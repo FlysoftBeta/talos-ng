@@ -18,6 +18,8 @@
 - Chat read markers exclude optimistic posts. Their provisional seq could exceed the
   server's latest seq, creating a failed queued read and blocking subsequent sends.
   Opening also completes from local rows if connectivity disappears during initial sync.
+  Reconnecting an empty offline history repeats its opening seek, since it has no failed
+  edge or boundary id to retry.
 - Reader text resume stores optional `charInset` with its UTF-16 character offset. It
   restores the character at its prior screen coordinate, retaining partial lines exactly.
   PDF restore no longer leaves a text-restoration flag that disables relative zoom;

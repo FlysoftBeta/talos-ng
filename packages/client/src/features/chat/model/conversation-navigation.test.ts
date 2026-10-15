@@ -164,6 +164,18 @@ describe("opening a conversation", () => {
 });
 
 describe("loading at the ends", () => {
+  it("reopens an empty offline history when connectivity returns", async () => {
+    const t = fixture({ online: false, readSeq: 0, lastSeq: 4, rows: [] });
+    await t.open();
+    expect(t.model.history.ids()).toEqual([]);
+    vi.mocked(page).mockResolvedValue(win([1, 2, 3, 4], { hasBefore: false }));
+    t.setOnline(true);
+    t.model.update(t.input);
+    await settle();
+    t.layout();
+    expect(page).toHaveBeenCalledWith(t.runtime, "group", "around", 1);
+    expect(t.model.history.position()).toEqual({ id: "post1", offset: 0 });
+  });
   it("loads the first remote post when an already open conversation was empty", async () => {
     const t = fixture({ readSeq: 0, lastSeq: 0, rows: [] });
     await t.open();

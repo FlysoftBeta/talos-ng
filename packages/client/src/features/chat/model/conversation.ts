@@ -252,7 +252,16 @@ export class ConversationController extends StateStore<ConversationState> {
       const was = this.canRead;
       this.canRead = can;
       // Ends that failed offline may load now.
-      if (can && was === false) this.history.retry();
+      if (can && was === false) {
+        if (!this.base().length && input.state.lastSeq > 0)
+          // An empty offline opening has no failed edge or boundary id to retry.
+          void this.history.jump(
+            this.initial < input.state.lastSeq
+              ? { key: { unreadAfter: this.initial } }
+              : { edge: "end" },
+          );
+        else this.history.retry();
+      }
     }
     this.sync();
     if (!this.started) {
