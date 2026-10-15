@@ -16,7 +16,7 @@ self-hosted Node server. Complete rewrite of the legacy `classapp-next` app. Sta
 Gates: `pnpm check`, `pnpm e2e`, `pnpm e2e:legacy`, `pnpm package`. The UI is functional but
 slated for a from-scratch redesign (see [`docs/tasks/HANDOFF.md`](docs/tasks/HANDOFF.md)).
 
-Use Node **22.19+** and Corepack's pinned **pnpm 12.11.2**:
+Use Node **24.18+ (24.x)** and Corepack's pinned **pnpm 12.11.2**:
 
 ```text
 pnpm install

@@ -21,7 +21,7 @@ const requestedTarget = args[1] ?? process.env.TALOS_PACKAGE_TARGET;
 const selectedTarget = requestedTarget
   ? parseTarget(requestedTarget)
   : undefined;
-const nodeVersion = "v26.12.0";
+const nodeVersion = "v24.22.0";
 const clientManifest = JSON.parse(
   await readFile(join(root, "packages/client/dist/app/manifest.json"), "utf8"),
 ) as { build: string; assets: { path: string }[] };

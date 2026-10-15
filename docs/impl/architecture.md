@@ -79,6 +79,10 @@ tablet (Chrome 70+)                                   server host (one Node proc
 
 ## Tooling decisions
 
+- Workspace tooling requires Node 24 (`^24.18.0`) and Node 24 declarations. Server,
+  launcher and migration bundles target `node24`; release assembly and CI pin the
+  official Node 24 runtime version documented in `packaging.md`.
+
 - TypeScript 7 checks the source (`tools/typecheck.mjs` selects the native compiler); the
   TypeScript 6 API is retained only because ESLint's parser does not yet support the 7 API.
   Prettier is part of `pnpm check` (lint includes `format:check`).
