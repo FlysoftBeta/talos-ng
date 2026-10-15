@@ -41,4 +41,8 @@ commands and test projects discover new packages without shared-file edits.
 installs, update ZIPs and JSON manifests in `dist/release/`. Build one with
 `pnpm package -- --target linux-redhat-x64`. Select the Linux distribution family
 and install its required system libraries; updates must match the exact target.
+Each artifact carries only its own platform's `better-sqlite3` and `sharp` binaries in
+`node_modules/` (pinned by `tools/package/native-manifest.json`, see
+[packaging](docs/impl/packaging.md)); `pnpm install` also fetches the win32 sharp package
+so Windows releases can be assembled on Linux.
 See [release assembly and operator instructions](tools/package/README.md).

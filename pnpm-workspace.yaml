@@ -1,6 +1,13 @@
 packages:
   - packages/*
   - tools/*
+# Releases are cross-assembled from Linux: install the win32 native packages too (sharp's
+# @img/sharp-win32-x64) so the lockfile pins and checks their integrity; package.ts copies
+# only the target platform's files into each artifact.
+supportedArchitectures:
+  os: [current, win32]
+  cpu: [x64]
+  libc: [glibc]
 allowBuilds:
   core-js: false
   esbuild: true

@@ -1,0 +1,13 @@
+{
+  "linux-x64": {
+    "node_modules/better-sqlite3/prebuilds/linux-x64.node": "6fd4292c6c5f352436cd85c9e1cb286978efa43c20ae350973f83414ced9991d",
+    "node_modules/@img/sharp-linux-x64/lib/sharp-linux-x64-0.35.5.node": "cf896cc1b7f3ae9c3e8eb3d7b2b198b8de2824ff7d0681d684bab5a825def335",
+    "node_modules/@img/sharp-libvips-linux-x64/lib/libvips-cpp.so.8.18.7": "4aa73553408c3964071728f4a231a8e86918e39bc49f1fbae75355f7ea933ea9"
+  },
+  "win32-x64": {
+    "node_modules/better-sqlite3/prebuilds/win32-x64.node": "e21e5efd71fba66578e95b62554d9028064a80dafd7221bf8a8ef155de8d240a",
+    "node_modules/@img/sharp-win32-x64/lib/libvips-42.dll": "06dab07cc386748513337a31672b1d5269fbc770a14ff403080575665bf0813f",
+    "node_modules/@img/sharp-win32-x64/lib/libvips-cpp-8.18.7.dll": "25001dbd05305a0a29119ab49933622c70b4a20ea12ef1d5d20ca40181db53bf",
+    "node_modules/@img/sharp-win32-x64/lib/sharp-win32-x64-0.35.5.node": "971048779f9c8598df14641dfc03c625885c93f473a788e65ca2deb50d0b083e"
+  }
+}

@@ -1,37 +1,13 @@
-import { createRequire } from "node:module";
-import type * as SQLiteDriver from "node:sqlite";
-import type {
-  DatabaseSync,
-  SQLInputValue,
-  StatementResultingChanges,
-  StatementSync,
-} from "node:sqlite";
+import Database from "better-sqlite3";
+import type { Database as Driver, RunResult, Statement } from "better-sqlite3";
 import { AppError } from "@talos/base";
 
-// node:sqlite emits synchronously while loading. Restore immediately; no other
-// warning category or later warning is suppressed.
-function sqlite(): typeof SQLiteDriver {
-  const emit = process.emitWarning;
-  process.emitWarning = ((...args: Parameters<typeof process.emitWarning>) => {
-    if (
-      typeof args[0] === "string" &&
-      args[0].startsWith("SQLite is an experimental feature") &&
-      (args[1] as unknown) === "ExperimentalWarning"
-    )
-      return;
-    Reflect.apply(emit, process, args);
-  }) as typeof process.emitWarning;
-  try {
-    return createRequire(import.meta.url)("node:sqlite") as typeof SQLiteDriver;
-  } finally {
-    process.emitWarning = emit;
-  }
-}
-const driver = sqlite();
+/** Values SQLite binds natively (the adapter never relies on implicit coercion). */
+export type SqlValue = null | number | bigint | string | Uint8Array;
 
 export class Db {
-  private readonly database: DatabaseSync;
-  private readonly cache = new Map<string, StatementSync>();
+  private readonly database: Driver;
+  private readonly cache = new Map<string, Statement>();
   private depth = 0;
   private closed = false;
   constructor(
@@ -41,17 +17,21 @@ export class Db {
   ) {
     if (!Number.isSafeInteger(busyTimeoutMs) || busyTimeoutMs < 0)
       throw new AppError("E_INVALID", "数据库等待时间无效");
-    this.database = new driver.DatabaseSync(path, { readOnly });
+    // `timeout` is SQLite's busy_timeout.
+    this.database = new Database(path, {
+      readonly: readOnly,
+      timeout: busyTimeoutMs,
+    });
     this.database.exec(
       readOnly
-        ? `PRAGMA foreign_keys=ON; PRAGMA busy_timeout=${busyTimeoutMs};`
-        : `PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=${busyTimeoutMs}; PRAGMA synchronous=NORMAL;`,
+        ? "PRAGMA foreign_keys=ON;"
+        : "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA synchronous=NORMAL;",
     );
   }
   get inTransaction(): boolean {
     return this.depth > 0;
   }
-  prepare(sql: string): StatementSync {
+  prepare(sql: string): Statement {
     let statement = this.cache.get(sql);
     if (!statement) {
       statement = this.database.prepare(sql);
@@ -62,13 +42,13 @@ export class Db {
   exec(sql: string): void {
     this.database.exec(sql);
   }
-  get<T>(sql: string, ...params: SQLInputValue[]): T | undefined {
+  get<T>(sql: string, ...params: SqlValue[]): T | undefined {
     return this.prepare(sql).get(...params) as T | undefined;
   }
-  all<T>(sql: string, ...params: SQLInputValue[]): T[] {
+  all<T>(sql: string, ...params: SqlValue[]): T[] {
     return this.prepare(sql).all(...params) as T[];
   }
-  run(sql: string, ...params: SQLInputValue[]): StatementResultingChanges {
+  run(sql: string, ...params: SqlValue[]): RunResult {
     return this.prepare(sql).run(...params);
   }
   tx<T>(fn: () => T): T {
@@ -99,7 +79,7 @@ export class Db {
   }
   async backupTo(path: string): Promise<void> {
     if (this.inTransaction) throw new AppError("E_CONFLICT", "事务中不能备份");
-    await driver.backup(this.database, path);
+    await this.database.backup(path);
   }
   checkpoint(): void {
     this.exec("PRAGMA wal_checkpoint(TRUNCATE)");

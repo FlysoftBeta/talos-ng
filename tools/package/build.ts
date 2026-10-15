@@ -1,3 +1,4 @@
+import { nativeFiles } from "./native.ts";
 import { tarGz } from "./tar.ts";
 import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -175,6 +176,11 @@ for (const platform of packageTargets) {
     await readFile(join(root, "packages/server/dist/server.js")),
   );
   payload.set("package.json", Buffer.from('{"type":"module"}'));
+  // Only this target's better-sqlite3/sharp binaries (never another platform's).
+  for (const [name, data] of await nativeFiles(
+    platform === "win32-x64" ? platform : "linux-x64",
+  ))
+    payload.set(name, data);
   await addTree(
     payload,
     join(root, "packages/server/dist/chat-assets"),

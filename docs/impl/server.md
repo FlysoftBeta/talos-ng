@@ -7,13 +7,14 @@ document covers the runtime design. Entry points: `packages/server/src/main.ts`
 
 ## Process model
 
-One Node process bundled into a single `server.js`. SQLite is the built-in `node:sqlite`
-behind a small `Db` adapter file (the API is experimental; the Node runtime is pinned and
-bundled, and all use goes through the adapter, whose warning alone is suppressed). WAL mode,
-one synchronous writer, no worker-thread pool: cross-thread RPC would add more failure modes
-than it removes at this scale. Child processes exist only for helper binaries (pdfrender,
-yt-dlp). No native Node addons anywhere (images use pure-JS Jimp, WebSocket uses pure-JS
-`ws`), so cross-building a release is file assembly.
+One Node process bundled into a single `server.js`. SQLite is `better-sqlite3` behind a
+small `Db` adapter file (WAL, foreign keys, `synchronous=NORMAL`, busy timeout, one
+synchronous writer, savepoint-nested transactions, online backup); no worker-thread pool:
+cross-thread RPC would add more failure modes than it removes at this scale. Child processes
+exist only for helper binaries (pdfrender, yt-dlp). Two native N-API addons exist,
+`better-sqlite3` and `sharp` (chat thumbnails); they stay external to the bundle and each
+release carries only its own platform's binaries in `node_modules/` (see `packaging.md`).
+WebSocket uses pure-JS `ws`.
 
 Dependencies are constructed once in `app/create-application.ts` and passed explicitly: no
 globals, no `AsyncLocalStorage`. Tests build a kernel on `:memory:` + memory object store +

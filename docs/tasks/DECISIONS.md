@@ -8,7 +8,7 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
 - **D-001 — pnpm monorepo of small packages with a lint-enforced dependency graph**
   (`docs/impl/architecture.md`). Sharp boundaries and independent tests are an explicit goal; mechanisms
   (`link`, `objectstore`, `docpack`, `docpipe`, `store`, `sync`) must be usable without the app.
-- **D-002 — Zero native Node addons; SQLite through built-in `node:sqlite` behind a `Db`
+- **D-002 — (Superseded by D-111.) Zero native Node addons; SQLite through built-in `node:sqlite` behind a `Db`
   adapter.** Verified on Node 22.23.1 (SQLite 3.51, `backup()` present). Removes the win32
   prebuild problem entirely and makes cross-packaging pure file assembly. The API is flagged
   experimental, so the Node runtime is pinned and bundled (D-003) and all use goes through one
@@ -16,7 +16,7 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
 - **D-003 — Releases bundle the official Node runtime** (pinned, initially 22.23.x; one constant
   in `tools/`). Legacy required a host-installed Node; bundling removes a host prerequisite and
   makes D-002 safe.
-- **D-004 — No `sharp`.** Image thumbnails are produced by the uploading client (canvas → WebP →
+- **D-004 — (Superseded by D-111; chat thumbnails already server-side per D-071.) No `sharp`.** Image thumbnails are produced by the uploading client (canvas → WebP →
   ArrayBuffer) and uploaded with the original; the server validates magic bytes, dimensions and
   size limits in pure TS. Trade-off accepted for a small managed community.
 - **D-005 — No Rust/WASM toolchain.** Legacy used WASM for the virtual list (Infini) and zstd
@@ -236,7 +236,7 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
 
 ## M10 community and chat
 
-- **D-071 — Chat thumbnails are generated on the server with Jimp, pure JavaScript.**
+- **D-071 — Chat thumbnails are generated on the server with Jimp, pure JavaScript. (Jimp replaced by sharp, D-111.)**
   Supersedes D-004 for M10's explicit server-generation requirement. PNG/JPEG/GIF/BMP
   originals (12 MiB maximum, 32 million decoded pixels) produce JPEG previews bounded
   to 480 pixels. Animated previews use their first frame. No native addon or WASM is
@@ -465,3 +465,23 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   handle and PIN-difference rules and exposes them through its TSX-free `model.ts`, which
   peer models may import. Feature views may import `@talos/contract` types only. Layout and
   rationale: `docs/impl/structure.md`.
+
+- **D-111 — `better-sqlite3` and `sharp` return; each release stays platform-specific.**
+  Supersedes D-002 and D-004 (and the Jimp part of D-071). SQLite is `better-sqlite3`
+  13.0.3 behind the unchanged `Db` adapter (same WAL, `foreign_keys`, `synchronous=NORMAL`,
+  busy timeout, savepoint transactions, online backup; the experimental-warning
+  suppression is gone). Server image work uses `sharp` 0.35.5 (autoOrient, 480 px
+  inside-fit JPEG quality 82, first frame of GIFs, transparency flattened on white).
+  libvips cannot read BMP, so `chat/assets/bmp.ts` decodes uncompressed 8/24/32-bit BMP
+  to raw RGBA for sharp; RLE/16-bit BMP is now rejected as unsupported. Client-side canvas
+  thumbnails were not reintroduced: the chat path was already server-generated (D-071) and
+  nothing else needs them, so there is no client change and no Chrome 70 impact.
+  Both addons are N-API, independent of the bundled Node ABI. esbuild keeps them external;
+  `tools/package/native.ts` lays out only the target's files in the release's
+  `node_modules/` (better-sqlite3 `lib/` plus `prebuilds/<platform>.node`; sharp, its JS
+  dependencies, `@img/sharp-<platform>` and on Linux `@img/sharp-libvips-linux-x64`). The
+  win32 packages are installed on Linux through pnpm `supportedArchitectures` so the
+  lockfile pins their integrity, the pnpm store makes the step offline-cacheable, and
+  `tools/package/native-manifest.json` pins SHA-256 of every native binary (re-pin with
+  `node --experimental-transform-types tools/package/native.ts --pin` after a bump). Debian
+  and Red Hat share the glibc linux-x64 binaries (sharp's libvips needs glibc 2.26+).

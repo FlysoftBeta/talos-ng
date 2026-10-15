@@ -1,6 +1,6 @@
 import { concat, utf8Decode } from "@talos/base";
 import { CHAT_TEXT_CHUNK } from "@talos/contract";
-import { Jimp } from "jimp";
+import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setupChat } from "./test-helper.ts";
 let current: ReturnType<typeof setupChat> | undefined;
@@ -420,11 +420,16 @@ describe("chat image ledger", () => {
   it("prepares thumbnails without publishing unowned files and rechecks revoked permission at commit", async () => {
     const s = setup(),
       user = s.users[0]!.id;
-    const source = await new Jimp({
-      width: 2,
-      height: 2,
-      color: 0xffffffff,
-    }).getBuffer("image/png");
+    const source = await sharp({
+      create: {
+        width: 2,
+        height: 2,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
     const upload = await s.uploads.begin(user, {
       kind: "image",
       size: source.length,
@@ -455,11 +460,16 @@ describe("chat image ledger", () => {
   it("generates thumbnail server-side, transfers ownership and removes refs on deletion", async () => {
     const s = setup(),
       u = s.users[0]!.id;
-    const source = await new Jimp({
-      width: 800,
-      height: 400,
-      color: 0xff3366ff,
-    }).getBuffer("image/png");
+    const source = await sharp({
+      create: {
+        width: 800,
+        height: 400,
+        channels: 4,
+        background: { r: 255, g: 51, b: 102, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
     const upload = await s.uploads.begin(u, {
       kind: "image",
       size: source.length,

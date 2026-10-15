@@ -79,7 +79,7 @@ project is not DONE before it. Inputs:
 - Migration of real PDFs, images, media and AI data verified on synthetic fixtures only;
   larger legacy DBs under `classapp-next/worktree/mydbs/` not inspected.
 - Performance numbers are from throttled current Chromium, not real tablets.
-- `node:sqlite` is experimental in Node 22, isolated behind the `Db` adapter.
+- Native addons (better-sqlite3, sharp; D-111): win32 artifact verified only by a Wine smoke of the bundled binaries, not on native Windows; BMP support is limited to uncompressed 8/24/32-bit.
 - pdfrender source build: decided not to act for now (see the Linux-targets decision in DECISIONS.md).
 - Migration rehearsal: `verify` exits 1 for 10 ownership-fallback issues (group-only
   collections need an earliest-imported-user fallback owner) — review before cutover; real

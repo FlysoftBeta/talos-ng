@@ -3,12 +3,14 @@ import type { ChatImage, ChatSticker } from "@talos/contract";
 import { CHAT_IMAGE_LIMIT } from "@talos/contract";
 import type { ObjectInfo } from "@talos/objectstore";
 import { beginObjectBatch } from "@talos/objectstore";
-import { Jimp } from "jimp";
+import sharp from "sharp";
+import type { Sharp } from "sharp";
 import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { BodyChunk, ChatOptions } from "../options.ts";
 import type { ChatRepo } from "../repo.ts";
+import { decodeBmp } from "./bmp.ts";
 import { validateImageBounds } from "./image-bounds.ts";
 interface SeedSticker {
   id: string;
@@ -120,18 +122,38 @@ export class ChatAssets {
         );
       try {
         validateImageBounds(bytes, mime);
-        const image = await Jimp.read(Buffer.from(bytes));
-        const { width, height } = image.bitmap;
-        if (width * height > 32_000_000 || !width || !height)
-          throw new AppError("E_TOO_LARGE", "图片像素过多");
-        if (width > 480 || height > 480) {
-          const ratio = Math.min(480 / width, 480 / height);
-          image.resize({
-            w: Math.max(1, Math.round(width * ratio)),
-            h: Math.max(1, Math.round(height * ratio)),
+        let input: Sharp;
+        if (mime === "image/bmp") {
+          const bmp = decodeBmp(bytes);
+          input = sharp(bmp.data, {
+            raw: { width: bmp.width, height: bmp.height, channels: 4 },
+            limitInputPixels: 32_000_000,
+          });
+        } else {
+          input = sharp(bytes, {
+            limitInputPixels: 32_000_000,
+            failOn: "error",
           });
         }
-        const thumbnail = await image.getBuffer("image/jpeg", { quality: 82 });
+        const meta = await input.metadata();
+        // EXIF orientations 5-8 swap the displayed axes.
+        const swapped = (meta.orientation ?? 1) >= 5;
+        const width = (swapped ? meta.height : meta.width) ?? 0;
+        const height = (swapped ? meta.width : meta.height) ?? 0;
+        if (width * height > 32_000_000 || !width || !height)
+          throw new AppError("E_TOO_LARGE", "图片像素过多");
+        // Animated sources use their first frame (sharp's default page).
+        const { data: thumbnail, info: out } = await input
+          .autoOrient()
+          .resize({
+            width: 480,
+            height: 480,
+            fit: "inside",
+            withoutEnlargement: true,
+          })
+          .flatten({ background: "#ffffff" })
+          .jpeg({ quality: 82 })
+          .toBuffer({ resolveWithObject: true });
         return {
           image: {
             original: { rid: info.id, size: info.size, mime, width, height },
@@ -139,8 +161,8 @@ export class ChatAssets {
               rid: sha256Hex(thumbnail),
               size: thumbnail.byteLength,
               mime: "image/jpeg",
-              width: image.bitmap.width,
-              height: image.bitmap.height,
+              width: out.width,
+              height: out.height,
             },
           },
           thumbnail,
