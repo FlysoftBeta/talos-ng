@@ -7,7 +7,6 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { ReactElement, ReactNode } from "react";
-import { createPortal } from "react-dom";
 import { AppError } from "@talos/base";
 import {
   useClientSnapshot,
@@ -59,10 +58,6 @@ export function MediaPlayerProvider({
     controller.getState,
     controller.getState,
   );
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    setPortalTarget(document.querySelector<HTMLElement>(".talos"));
-  }, []);
   const active = snapshot.gate === "app" && !snapshot.concealed;
   controller.setInput({
     user: snapshot.user?.id,
@@ -101,27 +96,24 @@ export function MediaPlayerProvider({
         onDuration={(seconds) => controller.durationChange(seconds)}
         onFailed={() => controller.outputFailed()}
       />
-      {state.queueOpen &&
-        portalTarget &&
-        createPortal(
-          <QueueSheetView
-            rows={queueRows(
-              data.state?.queue ?? [],
-              data.tracks,
-              state.current?.id,
-            )}
-            emptyState={emptyState(snapshot.status.connection)}
-            onPlay={(id) => {
-              const track = data.tracks.find((t) => t.id === id);
-              if (track) void controller.play(track);
-            }}
-            onMove={(index, delta) => controller.moveQueued(index, delta)}
-            onRemove={(index) => controller.removeQueued(index)}
-            onClear={() => controller.clearQueue()}
-            onClose={controller.closeQueue}
-          />,
-          portalTarget,
-        )}
+      {state.queueOpen && (
+        <QueueSheetView
+          rows={queueRows(
+            data.state?.queue ?? [],
+            data.tracks,
+            state.current?.id,
+          )}
+          emptyState={emptyState(snapshot.status.connection)}
+          onPlay={(id) => {
+            const track = data.tracks.find((t) => t.id === id);
+            if (track) void controller.play(track);
+          }}
+          onMove={(index, delta) => controller.moveQueued(index, delta)}
+          onRemove={(index) => controller.removeQueued(index)}
+          onClear={() => controller.clearQueue()}
+          onClose={controller.closeQueue}
+        />
+      )}
     </Context.Provider>
   );
 }
