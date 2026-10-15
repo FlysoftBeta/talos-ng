@@ -1,3 +1,18 @@
+# CI check repair — 2026-10-15
+
+- GitHub run 38755754989 failed on client test-only Array.at typings. The integrated
+  ES2022 test configuration fixes this while production remains independently checked
+  against ES2018. Source-entrypoint failures from run 38753096704 are covered by the
+  tsx changes and passing migration/boot tests.
+- The same earlier CI run timed out in IntervalSet's 8,000-step model test. Gap probes
+  now compare arrays once per iteration, preserving all operations and membership checks
+  while reducing matcher overhead; no timeout increase or coverage reduction.
+- Final main `pnpm check` exits 0: 175 files, 1,774 tests passed, one skipped, static
+  compatibility scans clean. This follow-up changes only tests and documentation.
+  Verified the existing full `pnpm e2e`, `pnpm e2e:legacy`, and three-target `pnpm package`
+  logs for production code at 73b7c61; production sources and gate tools are unchanged.
+- Codex shared quota: 56% consumed; no reset used.
+
 # Source containers and floating controls — 2026-10-15
 
 - Fixed clipped selects, menus and tooltips with themed portal layers and modal-owned
