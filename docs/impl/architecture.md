@@ -83,6 +83,11 @@ tablet (Chrome 70+)                                   server host (one Node proc
   launcher and migration bundles target `node24`; release assembly and CI pin the
   official Node 24 runtime version documented in `packaging.md`.
 
+- Source entrypoints with non-erasable TypeScript in their import graph (server,
+  migration and release tools) use the workspace-pinned `tsx` loader via
+  `node --import tsx`. The migration wrapper registers `tsx/esm/api` in-process before
+  importing its main module; there is no bootstrap child process. Other Node scripts
+  use Node 24 built-in type stripping where their imports contain only erasable syntax.
 - TypeScript 7 checks the source (`tools/typecheck.mjs` selects the native compiler); the
   TypeScript 6 API is retained only because ESLint's parser does not yet support the 7 API.
   Prettier is part of `pnpm check` (lint includes `format:check`).

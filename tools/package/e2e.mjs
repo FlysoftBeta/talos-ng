@@ -137,19 +137,13 @@ try {
       TALOS_PACKAGE_TARGET: target,
     };
     await run("pnpm", ["--filter", "@talos/client", "build"], { env });
-    await run(
-      process.execPath,
-      ["--experimental-transform-types", "tools/package/build.ts"],
-      { env },
-    );
+    await run(process.execPath, ["--import", "tsx", "tools/package/build.ts"], {
+      env,
+    });
   }
-  await run(
-    process.execPath,
-    ["--experimental-transform-types", "tools/package/build.ts"],
-    {
-      env: { ...process.env, TALOS_PACKAGE_TARGET: otherTarget },
-    },
-  );
+  await run(process.execPath, ["--import", "tsx", "tools/package/build.ts"], {
+    env: { ...process.env, TALOS_PACKAGE_TARGET: otherTarget },
+  });
   await checkLinuxStructure(root, B, otherTarget, target);
   await checkLinuxStructure(root, B, target, otherTarget);
   const tar = gunzipSync(

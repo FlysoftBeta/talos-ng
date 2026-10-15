@@ -86,10 +86,7 @@ export async function packagedOpsSuite() {
   await new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      [
-        "--experimental-transform-types",
-        path.join(ROOT, "tools/package/e2e.mjs"),
-      ],
+      ["--import", "tsx", path.join(ROOT, "tools/package/e2e.mjs")],
       { cwd: ROOT, stdio: "inherit" },
     );
     child.once("error", reject);

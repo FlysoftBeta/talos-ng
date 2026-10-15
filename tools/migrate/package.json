@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@talos/link": "workspace:*",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "tsx": "4.23.15"
   }
 }

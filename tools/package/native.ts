@@ -159,7 +159,7 @@ export async function nativeFiles(
   for (const [path, bytes] of files)
     if (isBinary(path) && pinned[path] !== digest(bytes))
       throw new Error(
-        `Native binary ${path} does not match tools/package/native-manifest.json (got ${digest(bytes)}); review the dependency bump, then run: node --experimental-transform-types tools/package/native.ts --pin`,
+        `Native binary ${path} does not match tools/package/native-manifest.json (got ${digest(bytes)}); review the dependency bump, then run: node --import tsx tools/package/native.ts --pin`,
       );
   for (const path of Object.keys(pinned))
     if (!files.has(path))

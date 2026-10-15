@@ -11,7 +11,7 @@ pnpm build && pnpm start   # production client served by the real server
 pnpm --filter @talos/server build   # dist/server.js for the pinned Node runtime
 ```
 
-Deterministic servers for tests: spawn `node --experimental-transform-types
+Deterministic servers for tests: spawn `node --import tsx
 packages/server/bin/talos-server.ts --dev` with `TALOS_DATA_DIR` (fresh absolute directory),
 `TALOS_TEST_SEED=true`, `TALOS_BIND_HOST=127.0.0.1`, `TALOS_PORTS=<free port>`; restart with the
 same directory and port to keep sessions and queued-operation replay. Seed accounts are in

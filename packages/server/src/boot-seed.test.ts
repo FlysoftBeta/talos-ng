@@ -20,7 +20,8 @@ it("repairs an interrupted disk catalog batch and reseeds idempotently after res
   const child = spawn(
     process.execPath,
     [
-      "--experimental-transform-types",
+      "--import",
+      "tsx",
       "--input-type=module",
       "-e",
       `

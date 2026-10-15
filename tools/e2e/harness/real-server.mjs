@@ -61,7 +61,8 @@ export async function createRealServer() {
       child = spawn(
         process.execPath,
         [
-          "--experimental-transform-types",
+          "--import",
+          "tsx",
           path.join(ROOT, "packages/server/bin/testing/server.ts"),
           "--dev",
         ],
@@ -148,7 +149,8 @@ export async function createRealServer() {
       await execFileAsync(
         process.execPath,
         [
-          "--experimental-transform-types",
+          "--import",
+          "tsx",
           path.join(ROOT, "packages/server/bin/learning-seed.ts"),
           path.join(data, "talos.db"),
           file,

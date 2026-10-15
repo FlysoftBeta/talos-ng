@@ -38,11 +38,7 @@ const vite = await createServer({
 });
 const child = spawn(
   process.execPath,
-  [
-    "--experimental-transform-types",
-    "packages/server/bin/talos-server.ts",
-    "--dev",
-  ],
+  ["--import", "tsx", "packages/server/bin/talos-server.ts", "--dev"],
   { cwd: root, env: process.env, stdio: "inherit" },
 );
 let stopping = false;

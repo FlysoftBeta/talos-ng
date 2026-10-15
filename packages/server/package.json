@@ -12,7 +12,7 @@
     "lint": "eslint .",
     "test": "vitest run --config ../../vitest.config.mjs --project @talos/server",
     "build": "node build.mjs",
-    "dev:server": "node --experimental-transform-types bin/talos-server.ts --dev"
+    "dev:server": "node --import tsx bin/talos-server.ts --dev"
   },
   "dependencies": {
     "@talos/base": "workspace:*",
@@ -30,6 +30,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "9.6.0",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "tsx": "4.23.15"
   }
 }

@@ -3,7 +3,7 @@ import { seedLearningFile } from "../src/app/seed-learning.ts";
 const [database, file] = process.argv.slice(2);
 if (!database || !file) {
   process.stderr.write(
-    "用法: node --experimental-transform-types packages/server/bin/learning-seed.ts <talos.db> <words.txt>\n",
+    "用法: node --import tsx packages/server/bin/learning-seed.ts <talos.db> <words.txt>\n",
   );
   process.exitCode = 1;
 } else {
