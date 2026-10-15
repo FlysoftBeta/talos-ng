@@ -1,0 +1,41 @@
+{
+  "name": "@talos/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "node ../../tools/typecheck.mjs -p tsconfig.json && node ../../tools/typecheck.mjs -p tsconfig.test.json",
+    "lint": "eslint . && node scripts/css-check.mjs",
+    "test": "vitest run --config ../../vitest.config.mjs --project @talos/client",
+    "build": "node scripts/build.mjs && node ../../tools/compat-check/cli.mjs dist"
+  },
+  "dependencies": {
+    "@talos/base": "workspace:*",
+    "@talos/contract": "workspace:*",
+    "@talos/docpack": "workspace:*",
+    "@talos/link": "workspace:*",
+    "@talos/shell": "workspace:*",
+    "@talos/store": "workspace:*",
+    "@talos/sync": "workspace:*",
+    "core-js": "3.50.0",
+    "fflate": "^0.8.3",
+    "katex": "0.16.22",
+    "markdown-it": "14.1.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zustand": "5.0.15"
+  },
+  "devDependencies": {
+    "@types/katex": "0.16.7",
+    "@types/markdown-it": "14.1.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "fake-indexeddb": "6.2.5",
+    "jsdom": "30.1.2",
+    "vite": "8.3.4"
+  }
+}

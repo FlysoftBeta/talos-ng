@@ -1,0 +1,37 @@
+{
+  "name": "talos-ng",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint && eslint tools/boundaries.mjs tools/typecheck.mjs eslint.config.mjs vitest.config.mjs && node tools/boundaries/ratchet.mjs --check && pnpm format:check",
+    "test": "vitest run --maxWorkers=4",
+    "test:coverage": "vitest run --coverage",
+    "build": "pnpm -r build",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "dev:server": "node --experimental-transform-types packages/server/bin/talos-server.ts --dev",
+    "e2e": "pnpm --filter @talos/shell build && pnpm --filter @talos/client build && node tools/e2e/run.mjs",
+    "e2e:legacy": "pnpm --filter @talos/shell build && pnpm --filter @talos/client build && node tools/e2e/run.mjs --legacy",
+    "dev": "node --experimental-transform-types tools/e2e/dev.mjs",
+    "start": "node packages/server/dist/server.js",
+    "package": "pnpm build && node --experimental-transform-types tools/package/build.ts",
+    "migrate": "node tools/migrate/bin/migrate.mjs"
+  },
+  "devDependencies": {
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "eslint": "10.12.0",
+    "typescript-eslint": "8.71.2",
+    "prettier": "3.9.10",
+    "vitest": "5.0.4",
+    "@vitest/coverage-v8": "5.0.4",
+    "@types/node": "22.20.5",
+    "acorn": "8.19.0",
+    "typescript7": "npm:typescript@7.0.2"
+  }
+}

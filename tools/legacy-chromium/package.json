@@ -1,0 +1,15 @@
+{
+  "name": "@talos/legacy-chromium",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "node --check prepare.mjs && node --check cdp.mjs",
+    "lint": "eslint .",
+    "test": "vitest run --config ../../vitest.config.mjs --project @talos/legacy-chromium",
+    "build": "pnpm typecheck",
+    "prepare-browser": "node prepare.mjs"
+  },
+  "dependencies": {
+    "extract-zip": "2.0.1"
+  }
+}

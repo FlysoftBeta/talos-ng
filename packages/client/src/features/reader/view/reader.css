@@ -1,0 +1,209 @@
+/* ---------- stage and scroll viewport ---------- */
+.reader-stage {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+.reader-scroll {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 200px;
+  overflow: auto;
+  overflow-anchor: none;
+  background: var(--bg);
+}
+.reader-stage.is-paged .reader-scroll {
+  background: var(--raised);
+}
+.talos[data-focus="keyboard"] .reader-scroll:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+/* ---------- units ---------- */
+/* Paged units keep 24 px of the estimated unit height: 16 above the page, 8 below. */
+.reader-unit.is-paged {
+  padding-top: var(--s-4);
+  padding-bottom: var(--s-2);
+}
+.reader-page {
+  position: relative;
+  margin: 0 auto;
+  overflow: hidden;
+  background: var(--bg);
+  /* hairline border plus a soft lift: the page is paper on the canvas */
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+}
+/* Converted pages are drawn for paper; dark theme keeps them light. */
+.talos[data-theme="dark"] .reader-page {
+  background: var(--inverse);
+}
+.reader-page.is-loading {
+  background: var(--bg);
+}
+.reader-page iframe {
+  display: block;
+  border: 0;
+  transform-origin: 0 0;
+}
+.reader-flow {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--s-6) var(--gutter-content) 0;
+  font-size: 17px; /* reading size, one step between the body and title steps */
+  line-height: var(--lh-read);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  color: var(--text);
+}
+.talos.text-large .reader-flow {
+  font-size: 19px; /* 大字 raises the reading size with the text steps */
+}
+
+/* ---------- missing and failed units ---------- */
+.reader-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 720px;
+  min-height: 72px;
+  margin: 0 auto;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: var(--muted);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+}
+.reader-unit:not(.is-paged) .reader-missing {
+  margin: var(--s-4) auto 0;
+  max-width: 672px; /* the 720 px column less its gutters */
+}
+.reader-unit.is-paged .reader-missing {
+  max-width: none;
+  border-radius: 0;
+  background: var(--bg);
+}
+.reader-missing > .icon {
+  margin-right: var(--s-2);
+}
+.reader-missing > .btn {
+  margin-left: var(--s-2);
+}
+.reader-missing.is-error {
+  color: var(--failed);
+}
+
+/* ---------- completion footer ---------- */
+.reader-end {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--s-7) var(--s-4) 96px; /* clears the floating page controls */
+  color: var(--muted);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+  text-align: center;
+}
+.reader-end-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: var(--s-2);
+  border-radius: 18px;
+  background: var(--confirmed-soft);
+  color: var(--confirmed);
+}
+.reader-end strong {
+  color: var(--text);
+  font-size: var(--fs-3);
+  line-height: var(--lh-3);
+  font-weight: 600;
+}
+.reader-end strong + span {
+  margin-top: 2px;
+}
+
+/* ---------- floating page controls ---------- */
+.reader-controls {
+  position: absolute;
+  bottom: var(--s-4);
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 var(--s-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.reader-zoom {
+  min-width: 44px;
+  color: var(--muted);
+  font-size: var(--fs-1);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.reader-controls-sep {
+  width: 1px;
+  height: 24px;
+  margin: 0 var(--s-2);
+  background: var(--border);
+}
+.reader-page-input {
+  width: 52px;
+  height: var(--control-sm);
+  padding: 0 var(--s-1);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+.reader-page-input::-webkit-outer-spin-button,
+.reader-page-input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+.reader-page-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.reader-position {
+  margin: 0 var(--s-3) 0 var(--s-2);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- retention dialog ---------- */
+.reader-retention > * + * {
+  margin-top: var(--s-3);
+}
+.reader-retention-label {
+  display: block;
+  color: var(--text);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+  font-weight: 500;
+}
+.reader-retention-label + .segmented {
+  margin-top: var(--s-2);
+}
+.reader-muted {
+  color: var(--muted);
+  font-size: var(--fs-1);
+  line-height: var(--lh-1);
+}

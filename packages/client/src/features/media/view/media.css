@@ -1,0 +1,479 @@
+/* ---------- list pane: source nav ---------- */
+.media-nav-body {
+  padding: var(--s-1) 0 var(--s-2);
+}
+.media-nav-body .row + .row {
+  margin-top: 2px;
+}
+.media-nav-body .row.is-selected .row-leading {
+  color: var(--accent);
+}
+.media-count {
+  color: var(--muted);
+  font-size: var(--fs-2);
+  font-variant-numeric: tabular-nums;
+}
+/* the 歌单 label lines up with the row text (row inset 8 + padding 8) */
+.media-nav-section {
+  padding: var(--s-4) var(--s-3) 0;
+}
+.media-nav-section .section-header {
+  margin-bottom: var(--s-1);
+}
+.media-search {
+  position: relative;
+}
+.media-search .input {
+  padding-right: var(--s-6);
+}
+/* 32 px button centred in the 36 px field */
+.media-search-go {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+}
+
+/* ---------- tiles ---------- */
+.media-tile {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius);
+  background: var(--hover);
+  color: var(--muted);
+}
+.media-tile-48 {
+  width: 48px;
+  height: 48px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.row.is-selected .media-tile {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* ---------- content pane: track list ---------- */
+.media-tracks {
+  padding: var(--s-2) 0 var(--s-5);
+}
+.media-notice {
+  padding: var(--s-1) var(--gutter-content) var(--s-3);
+}
+.media-retention .icon {
+  margin-left: var(--s-1);
+  color: var(--muted);
+}
+.media-retention .btn-label {
+  display: inline-flex;
+  align-items: center;
+}
+.media-retention-form > * + * {
+  margin-top: var(--s-4);
+}
+.media-dialog-text {
+  color: var(--muted);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+}
+
+/*
+ * One track: index · title (+ artist) · album · tag · duration · actions.
+ * Fixed side columns keep the rows aligned; the album column goes below 1100 px.
+ */
+.media-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 3fr) minmax(0, 2fr) 56px 44px 84px;
+  grid-column-gap: var(--s-3);
+  align-items: center;
+  min-height: var(--row);
+  margin: 0 var(--s-3);
+  padding: 0 var(--s-1) 0 var(--s-1);
+  border-radius: var(--radius);
+}
+.media-track + .media-track {
+  margin-top: 2px;
+}
+.media-track:hover {
+  background: var(--hover);
+}
+.media-track-index {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: var(--fs-2);
+  font-variant-numeric: tabular-nums;
+}
+.media-track-index .icon {
+  display: none;
+}
+.media-track:hover .media-track-index .icon,
+.media-track.is-current .media-track-index .icon {
+  display: block;
+}
+.media-track:hover .media-track-number {
+  display: none;
+}
+.media-track.is-current .media-track-index,
+.media-track.is-current .media-track-title {
+  color: var(--accent);
+}
+.media-track-copy {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+.media-track-main {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  color: inherit;
+  text-align: left;
+}
+/* the title button covers the row; the actions sit above it by order */
+.media-track-main::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: var(--radius);
+}
+.talos[data-focus="keyboard"] .media-track-main:focus {
+  outline: none;
+}
+.talos[data-focus="keyboard"] .media-track-main:focus::after {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.media-track-title,
+.media-track-artist,
+.media-track-album {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.media-track-title {
+  font-weight: 500;
+}
+.media-track-artist {
+  flex: 0 1000 auto;
+  min-width: 0;
+  margin-left: var(--s-2);
+}
+.media-track-artist,
+.media-track-album,
+.media-track-time {
+  color: var(--muted);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+}
+.media-track-tag {
+  display: flex;
+  justify-content: flex-end;
+}
+.media-track-time {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.media-track-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.media-track-actions > * + * {
+  margin-left: var(--s-1);
+}
+.media-fav[aria-pressed="true"],
+.media-fav[aria-pressed="true"]:hover {
+  background: transparent;
+  color: var(--accent);
+}
+.media-fav[aria-pressed="true"] svg {
+  fill: currentColor;
+}
+.media-track-error {
+  grid-column: 1 / -1;
+  padding: 0 0 var(--s-2) 44px;
+  color: var(--failed);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+}
+@media (max-width: 1099px) {
+  .media-track {
+    grid-column-gap: var(--s-2);
+    grid-template-columns: 32px minmax(0, 1fr) 56px 44px 84px;
+    min-height: var(--row);
+  }
+  .media-track-album {
+    display: none;
+  }
+  .media-track-copy {
+    display: block;
+  }
+  .media-track-artist {
+    margin: 1px 0 0;
+  }
+}
+
+/* ---------- player bar (content pane footer) ---------- */
+.media-player {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px) minmax(0, 1fr);
+  grid-template-rows: 48px 20px;
+  grid-template-areas:
+    "track controls tools"
+    "track seek tools";
+  grid-column-gap: var(--s-4);
+  align-items: center;
+  height: 72px;
+  padding: 2px var(--s-3) 2px var(--gutter-content);
+}
+.media-player-track {
+  grid-area: track;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.media-player-copy {
+  min-width: 0;
+  margin-left: var(--s-3);
+}
+.media-player-title,
+.media-player-artist,
+.media-player-error {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.media-player-title {
+  font-weight: 600;
+}
+.media-player-artist,
+.media-player-error {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+}
+.media-player-cache {
+  color: var(--muted);
+}
+.media-player-error {
+  color: var(--failed);
+}
+.media-player-controls {
+  grid-area: controls;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.media-player-controls > * + * {
+  margin-left: var(--s-3);
+}
+.media-player-controls .icon-btn {
+  color: var(--text);
+}
+.media-play {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  transition: background-color var(--fast) var(--ease);
+}
+.media-play:hover {
+  background: var(--accent-hover);
+}
+.media-player-seek {
+  grid-area: seek;
+  display: flex;
+  align-items: center;
+  height: 20px;
+}
+.media-player-seek time {
+  flex: none;
+  width: 40px;
+  color: var(--muted);
+  font-size: var(--fs-1);
+  line-height: var(--lh-1);
+  font-variant-numeric: tabular-nums;
+}
+.media-player-seek time:first-child {
+  margin-right: var(--s-2);
+  text-align: right;
+}
+.media-player-seek time:last-child {
+  margin-left: var(--s-2);
+}
+.media-player-tools {
+  grid-area: tools;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.media-player-tools > * + * {
+  margin-left: var(--s-1);
+}
+.media-volume {
+  display: flex;
+  align-items: center;
+  width: 112px;
+  padding: 0 var(--s-2);
+  color: var(--muted);
+}
+.media-volume .icon {
+  flex: none;
+  margin-right: var(--s-2);
+}
+@media (max-width: 1099px) {
+  .media-player {
+    grid-template-columns: minmax(0, 1fr) 136px auto;
+    grid-column-gap: var(--s-3);
+    padding-left: var(--gutter);
+    padding-right: var(--s-2);
+  }
+  .media-player .media-tile-48 {
+    width: 40px;
+    height: 40px;
+  }
+  .media-player-copy {
+    margin-left: var(--s-2);
+  }
+  .media-player-controls > * + * {
+    margin-left: var(--s-1);
+  }
+  .media-player-seek time {
+    width: 32px;
+  }
+  .media-player-seek time:first-child {
+    margin-right: var(--s-1);
+  }
+  .media-player-seek time:last-child {
+    margin-left: var(--s-1);
+  }
+  .media-player-tools > * + * {
+    margin-left: 2px;
+  }
+  .media-volume {
+    width: 56px;
+    padding: 0 var(--s-1);
+  }
+  .media-volume .icon {
+    display: none;
+  }
+}
+
+/* ---------- range sliders (seek, volume) ---------- */
+.media-range {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 16px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+}
+.media-range:focus {
+  outline: none;
+}
+.media-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--accent) var(--fill, 0%),
+    var(--border-strong) var(--fill, 0%)
+  );
+}
+.media-range::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  -webkit-appearance: none;
+  transition: transform var(--fast) var(--ease);
+}
+.media-range:hover::-webkit-slider-thumb {
+  transform: scale(1.25);
+}
+.talos[data-focus="keyboard"] .media-range:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ---------- rail mini player ---------- */
+.media-mini {
+  display: flex;
+  flex: none;
+  justify-content: center;
+  width: 56px;
+  margin-bottom: var(--s-1);
+}
+.media-mini[hidden] {
+  display: none;
+}
+.media-mini-play {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  transition: background-color var(--fast) var(--ease);
+}
+.media-mini-play:hover {
+  background: var(--selected);
+}
+.media-mini-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.media-mini-track {
+  stroke: var(--border-strong);
+}
+.media-mini-progress {
+  stroke: var(--accent);
+  transition: stroke-dashoffset 250ms linear;
+}
+.media-mini-play > .icon {
+  position: relative;
+}
+
+/* ---------- queue sheet ---------- */
+/* rows reach the sheet edges so their text lines up with the title (24 px) */
+.media-queue {
+  margin: calc(-1 * var(--s-3)) calc(-1 * var(--s-4)) 0;
+}
+.media-queue .row + .row {
+  margin-top: 2px;
+}
+.media-queue-index {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  color: var(--muted);
+  font-size: var(--fs-2);
+  font-variant-numeric: tabular-nums;
+}
+.media-queue-current .media-queue-index,
+.media-queue-current .row-title {
+  color: var(--accent);
+}

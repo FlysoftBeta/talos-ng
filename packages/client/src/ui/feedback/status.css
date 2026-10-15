@@ -1,0 +1,153 @@
+/* The status entry: neutral when idle, amber offline, accent while syncing. */
+.status-entry {
+  position: relative;
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+}
+.status-entry.is-rail {
+  flex-direction: column;
+  justify-content: center;
+  width: 56px;
+  height: 52px;
+  margin: 0 auto;
+  border-radius: var(--radius);
+}
+.status-entry.is-rail:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.status-entry.is-pill {
+  height: 32px;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg);
+  font-size: var(--fs-2);
+}
+.status-entry.is-pill .status-label {
+  margin-left: 6px;
+}
+.status-glyph {
+  position: relative;
+  display: flex;
+}
+.status-entry.is-rail .status-label {
+  max-width: 60px;
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.status-offline {
+  color: var(--pending);
+}
+.status-entry.status-offline:hover {
+  color: var(--pending);
+}
+.status-syncing {
+  color: var(--accent);
+}
+.status-count {
+  position: absolute;
+  top: -6px;
+  left: 14px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border: 2px solid var(--sidebar);
+  border-radius: 9px;
+  background: var(--pending);
+  color: var(--bg);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.status-entry.has-failed .status-count {
+  background: var(--failed);
+}
+.status-dot {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--sidebar);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* ---------- status centre ---------- */
+.status-hero {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--s-5);
+  padding: var(--s-4);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+}
+.status-hero-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-right: var(--s-3);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--muted);
+}
+.status-hero.status-offline .status-hero-icon {
+  background: var(--pending-soft);
+  color: var(--pending);
+}
+.status-hero.status-syncing .status-hero-icon {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.status-hero strong {
+  display: block;
+  color: var(--text);
+  font-size: var(--fs-4);
+  line-height: var(--lh-4);
+}
+.status-hero span {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+}
+.status-op,
+.status-download {
+  padding: var(--s-3) var(--s-4);
+}
+.status-op {
+  display: flex;
+  align-items: center;
+}
+.status-op-copy {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+.status-op-copy > .ellipsis {
+  min-width: 0;
+  margin-right: var(--s-3);
+}
+.status-op-actions {
+  display: flex;
+  flex: none;
+  margin-left: var(--s-3);
+}
+.status-op-actions > * + * {
+  margin-left: var(--s-2);
+}
+.status-download .progress {
+  margin-top: var(--s-2);
+}

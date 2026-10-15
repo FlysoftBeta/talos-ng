@@ -1,0 +1,11 @@
+{
+  "version": "2026.07.04",
+  "linux": {
+    "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.07.04/yt-dlp_linux",
+    "sha256": "6bbb3d314cde4febe36e5fa1d55462e29c974f63444e707871834f6d8cc210ae"
+  },
+  "windows": {
+    "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.07.04/yt-dlp_win.zip",
+    "sha256": "90254845be5282b1f4d843a873abff04f569f857f64250f833fe152b21eec152"
+  }
+}

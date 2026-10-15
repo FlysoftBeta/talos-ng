@@ -1,0 +1,171 @@
+/* ---------- rail ---------- */
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  padding: var(--s-2) 0 var(--s-2);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.rail > * + * {
+  margin-top: 2px;
+}
+.rail-spacer {
+  flex: 1 1 auto;
+  min-height: var(--s-3);
+}
+.rail-item {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 52px;
+  border-radius: var(--radius);
+  color: var(--muted);
+}
+.rail-glyph {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 28px;
+  border-radius: 14px;
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+.rail-item:hover .rail-glyph {
+  background: var(--hover);
+  color: var(--text);
+}
+.rail-item.is-selected .rail-glyph {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.rail-label {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+.rail-item.is-selected .rail-label {
+  color: var(--text);
+  font-weight: 600;
+}
+.rail-item[aria-disabled="true"] {
+  opacity: 0.45;
+}
+.rail-badge {
+  position: absolute;
+  top: -4px;
+  left: 26px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border: 2px solid var(--sidebar);
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- segmented ---------- */
+.segmented {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  max-width: 100%;
+  padding: 2px;
+  border-radius: var(--radius);
+  background: var(--hover);
+  vertical-align: middle;
+}
+.frame-list .segmented {
+  background: var(--selected);
+}
+/* Overlays opened from the list pane keep the default surface. */
+.frame-list .overlay-surface .segmented {
+  background: var(--hover);
+}
+.segmented.is-block {
+  display: flex;
+  width: 100%;
+}
+.segmented.is-wrap {
+  flex-wrap: wrap;
+}
+.segmented > button {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+  padding: 0 var(--s-3);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: var(--fs-2);
+  font-weight: 500;
+  text-align: center;
+  white-space: nowrap;
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+.segmented > button:hover {
+  color: var(--text);
+}
+.segmented > button[aria-pressed="true"] {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+.talos[data-theme="dark"] .segmented > button[aria-pressed="true"] {
+  background: var(--border-strong);
+}
+.segmented > button:disabled {
+  opacity: 0.45;
+}
+
+/* ---------- tabs ---------- */
+.tabs {
+  display: flex;
+  flex: none;
+  padding: 0 var(--gutter);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.frame-content .tabs {
+  padding: 0 var(--gutter-content);
+}
+.tabs > button {
+  position: relative;
+  flex: none;
+  height: 44px;
+  padding: 0 var(--s-1);
+  color: var(--muted);
+  font-weight: 500;
+}
+.tabs > button + button {
+  margin-left: var(--s-5);
+}
+.tabs > button:hover {
+  color: var(--text);
+}
+.tabs > button[aria-selected="true"] {
+  color: var(--text);
+}
+.tabs > button[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}

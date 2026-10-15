@@ -1,0 +1,23 @@
+{
+  "name": "@talos/contract",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "node ../../tools/typecheck.mjs -p tsconfig.json && node ../../tools/typecheck.mjs -p tsconfig.test.json",
+    "lint": "eslint .",
+    "test": "vitest run --config ../../vitest.config.mjs --project @talos/contract",
+    "build": "pnpm typecheck && node compat.mjs"
+  },
+  "dependencies": {
+    "@talos/base": "workspace:*",
+    "@talos/docpack": "workspace:*",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}

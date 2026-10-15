@@ -1,0 +1,1 @@
+.row:is(.active):where(.wide) { inset: 0; aspect-ratio: 1; width: clamp(1px, 2vw, 3px); height: min(1px, 2px); padding: max(1px, 2px); backdrop-filter: blur(1px); }

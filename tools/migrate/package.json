@@ -1,0 +1,25 @@
+{
+  "name": "@talos/migrate",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "node ../../tools/typecheck.mjs -p tsconfig.json && node ../../tools/typecheck.mjs -p tsconfig.test.json",
+    "lint": "eslint .",
+    "test": "vitest run --config ../../vitest.config.mjs --project @talos/migrate",
+    "build": "pnpm typecheck"
+  },
+  "dependencies": {
+    "@talos/base": "workspace:*",
+    "@talos/contract": "workspace:*",
+    "@talos/objectstore": "workspace:*",
+    "@talos/server": "workspace:*",
+    "fflate": "0.8.2"
+  },
+  "devDependencies": {
+    "@talos/link": "workspace:*"
+  }
+}

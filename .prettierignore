@@ -1,0 +1,4 @@
+pnpm-lock.yaml
+docs/
+tools/compat-check/fixtures/
+tools/boundaries/exceptions.json

@@ -1,0 +1,60 @@
+/* ---------- rows ---------- */
+.lib-list-body,
+.lib-collection-body {
+  padding: var(--s-1) 0 var(--s-2);
+}
+.lib-collection-body {
+  padding-top: var(--s-3);
+}
+.lib-list-body .row + .row,
+.lib-collection-body .row + .row {
+  margin-top: 2px;
+}
+.frame-content .lib-collection-body .row {
+  margin-left: var(--s-3);
+  margin-right: var(--s-3);
+}
+.lib-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius);
+  background: var(--hover);
+  color: var(--muted);
+}
+.frame-content .lib-tile {
+  background: var(--raised);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.row.is-selected .lib-tile {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: none;
+}
+.lib-filter {
+  padding: 0 var(--gutter) var(--s-2);
+}
+.lib-notice {
+  padding: 0 var(--gutter-content) var(--s-3);
+}
+
+/* ---------- import ---------- */
+.lib-import-file {
+  display: flex;
+  align-items: flex-end;
+}
+.lib-import-file > .field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.lib-import-file > .btn {
+  flex: none;
+  margin-left: var(--s-2);
+}
+.lib-muted {
+  color: var(--muted);
+  font-size: var(--fs-1);
+  line-height: var(--lh-1);
+}

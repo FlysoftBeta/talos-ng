@@ -1,0 +1,19 @@
+{
+  "name": "@talos/objectstore",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/conformance.ts"
+  },
+  "scripts": {
+    "typecheck": "node ../../tools/typecheck.mjs -p tsconfig.json && node ../../tools/typecheck.mjs -p tsconfig.test.json",
+    "lint": "eslint .",
+    "test": "vitest run --config ../../vitest.config.mjs --project @talos/objectstore",
+    "build": "pnpm typecheck"
+  },
+  "dependencies": {
+    "@talos/base": "workspace:*"
+  }
+}

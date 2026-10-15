@@ -1,0 +1,15 @@
+{
+  "name": "@talos/base",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "node ../../tools/typecheck.mjs -p tsconfig.json && node ../../tools/typecheck.mjs -p tsconfig.test.json",
+    "lint": "eslint .",
+    "test": "vitest run --config ../../vitest.config.mjs --project @talos/base",
+    "build": "pnpm typecheck"
+  }
+}

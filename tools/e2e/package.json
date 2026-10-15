@@ -1,0 +1,16 @@
+{
+  "name": "@talos/e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "node -e \"const{globSync}=require('node:fs');const{spawnSync}=require('node:child_process');let bad=0;for(const f of globSync('{run,dev}.mjs').concat(globSync('{harness,scenarios}/**/*.mjs')))if(spawnSync(process.execPath,['--check',f],{stdio:'inherit'}).status)bad=1;process.exit(bad)\"",
+    "lint": "eslint .",
+    "test": "vitest run --config ../../vitest.config.mjs --project @talos/e2e",
+    "build": "pnpm typecheck",
+    "current": "node run.mjs",
+    "legacy": "node run.mjs --legacy"
+  },
+  "dependencies": {
+    "playwright": "1.64.0"
+  }
+}

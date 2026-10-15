@@ -1,0 +1,14 @@
+{
+  "name": "@talos/compat-check",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "node ../../tools/typecheck.mjs -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run --config ../../vitest.config.mjs --project @talos/compat-check",
+    "build": "pnpm typecheck"
+  },
+  "dependencies": {
+    "acorn": "8.19.0"
+  }
+}

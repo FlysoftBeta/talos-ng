@@ -1,0 +1,136 @@
+# Sync and offline
+
+Packages: `@talos/sync` (pure algorithms, depends on `base` only: no storage, network, timers,
+randomness or module state), server `kernel/sync` (`SyncHub`), client `core/data` (sync
+engine, outbox executor, repositories). Entry points: `packages/sync/src/index.ts`,
+`packages/server/src/kernel/sync/sync-hub.ts`, `packages/client/src/core/data/sync-engine.ts`.
+
+## Principle
+
+Row-revision sync over access scopes. **Pull on every connect is the correctness mechanism;
+pushed deltas are an optimisation.** One mechanism replaces per-feature revision sums and
+snapshots. Client writes go through a durable outbox with idempotency keys, optimistic local
+reducers and shared pure merge functions.
+
+## Scopes and revisions (server to client)
+
+Synced state is rows in **scopes**; a scope is the unit of access control and subscription:
+
+- `me:<user>`: profile, settings, roles/gates, device state, own conversation states, own
+  grants, own jobs, own library/media/AI lists, own progress.
+- `conv:<id>`: conversation metadata, visible members, posts. `coll:<id>`: collection or
+  playlist metadata and items. `ai:<conversation>`: windowed AI messages. `learn`: the
+  word corpus. `sys`: announcement, global locks, public config.
+- Admin data is never synced; the workbench is online with paged calls.
+
+Every write bumps the global `rev` inside its transaction and stamps the rows it touches.
+`sync.pull({cursors:{[scope]:rev}})` returns per scope `{rows:[{type,id,rev,deleted,data}],
+cursor, more, reset?}` plus `gone` and `added` scope lists. After a scope's final page the
+connection is subscribed and later commits push the same row shapes as `sync.delta` events.
+Losing access puts the scope in `gone` (the client purges it); gaining access lists it in
+`added` and it syncs from 0. Memberships and grants changes must therefore refresh the
+affected scopes (`SyncHub.refreshAccess`, and re-projection of grants when community
+membership changes).
+
+### Server `SyncHub`
+
+Scope providers (`match, access, list, select`) and entity serialisers register at startup.
+
+- A scope shared by several providers is visible only if **every** matching provider grants
+  access, and providers are combined before paging so transaction boundaries stay intact.
+  Provider `select` results are ordered by revision, strictly after the cursor, tombstones
+  included; `selectDelta` keeps the last revision group whole (the row limit is soft).
+- Pull and point reads must serialise identically, tombstones included. Serialisers may
+  transform data but not row identity or revision.
+- A connection subscribes to a scope only after its final pull page; rebinding replaces the
+  previous subscription. Pushes after commit re-read touched rows from the committed state.
+- Memory stays bounded: changes are scanned in batches retaining candidate rows for the first
+  page plus the next revision group, per entity type; counts continue to detect window resets.
+
+## Windowed types
+
+Posts (and AI messages) are too large to mirror. The client keeps contiguous **intervals** by
+sequence number (`IntervalSet`: closed, canonical, merged on overlap and adjacency). Deltas
+cover the whole scope; the client applies rows inside held windows and consecutive
+extensions of the greatest window, and ignores rows in gaps. If more than a threshold of
+changes accumulated, the server answers `reset` for that type and the client keeps only what
+it re-fetches through explicit page calls (`mergePage` certifies a fetched range; an empty
+complete page certifies absence). Windowed rows are never seeded by deltas into an empty
+window. Sequence numbers must be stable per row id. Pages are bounded in rows and serialised
+bytes so a header never overflows; large bodies are fetched separately as binary chunks.
+
+## Applying pulls (`planApply`)
+
+The planner turns a complete pull, or a buffered ordered chain of pages, into operations an
+executor runs in **one transaction**: conditional `put`/`delete` (only if `row.rev` is newer
+than the held revision; a missing revision compares below zero), `dropType`, `setWindow`,
+`setCursor`. Deletion revisions are kept so old history pages cannot resurrect deleted rows.
+An incomplete chain (`more` on the last page) produces no operations; on disconnect buffered
+pages are discarded and the pull restarts from the durable cursor. The cursor is persisted
+only with the rows. The caller serialises planning per scope. Conditional operations (not
+injected storage reads) keep revision checks transactional and work with sync or async
+executors. Memory grows with the whole pull; servers use `reset` to bound large types.
+
+## Conflict rules
+
+All pure, commutative, associative and idempotent over valid histories; the server applies
+the same functions to queued writes, so two offline devices converge without a proposal
+side channel.
+
+- `Lww<T>` `{v, t:{ms,counter}, op}`: greatest `(ms, counter, op)` wins (settings, drafts,
+  mute, pin, resume position, theme). `clampFutureStamp` caps stamps above `now + maxSkew`.
+- `Max`: monotonic numbers or `{seq,id}` cursors (read cursor, furthest reading position,
+  announcement acknowledgement by revision).
+- Counters per device: grow-only per device, merged by maximum per field, summed for display
+  (reading seconds, learning progress). Learning clears an observed wrong answer by recording
+  an observed-prefix per source device, so unseen concurrent errors survive.
+- Immutable facts and tombstones: a deletion beats any live fact; otherwise the greater
+  revision wins (posts, documents). Tombstones never resurrect (SQL triggers on posts).
+- Identities must not be reused for different payloads.
+
+## Outbox (client to server)
+
+`reduceOutbox` is a pure reducer; the executor persists the list **before** any network
+effect. Item: `{op, method, args, body?, createdAt, state: pending|sending|failed, attempts,
+error?, dependencies}`.
+
+- FIFO per ordering key; only the first outstanding operation per key may fly; a failed or
+  dependency-blocked head blocks its key. Default capacity is one in flight in the app.
+- `op` is the idempotency key; the server remembers results for 14 days, so a late success
+  after a connection loss is harmless.
+- Ack removes the item **only after** the authoritative rows arrive by delta/pull; the
+  optimistic mark clears then. Optimistic data is never promoted to authoritative base.
+- Terminal rejections (`E_DENIED, E_INVALID, E_NOT_FOUND, E_CONFLICT`) make the item
+  `failed`; the affected rows roll back and are re-pulled; the status centre offers retry or
+  discard. Every other error, including transport loss, returns it to pending with backoff
+  (500 ms doubling to 30 s; a hint, the executor enforces it). Auth/version/lock errors
+  pause flushing at the application level.
+- Dependencies must already be queued (no cycles). Discarding a dependency fails its
+  dependents with `E_CONFLICT`; a discarded dependency cannot recover, so dependents are
+  recreated with new ids. A sending item cannot be discarded.
+- `coalesce` lets a later pending whole-register LWW write replace an earlier pending one;
+  sending, failed, dependency-bearing and referenced operations are barriers. Never implicit.
+- No UI action silently drops an intent.
+
+### Optimistic projections
+
+`pendingRow(base)` / `withPending(row, op, patch)` overlay shallow field patches in enqueue
+order over the authoritative base; `updateAuthoritative` rebases, `rollback` removes one
+operation's patch, `settle` removes the mark after the authoritative result is installed.
+Patches are serialisable data, not closures. Queued methods have a pure local reducer
+`{user, op}`-parameterised that replays deterministically after a crash.
+
+## Client sync engine
+
+One state machine: `offline, connecting, authenticating, syncing(progress), live`, with
+independent `locked` and `updating` flags. It owns session resume, pull on connect, buffered
+pull chains committed atomically (rows, tombstones, admitted scopes, cursors, last-sync
+time), delta application, outbox flush, retention downloads and quota eviction. Persisted
+per-user scope admission stops one user's cached shared data projecting into another user's
+session. Revision checks stop stale push/pull data regressing state. Navigator `onLine` is
+only a negative hint; going offline interrupts the carrier and leaves reconnect to the link
+retry machine.
+
+Retention content (documents, conversations, audio the user keeps offline) is downloaded by
+background schedulers using resumable ranged fetches into the file store (see
+`client-store.md`); the eviction order is in that document.

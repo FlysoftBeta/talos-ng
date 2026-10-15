@@ -1,0 +1,352 @@
+/*
+ * Talos design system — base layer. Colour variables come from tokens.ts (TalosProvider);
+ * this file mirrors the size, type and motion tokens. Chrome 70: no flex `gap`, no `inset`,
+ * no `aspect-ratio`, no clamp()/min()/max(), no :is()/:where()/:focus-visible.
+ * Grid layouts use `grid-gap`, which Chrome 70 supports.
+ */
+.talos {
+  --font:
+    -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "Segoe UI",
+    Roboto, sans-serif;
+  --font-mono: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  /* type scale: size / line height */
+  --fs-1: 12px;
+  --lh-1: 16px;
+  --fs-2: 13px;
+  --lh-2: 18px;
+  --fs-3: 14px;
+  --lh-3: 20px;
+  --fs-4: 16px;
+  --lh-4: 24px;
+  --fs-5: 20px;
+  --lh-5: 28px;
+  --fs-6: 28px;
+  --lh-6: 36px;
+  --lh-read: 1.7;
+  /* space scale (4 px grid) */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  /* sizes */
+  --rail: 64px;
+  --list: 296px;
+  --nav: 216px;
+  --header: 56px;
+  --control: 40px;
+  --control-sm: 32px;
+  --row: 44px;
+  --row-2: 56px;
+  --gutter: 16px;
+  --gutter-content: 24px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --fast: 120ms;
+  --normal: 180ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  position: relative;
+  height: 100%;
+  font-family: var(--font);
+  font-size: var(--fs-3);
+  line-height: var(--lh-3);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  color-scheme: light;
+}
+.talos[data-theme="dark"] {
+  color-scheme: dark;
+}
+@media (max-width: 1099px) {
+  .talos {
+    --list: 264px;
+    --nav: 184px;
+    --gutter-content: 16px;
+  }
+}
+.talos.text-large {
+  --fs-1: 13px;
+  --lh-1: 18px;
+  --fs-2: 14px;
+  --lh-2: 20px;
+  --fs-3: 16px;
+  --lh-3: 24px;
+  --fs-4: 18px;
+  --lh-4: 26px;
+}
+
+/* ---------- reset ---------- */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+.talos *,
+.talos *::before,
+.talos *::after {
+  box-sizing: border-box;
+}
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol,
+dl,
+dd,
+figure,
+blockquote,
+fieldset {
+  margin: 0;
+  padding: 0;
+}
+fieldset {
+  border: 0;
+  min-width: 0;
+}
+ul,
+ol {
+  list-style: none;
+}
+h1,
+h2,
+h3,
+h4 {
+  font-size: inherit;
+  font-weight: 600;
+  line-height: inherit;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: inherit;
+  -webkit-appearance: none;
+}
+button:disabled,
+button[aria-disabled="true"] {
+  cursor: default;
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+svg {
+  flex-shrink: 0;
+}
+hr {
+  height: 1px;
+  margin: 0;
+  border: 0;
+  background: var(--border);
+}
+.talos progress {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 4px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--hover);
+  overflow: hidden;
+}
+.talos progress::-webkit-progress-bar {
+  background: var(--hover);
+  border-radius: 2px;
+}
+.talos progress::-webkit-progress-value {
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width var(--normal) var(--ease);
+}
+
+/* ---------- focus (keyboard modality only) ---------- */
+.talos :focus {
+  outline: none;
+}
+.talos[data-focus="keyboard"] :focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.talos[data-focus="keyboard"] input:focus,
+.talos[data-focus="keyboard"] textarea:focus {
+  outline: none;
+}
+
+/* ---------- touch and selection ---------- */
+.talos {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.talos input,
+.talos textarea,
+.talos [contenteditable="true"],
+.talos .selectable {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* ---------- scrollbars ---------- */
+.talos ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.talos ::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.talos ::-webkit-scrollbar-track,
+.talos ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.talos ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 5px;
+  background: var(--border-strong);
+  background-clip: padding-box;
+}
+.talos ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--faint);
+}
+
+/* ---------- text helpers ---------- */
+.talos .t-1 {
+  font-size: var(--fs-1);
+  line-height: var(--lh-1);
+}
+.talos .t-2 {
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+}
+.talos .t-4 {
+  font-size: var(--fs-4);
+  line-height: var(--lh-4);
+}
+.talos .t-5 {
+  font-size: var(--fs-5);
+  line-height: var(--lh-5);
+}
+.talos .t-6 {
+  font-size: var(--fs-6);
+  line-height: var(--lh-6);
+}
+.talos .muted {
+  color: var(--muted);
+}
+.talos .strong {
+  font-weight: 600;
+}
+.talos .num {
+  font-variant-numeric: tabular-nums;
+}
+.talos .ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.talos .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
+  white-space: nowrap;
+}
+.talos .scroll {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+@keyframes talos-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes talos-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes talos-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes talos-slide-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* TRANSITIONAL: names used by feature stylesheets not yet rebuilt. Remove when unused. */
+.talos {
+  --surface: var(--bg);
+  --background: var(--sidebar);
+  --subtle: var(--raised);
+  --action: var(--accent);
+  --surface-hover: var(--hover);
+  --surface-selected: var(--selected);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .talos *,
+  .talos *::before,
+  .talos *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

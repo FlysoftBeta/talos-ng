@@ -1,0 +1,14 @@
+{
+  "name": "@talos/package",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "node ../../tools/typecheck.mjs -p tsconfig.json && node --check structure.mjs && node --check e2e.mjs && node --check windows-smoke.mjs",
+    "lint": "eslint .",
+    "test": "vitest run --config ../../vitest.config.mjs --project @talos/package",
+    "build": "pnpm typecheck"
+  },
+  "dependencies": {
+    "@talos/launcher": "workspace:*"
+  }
+}

@@ -1,0 +1,208 @@
+/* ---------- backdrop ---------- */
+.overlay-backdrop {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 200;
+  display: flex;
+  background: var(--scrim);
+  animation: talos-fade-in var(--fast) var(--ease);
+}
+.overlay-backdrop.is-dialog {
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-5);
+}
+.overlay-backdrop.is-sheet {
+  justify-content: flex-end;
+}
+
+/* ---------- surfaces ---------- */
+.overlay-surface {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.overlay-surface:focus {
+  outline: none;
+}
+.talos[data-focus="keyboard"] .overlay-surface:focus {
+  outline: none;
+}
+.dialog {
+  width: 520px;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-lg);
+  animation: talos-rise var(--normal) var(--ease);
+}
+.dialog-sm {
+  width: 400px;
+}
+.dialog-lg {
+  width: 720px;
+}
+.dialog-xl {
+  width: 960px;
+}
+.sheet {
+  width: 440px;
+  max-width: 100%;
+  height: 100%;
+  border-left: 1px solid var(--border);
+  animation: talos-slide-in var(--normal) var(--ease);
+}
+@media (max-width: 1099px) {
+  .sheet {
+    width: 400px;
+  }
+}
+@media (max-width: 599px) {
+  .sheet {
+    width: 100%;
+  }
+  .overlay-backdrop.is-dialog {
+    padding: var(--s-3);
+  }
+}
+
+/* ---------- header / body / footer ---------- */
+.overlay-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-height: var(--header);
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-5);
+}
+.sheet .overlay-header {
+  border-bottom: 1px solid var(--border);
+}
+.overlay-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.overlay-title h2 {
+  font-size: var(--fs-4);
+  line-height: var(--lh-4);
+  font-weight: 600;
+}
+.overlay-title p {
+  color: var(--muted);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+}
+.overlay-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-left: var(--s-2);
+}
+.overlay-actions > * + * {
+  margin-left: var(--s-1);
+}
+.overlay-header > .icon-btn {
+  margin-left: var(--s-1);
+}
+.overlay-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--s-1) var(--s-5) var(--s-5);
+}
+.sheet .overlay-body {
+  padding-top: var(--s-5);
+}
+.overlay-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  padding: var(--s-3) var(--s-5) var(--s-4);
+}
+.sheet .overlay-footer {
+  border-top: 1px solid var(--border);
+}
+.overlay-footer > * + * {
+  margin-left: var(--s-2);
+}
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  margin: var(--s-5) 0 0 0;
+}
+.dialog-actions > * + * {
+  margin-left: var(--s-2);
+}
+.confirm-text {
+  color: var(--muted);
+}
+
+/* ---------- menu ---------- */
+.menu-host {
+  position: relative;
+  display: inline-flex;
+}
+.menu {
+  position: fixed;
+  z-index: 300;
+  min-width: 180px;
+  max-width: 280px;
+  padding: var(--s-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  animation: talos-fade-in var(--fast) var(--ease);
+}
+.talos[data-theme="dark"] .menu {
+  background: var(--raised);
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: var(--control);
+  padding: 0 var(--s-3) 0 var(--s-2);
+  border-radius: 6px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.menu-item:hover,
+.menu-item:focus {
+  background: var(--hover);
+}
+.menu-icon {
+  display: flex;
+  justify-content: center;
+  width: 24px;
+  margin-right: var(--s-2);
+  color: var(--muted);
+}
+.menu-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.menu-check {
+  margin-left: var(--s-3);
+  color: var(--accent);
+}
+.menu-item.is-danger,
+.menu-item.is-danger .menu-icon {
+  color: var(--failed);
+}
+.menu-item.is-disabled {
+  opacity: 0.45;
+}
+
+/* Fixed overlays must not inherit a containing Stack's sibling spacing. */
+.stack > .overlay-backdrop {
+  margin: 0;
+}

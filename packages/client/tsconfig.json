@@ -1,0 +1,6 @@
+{
+  "extends": "../../tools/tsconfig/browser.json",
+  "compilerOptions": { "jsx": "react-jsx" },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+}

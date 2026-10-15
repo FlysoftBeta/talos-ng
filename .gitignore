@@ -1,0 +1,18 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.DS_Store
+.data/
+
+# Isolated audit/test temporary data (large backup fixtures).
+.tmp/
+
+# E2E screenshots are a debugging artifact only (written under .tmp/e2e).
+packages/client/screenshots/
+
+# Finished process documents (task prompts, results, audits) — kept on disk, out of git.
+archive/

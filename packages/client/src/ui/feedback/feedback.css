@@ -1,0 +1,440 @@
+/* ---------- list rows ---------- */
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: var(--row);
+  margin: 0 var(--s-2);
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+.row-2 {
+  min-height: var(--row-2);
+}
+.row.is-action:hover {
+  background: var(--hover);
+}
+.row.is-selected,
+.row.is-selected:hover {
+  background: var(--selected);
+}
+.row-leading {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-right: var(--s-3);
+  color: var(--muted);
+  pointer-events: none;
+}
+.row-leading button,
+.row-leading a {
+  pointer-events: auto;
+}
+.row-copy {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.row-line {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.row-main {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  color: inherit;
+  text-align: left;
+}
+/* stretch the main button over the whole row */
+.row-main::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: var(--radius);
+}
+.talos[data-focus="keyboard"] .row-main:focus {
+  outline: none;
+}
+.talos[data-focus="keyboard"] .row-main:focus::after {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.row-title {
+  display: block;
+  font-weight: 500;
+}
+.row-suffix {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  margin-left: var(--s-1);
+  color: var(--faint);
+}
+.row-suffix > * + * {
+  margin-left: 2px;
+}
+.row-meta {
+  flex: none;
+  margin-left: auto;
+  padding-left: var(--s-2);
+  color: var(--muted);
+  font-size: var(--fs-1);
+  line-height: var(--lh-1);
+  font-variant-numeric: tabular-nums;
+}
+.row-hint {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+}
+.row-badge {
+  flex: none;
+  margin-left: var(--s-2);
+}
+.row-mark {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  margin-left: var(--s-2);
+}
+/* Above the stretched main button by order; no z-index, so a row menu is not covered
+ * by the trailing controls of the rows below it. */
+.row-trailing {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-left: var(--s-2);
+  margin-right: calc(-1 * var(--s-1));
+}
+.row-trailing > * + * {
+  margin-left: 2px;
+}
+
+/* ---------- badges and marks ---------- */
+.badge {
+  display: inline-block;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.badge-accent {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.badge-muted {
+  background: var(--border-strong);
+  color: var(--text);
+}
+.badge-pending {
+  background: var(--pending-soft);
+  color: var(--pending);
+}
+.badge-failed {
+  background: var(--failed);
+  color: var(--bg);
+}
+.mark {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--fs-1);
+  line-height: var(--lh-1);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.mark > .icon {
+  margin-right: 3px;
+}
+.mark-pending {
+  color: var(--pending);
+}
+.mark-failed {
+  color: var(--failed);
+}
+.mark-confirmed {
+  color: var(--confirmed);
+}
+.mark-action,
+.link-btn {
+  margin-left: var(--s-2);
+  padding: 2px 0;
+  color: var(--accent);
+  font-weight: 600;
+}
+.mark-action:hover,
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+/* ---------- state panels ---------- */
+.state-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: var(--s-6) var(--s-5);
+  text-align: center;
+}
+.state-panel.is-compact {
+  min-height: 0;
+  padding: var(--s-5) var(--s-4);
+}
+.state-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--s-3);
+  border-radius: 14px;
+  background: var(--raised);
+  color: var(--muted);
+}
+.frame-list .state-icon,
+.overlay-surface .state-icon {
+  background: var(--hover);
+}
+.state-panel h3 {
+  font-size: var(--fs-3);
+  line-height: var(--lh-3);
+  font-weight: 600;
+}
+.state-panel p {
+  max-width: 320px;
+  margin-top: var(--s-1);
+  color: var(--muted);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+}
+.state-action {
+  margin-top: var(--s-4);
+}
+.state-offline .state-icon {
+  background: var(--pending-soft);
+  color: var(--pending);
+}
+.state-error .state-icon {
+  background: var(--failed-soft);
+  color: var(--failed);
+}
+.state-loading {
+  opacity: 0;
+  animation: talos-fade-in var(--normal) var(--ease) 300ms forwards;
+}
+.state-loading .state-icon {
+  background: none;
+  margin-bottom: var(--s-2);
+}
+.state-loading h3 {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: var(--fs-2);
+}
+.icon-spin {
+  animation: talos-spin 0.9s linear infinite;
+}
+.spinner {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+/* ---------- progress ---------- */
+.progress {
+  position: relative;
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--hover);
+  overflow: hidden;
+}
+.progress-bar {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width var(--normal) var(--ease);
+}
+.progress.is-indeterminate .progress-bar {
+  width: 30%;
+  animation: talos-indeterminate 1.2s var(--ease) infinite;
+}
+@keyframes talos-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+/* ---------- inline notices ---------- */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4);
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: var(--text);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+}
+.notice > .icon {
+  margin: 0 var(--s-3) 0 0;
+  color: var(--muted);
+}
+.notice-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 1px;
+  overflow-wrap: break-word;
+}
+.notice-action {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin: -2px 0 -2px var(--s-3);
+}
+.notice-pending {
+  background: var(--pending-soft);
+}
+.notice-pending > .icon {
+  color: var(--pending);
+}
+.notice-failed {
+  background: var(--failed-soft);
+}
+.notice-failed > .icon {
+  color: var(--failed);
+}
+.notice-confirmed {
+  background: var(--confirmed-soft);
+}
+.notice-confirmed > .icon {
+  color: var(--confirmed);
+}
+.notice-close {
+  display: inline-flex;
+  margin-left: var(--s-2);
+  padding: 2px;
+  border-radius: 4px;
+  color: var(--muted);
+}
+.banner-host > * + * {
+  margin-top: var(--s-2);
+}
+
+/* ---------- toast ---------- */
+.toast-host {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--s-6);
+  z-index: 400;
+  display: flex;
+  justify-content: center;
+  padding: 0 var(--s-4);
+  pointer-events: none;
+}
+.toast {
+  max-width: 480px;
+  padding: 10px var(--s-4);
+  border-radius: var(--radius);
+  background: var(--inverse);
+  color: var(--inverse-ink);
+  box-shadow: var(--shadow);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+  text-align: center;
+  animation: talos-rise var(--normal) var(--ease);
+  pointer-events: auto;
+}
+.toast-failed {
+  background: var(--failed);
+  color: var(--bg);
+}
+.toast-host.is-legacy .notice {
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+}
+
+/* ---------- disabled-with-reason wrapper ---------- */
+.offline-hint {
+  position: relative;
+  display: inline-block;
+}
+.offline-hint > .disabled-control {
+  opacity: 0.42;
+  pointer-events: none;
+}
+.offline-hint.is-block {
+  display: block;
+}
+.offline-hit {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  min-height: 40px;
+  border-radius: var(--radius);
+}
+
+/* ---------- help tip ---------- */
+.help-tip {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+}
+.help-tip > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: var(--s-1);
+  border-radius: 10px;
+  color: var(--muted);
+}
+.help-tip > button:hover {
+  background: var(--hover);
+}
+.help-tip-content {
+  position: absolute;
+  top: 26px;
+  left: -8px;
+  z-index: 50;
+  width: 260px;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--radius);
+  background: var(--inverse);
+  color: var(--inverse-ink);
+  box-shadow: var(--shadow);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+  font-weight: 400;
+}
+
+/* ---------- skeleton ---------- */
+.skeleton {
+  display: block;
+  border-radius: 4px;
+  background: var(--hover);
+}

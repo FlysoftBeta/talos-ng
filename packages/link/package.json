@@ -1,0 +1,24 @@
+{
+  "name": "@talos/link",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ws-browser": "./src/ws-browser.ts",
+    "./ws-node": "./src/ws-node/index.ts"
+  },
+  "scripts": {
+    "typecheck": "node ../../tools/typecheck.mjs -p tsconfig.json && node ../../tools/typecheck.mjs -p src/ws-node/tsconfig.json && node ../../tools/typecheck.mjs -p tsconfig.test.json && node ../../tools/typecheck.mjs -p tsconfig.browser.json",
+    "lint": "eslint .",
+    "test": "vitest run --config ../../vitest.config.mjs --project @talos/link",
+    "build": "pnpm typecheck"
+  },
+  "dependencies": {
+    "@talos/base": "workspace:*",
+    "ws": "8.18.3"
+  },
+  "devDependencies": {
+    "@types/ws": "8.18.1"
+  }
+}

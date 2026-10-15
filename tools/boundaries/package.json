@@ -1,0 +1,13 @@
+{
+  "name": "@talos/boundaries",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "node --check plugin.mjs && node --check graph.mjs && node --check ratchet.mjs && node --check sql-ownership.mjs",
+    "lint": "eslint .",
+    "test": "vitest run --config ../../vitest.config.mjs --project @talos/boundaries",
+    "build": "pnpm typecheck",
+    "ratchet": "node ratchet.mjs --check",
+    "ratchet:write": "node ratchet.mjs --write"
+  }
+}

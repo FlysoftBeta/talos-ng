@@ -1,0 +1,172 @@
+/* Buttons: one height per size, one look per rank. */
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--control);
+  min-width: 64px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: var(--fs-3);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  vertical-align: middle;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+.btn:hover {
+  text-decoration: none;
+}
+.btn > .icon + .btn-label {
+  margin-left: 6px;
+}
+.btn-sm {
+  height: var(--control-sm);
+  min-width: 48px;
+  padding: 0 12px;
+  font-size: var(--fs-2);
+}
+.btn-block {
+  display: flex;
+  width: 100%;
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+.btn-secondary {
+  background: var(--bg);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.btn-secondary:hover {
+  background: var(--hover);
+}
+.btn-ghost {
+  color: var(--text);
+}
+.btn-ghost:hover {
+  background: var(--hover);
+}
+.btn-danger {
+  background: var(--failed);
+  color: var(--bg);
+}
+.btn-danger:hover {
+  opacity: 0.9;
+}
+.btn-danger-ghost {
+  color: var(--failed);
+}
+.btn-danger-ghost:hover {
+  background: var(--failed-soft);
+}
+.btn:disabled,
+.btn.is-disabled {
+  opacity: 0.42;
+}
+.btn:disabled:hover,
+.btn.is-disabled:hover {
+  background-color: transparent;
+}
+.btn-primary:disabled:hover,
+.btn-primary.is-disabled:hover {
+  background-color: var(--accent);
+}
+.btn-secondary:disabled:hover,
+.btn-secondary.is-disabled:hover {
+  background-color: var(--bg);
+}
+.btn-danger:disabled,
+.btn-danger.is-disabled {
+  opacity: 0.42;
+}
+.btn.is-busy {
+  opacity: 0.8;
+}
+
+/* Icon buttons: square, ghost, always with an accessible label. */
+.icon-btn {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--control);
+  height: var(--control);
+  border-radius: var(--radius);
+  color: var(--muted);
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+.icon-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.icon-btn[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.icon-btn-sm {
+  width: var(--control-sm);
+  height: var(--control-sm);
+}
+.icon-btn-danger {
+  color: var(--failed);
+}
+.icon-btn-danger:hover {
+  background: var(--failed-soft);
+  color: var(--failed);
+}
+.icon-btn:disabled,
+.icon-btn.is-disabled {
+  opacity: 0.38;
+}
+.icon-btn:disabled:hover,
+.icon-btn.is-disabled:hover {
+  background: transparent;
+  color: var(--muted);
+}
+
+/* Count badge on icons (unread, pending). Hidden when zero, never an empty dot. */
+.count-badge {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border: 2px solid var(--sidebar);
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Action rows: buttons laid out with margins (no flex gap on Chrome 70). */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: -4px;
+}
+.actions > * {
+  margin: 4px;
+}
+.actions-end {
+  justify-content: flex-end;
+}

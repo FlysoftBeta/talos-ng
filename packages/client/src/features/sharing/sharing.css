@@ -1,0 +1,31 @@
+.share-heading {
+  margin-bottom: var(--s-2);
+  padding: 0 var(--s-1);
+  color: var(--muted);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+  font-weight: 600;
+}
+.share-grants {
+  margin: 0 calc(-1 * var(--s-2));
+}
+.share-grants .row + .row {
+  margin-top: 2px;
+}
+.share-grants .row-trailing > .tag + * {
+  margin-left: var(--s-1);
+}
+.share-add {
+  margin-top: var(--s-5);
+}
+.share-form {
+  padding: var(--s-4);
+}
+.share-form > * + *,
+.share-picker > * + * {
+  margin-top: var(--s-4);
+}
+.share-level .field-label {
+  display: block;
+  margin-bottom: var(--s-2);
+}

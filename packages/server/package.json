@@ -1,0 +1,33 @@
+{
+  "name": "@talos/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./migration": "./src/migration.ts"
+  },
+  "scripts": {
+    "typecheck": "node ../../tools/typecheck.mjs -p tsconfig.json && node ../../tools/typecheck.mjs -p tsconfig.test.json",
+    "lint": "eslint .",
+    "test": "vitest run --config ../../vitest.config.mjs --project @talos/server",
+    "build": "node build.mjs",
+    "dev:server": "node --experimental-transform-types bin/talos-server.ts --dev"
+  },
+  "dependencies": {
+    "@talos/base": "workspace:*",
+    "@talos/contract": "workspace:*",
+    "@talos/link": "workspace:*",
+    "@talos/objectstore": "workspace:*",
+    "@talos/sync": "workspace:*",
+    "jimp": "^1.6.1",
+    "zod": "3.25.76",
+    "@talos/launcher": "workspace:*",
+    "@talos/docpipe": "workspace:*",
+    "@talos/docpack": "workspace:*",
+    "cheerio": "1.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}

@@ -1,0 +1,38 @@
+.settings-account {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.settings-account small {
+  color: var(--muted);
+  font-size: var(--fs-2);
+}
+.settings-profile {
+  padding: var(--s-4);
+}
+.settings-profile > * + * {
+  margin-top: var(--s-4);
+}
+.settings-profile-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.settings-value {
+  user-select: text;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  color: var(--muted);
+  font-size: var(--fs-2);
+}
+.settings-device {
+  font-family: var(--font-mono);
+}
+.settings-warning {
+  display: block;
+  margin-top: var(--s-3);
+  color: var(--failed);
+}
+.settings-pin {
+  text-align: center;
+  padding: var(--s-2) 0;
+}
