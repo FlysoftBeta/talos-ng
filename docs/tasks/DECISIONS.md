@@ -483,7 +483,7 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   win32 packages are installed on Linux through pnpm `supportedArchitectures` so the
   lockfile pins their integrity, the pnpm store makes the step offline-cacheable, and
   `tools/package/native-manifest.json` pins SHA-256 of every native binary (re-pin with
-  `node --experimental-transform-types tools/package/native.ts --pin` after a bump). Debian
+  `node --import tsx tools/package/native.ts --pin` after a bump). Debian
   and Red Hat share the glibc linux-x64 binaries (sharp's libvips needs glibc 2.26+).
 
 - **D-112 — Dependency refresh and upstream yt-dlp client selection.** Update stable
@@ -501,3 +501,10 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   are ^24.18.0, direct @types/node is 24.19.2, CI and packaged runtime pin 24.22.0,
   and server/launcher/migration emit for node24. Chrome 70 and Zod remain unchanged.
   Verification is the normal build on host Node 24.18.0, not a runtime/package gate.
+
+- **D-114 — Source TypeScript entrypoints use the existing tsx loader.** Remove
+  the experimental transform flag from commands and subprocesses. Their import
+  graphs contain parameter properties unsupported by Node 24 strip-only execution,
+  so source runners use node --import tsx with an explicit pinned dev dependency.
+  Migration registers tsx in-process instead of spawning a bootstrap child.
+  Production bundles are unchanged; verification remains build-only as requested.

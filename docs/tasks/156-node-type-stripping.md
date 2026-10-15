@@ -1,7 +1,0 @@
-# 156 — Remove experimental transform-types flag
-
-User requests removing all --experimental-transform-types usage. Project baseline is Node ^24.18.0 (host v24.18.0). User authorizes commit/push (orchestrator handles push), and requests build-only verification, no tests.
-
-Remove flag from runtime scripts, subprocess arguments, developer instructions and diagnostics. Inspect migration CLI reexec guard carefully: remove flag-driven bootstrap without creating recursive spawning; preserve signals/exit/arguments behavior where needed. Determine whether directly executed TS/transitive imports use non-erasable syntax (parameter properties, enums etc); choose an appropriate existing tsx loader or small syntax refactor if necessary, rather than silently breaking entrypoints. Do not replace the flag with an equivalent experimental transform option. Prefer Node 24 built-in stripping where supported. Check applicable docs and source. No unrelated edits; existing main docs/tasks/154-music-sources.md belongs to other work.
-
-Scope: all affected scripts/source/docs. Do not edit HANDOFF/ROADMAP/DECISIONS (tell orchestrator about historical docs flag mention). Run pnpm install then unmodified pnpm build only. No check/test/e2e/package commands. Read-only static syntax analysis and --help entrypoint invocations are permitted if no side effects. Use disk-backed .tmp, bounded commands. Commit changes and docs/tasks/156-node-type-stripping.result.md with approach, evidence, limitations. No merge/push. Timeout 20 min.

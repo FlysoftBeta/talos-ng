@@ -1,3 +1,13 @@
+# Source TypeScript entrypoints — 2026-10-15
+
+- Removed experimental transform flag from scripts, subprocesses and instructions.
+  Source import graphs containing parameter properties now use the existing tsx
+  4.23.15 loader; migration registers it in-process instead of restarting itself.
+- Main at 518430f: frozen install and unmodified pnpm build exit 0 on Node 24.18.0;
+  static client compatibility checks report 0 violations. No separate tests/e2e/package
+  gates per user request. Live startup, migration data processing and packaging remain
+  unverified for this change. See D-114.
+
 # Node 24 alignment — 2026-10-15
 
 - Host is Node 24.18.0; workspace requires ^24.18.0. Packaged runtime and CI pin
