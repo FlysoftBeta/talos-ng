@@ -508,3 +508,26 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   so source runners use node --import tsx with an explicit pinned dev dependency.
   Migration registers tsx in-process instead of spawning a bootstrap child.
   Production bundles are unchanged; verification remains build-only as requested.
+
+- **D-113 — Unclipped floating controls.** Presentation-owned portal hosts keep menus,
+  selects and tooltips outside clipping ancestors, with a separate host inside each modal's
+  focus boundary. Open-only animation-frame positioning supports Chrome 70, viewport edges,
+  ancestor scrolling and animations without ResizeObserver.
+
+- **D-114 — Built-in booklists and source-based saving.** Each user has private physical
+  我的书架 and 我的收藏 collections, pinned above recent documents and protected from
+  deletion/sharing. Favorites use ordinary membership with the existing offline LWW command
+  as concurrency metadata. Imports default to the shelf; transfers originate at an explicitly
+  named accessible source with a delegable grant (or source ownership). Destination item
+  updates only remove/reorder. Last-container removal immediately reclaims books, dependent
+  state/jobs and unreferenced objects, while preserving shared bytes and sync tombstones.
+
+- **D-115 — Music sources, delayed collection and fixed retention.** Music saving accepts
+  current search results or an accessible playlist, with no transfer flag or global catalog.
+  Playlist membership is the retention reference; search discovery authorizes access but does
+  not retain songs indefinitely. Durable unreferenced timestamps and job generations prevent
+  restart/race resurrection; reattachment cancels pending collection. Per owner clarification,
+  song collection is delayed, unlike books. Two independent server constants define audio-cache
+  expiry and unreferenced-song grace (both 30 days); remove administrator control of these
+  periods. Audio-cache expiry keeps song metadata; song collection removes live metadata,
+  discovery/state and file references. No upgrade migration: use fresh development data.

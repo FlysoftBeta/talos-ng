@@ -265,7 +265,11 @@ export function verifyCounts(
     };
     if (oneToOne[table]) {
       const actual = target.get<{ n: number }>(
-        `SELECT count(*) n FROM ${oneToOne[table]}`,
+        `SELECT count(*) n FROM ${oneToOne[table]}${
+          table === "booklists"
+            ? " WHERE json_extract(body,'$.builtin') IS NULL"
+            : ""
+        }`,
       )!.n;
       if (actual !== count.expected)
         mismatches.push(

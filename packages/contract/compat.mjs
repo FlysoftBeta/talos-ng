@@ -220,6 +220,7 @@ try {
         'library.doc.describe': [{doc:id},{document:{id:id,title:'测试',owner:id,created:1000,kind:'flow',status:'ready',pack:{id:hash,size:100},units:1,chars:2},pack:{id:hash,size:100},download:ticket}],
         'library.doc.fetch': [{doc:id,rids:[hash]},{ok:true}],
         'library.doc.delete': [{doc:id},{ok:true}],
+        'library.collection.transfer': [{source:id,target:id,doc:id},{ok:true}],
         'library.collection.create': [{title:'书单'},{id:id}],
         'library.collection.items': [{collection:id,docs:[id]},{ok:true}],
         'library.collection.delete': [{collection:id},{ok:true}],
