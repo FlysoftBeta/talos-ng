@@ -44,20 +44,21 @@ it can fetch live or keeps for offline use.
   extends to the last play plus 1-365 days. Deleting a playlist releases its retention; its
   tracks stay available to people who still reach them.
 - Songs without any playlist references are reclaimed **after a delay**, including search
-  results that were never saved. The delay uses the administrator's music eviction days
-  (30 days by default), measured from discovery for never-saved songs or from the removal
+  results that were never saved. The delay is fixed at 30 days, measured from discovery
+  for never-saved songs or from the removal
   of the last playlist reference. Adding a playlist reference cancels reclamation; a later
   last removal starts a new period. Searching again, playing, favouriting and queueing do
   not extend this period. No built-in music collections are created.
 - Scheduled reclamation removes the song's audio references, discovery access, favourites,
   queue entries and recent-play entries. Search can discover the song again afterwards.
-- Separately, the server drops audio that nothing has used for the administrator-set number of days
+- Separately, the server drops audio that nothing has used for 30 days
   (even for playlist members); the track stays listed and is prepared again on the next
   play.
 
 ## Limits
 
-The administrator sets the volume cap and the eviction days (admin.md). Tracks found
+The administrator sets the volume cap (admin.md). Audio cache expiry and unreferenced-song
+reclamation each have their own fixed 30-day period. Tracks found
 by search are usable only by the people who found them or hold a current playlist grant.
 Search discovery grants access while the track exists; it never prevents reclamation.
 A provider identifier, favourite, queue entry or root role alone cannot reveal or open

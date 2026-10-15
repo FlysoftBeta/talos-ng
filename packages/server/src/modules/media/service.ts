@@ -16,6 +16,10 @@ import type { Uow } from "../../kernel/persistence/uow.ts";
 import type { JobCommands } from "../../kernel/jobs/ports.ts";
 import type { ObjectLedger } from "../../kernel/objects/objects.ts";
 import type { ObjectStore } from "@talos/objectstore";
+import {
+  AUDIO_CACHE_EXPIRY_MS,
+  UNREFERENCED_SONG_GRACE_MS,
+} from "./retention-policy.ts";
 import { reconcileTracks, reclaimTracks } from "./lifecycle.ts";
 import { MediaRepo } from "./repo.ts";
 import { mediaMigrations } from "./schema.ts";
@@ -369,13 +373,15 @@ export class MediaService {
       ctx.changed(`coll:${id}`, "mediaPlaylist", id);
     });
   }
-  evict(days: number): number {
-    const cutoff = this.now() - days * 86400000;
+  evict(): number {
+    const now = this.now();
+    const songCutoff = now - UNREFERENCED_SONG_GRACE_MS;
+    const audioCutoff = now - AUDIO_CACHE_EXPIRY_MS;
     let count = 0;
     // Bound each reclamation revision so a large backlog remains synchronisable.
     for (;;) {
       const reclaimed = this.options.uow.write((ctx) =>
-        reclaimTracks(this.repo, this.options.objects, cutoff, ctx),
+        reclaimTracks(this.repo, this.options.objects, songCutoff, ctx),
       );
       count += reclaimed;
       if (reclaimed < 100) break;
@@ -383,7 +389,7 @@ export class MediaService {
     this.options.uow.write(() => {
       for (const row of this.repo.tracks()) {
         const track = JSON.parse(row.body) as MediaTrack;
-        if (!track.audio || (row.last_played ?? 0) >= cutoff) continue;
+        if (!track.audio || (row.last_played ?? 0) > audioCutoff) continue;
         this.options.objects.removeRef(track.audio.id, "media.audio", track.id);
         this.repo.putTrack(
           { ...track, audio: null },

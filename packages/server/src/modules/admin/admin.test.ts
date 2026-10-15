@@ -378,7 +378,6 @@ describe("admin workbench over memory link", () => {
         (
           await admin.api.admin.settings.set({
             maxVolume: 0.75,
-            evictionDays: 60,
           })
         ).maxVolume,
       ).toBe(0.75);

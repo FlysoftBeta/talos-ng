@@ -161,13 +161,13 @@ Talos does not pass a `player_client` extractor override.
   any live playlist reference exists; the last removal sets it only if not already set.
   Search, playback, favourites, queue writes and unrelated playlist edits do not restart it.
   Reattachment cancels reclamation, including at the deadline if its transaction wins first.
-- The existing scheduled `media.evict(admin.settings().evictionDays)` pass reclaims live
-  tracks with `unreferenced_since <= now - days * 86400000` in batches of 100 (bounded
-  sync revisions), rechecking that no live
-  membership exists in the same synchronous writer transaction. The shared existing setting
-  defaults to 30 days; changing it applies to the stored timestamp at the next pass. No new
-  timer, global playlist or permanent discovery retention is introduced. Owner purge uses
-  the same membership transitions; another owner's saved copy survives.
+- Server media defines two independent hardcoded durations in `retention-policy.ts`:
+  `AUDIO_CACHE_EXPIRY_MS` and `UNREFERENCED_SONG_GRACE_MS`, each 30 days. Neither is
+  administrator-configurable. The scheduled `media.evict()` pass uses the song grace to
+  reclaim live tracks with `unreferenced_since <= now - UNREFERENCED_SONG_GRACE_MS` in
+  batches of 100 (bounded sync revisions), rechecking that no live membership exists in
+  the same synchronous writer transaction. Owner purge uses the same membership
+  transitions; another owner's saved copy survives.
 - Reclamation releases audio/cover ledger references, tombstones the track and each
   discovery, prunes favourites/queue/recents, and publishes scoped sync tombstones atomically.
   Identity/tombstone rows remain for sync and provider deduplication. Rediscovery
@@ -175,7 +175,8 @@ Talos does not pass a `player_client` extractor override.
   materialisation jobs check that generation both before work and during object publication,
   preventing late jobs from resurrecting reclaimed audio. Objects with other owners remain
   protected by the ledger; physical deletion follows its normal sweep.
-- Independent audio-cache eviction still drops old audio references even for playlist members;
+- Independent audio-cache eviction drops audio references with
+  `last_played <= now - AUDIO_CACHE_EXPIRY_MS`, even for playlist members;
   referenced metadata stays and a later play re-materialises. Playback/retention use the
   bounded `media.materialise` job and publish audio into the ledger before advertising its
   hash. The volume cap is returned with every playback RPC.
@@ -229,7 +230,7 @@ invitations belong to identity, effective access to authority, group paging to c
 mute projections and acknowledgement counts to chat. Bulk user changes evaluate each target
 independently, return a per-user result and audit both the batch and each successful field
 change. Reserved system group types cannot be created or promoted in the editor. Settings
-include the media volume cap and eviction days consumed by media. Diagnostics consume kernel
+include the media volume cap consumed by media. Diagnostics consume kernel
 query ports and own authorisation of generated downloads (incident ZIP).
 
 ## Ops

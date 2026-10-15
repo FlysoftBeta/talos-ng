@@ -46,8 +46,7 @@ history shows each revision with its acknowledgement count.
 
 ## System settings
 
-System lock and idle lock switches, the media volume cap (steps of 0.05) and the audio
-eviction days. The system lock stops everyone but administrators from using the app; the
+System lock and idle lock switches and the media volume cap (steps of 0.05). The system lock stops everyone but administrators from using the app; the
 idle lock applies the five-minute inactivity policy to devices.
 
 ## AI billing

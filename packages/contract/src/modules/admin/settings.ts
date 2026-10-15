@@ -9,7 +9,6 @@ export const adminSettingsSchema = z
     idleLock: z.boolean(),
     identitySignals: z.array(z.enum(["clientId", "userAgent", "ip"])).min(1),
     maxVolume: z.number().min(0).max(1),
-    evictionDays: z.number().int().min(1).max(3650),
   })
   .strict();
 export type AdminSettings = z.infer<typeof adminSettingsSchema>;
@@ -26,7 +25,6 @@ export const adminSettingsMethods = Object.freeze({
     args: z
       .object({
         maxVolume: z.number().min(0).max(1).optional(),
-        evictionDays: z.number().int().min(1).max(3650).optional(),
       })
       .strict(),
     result: adminSettingsSchema,

@@ -106,7 +106,6 @@ export async function mediaSuite(browser, server, { legacy = false } = {}) {
     assert.equal(tracks.length, 3);
     await wire.call("admin.settings.set", {
       maxVolume: 0.25,
-      evictionDays: 30,
     });
     const playlist = (
       await wire.call("media.playlist.create", { title: "离线歌单" })

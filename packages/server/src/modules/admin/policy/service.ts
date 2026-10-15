@@ -59,9 +59,8 @@ export class AdminPolicy {
     const current = this.settings();
     this.options.db.tx(() => {
       this.options.db.run(
-        "UPDATE admin_settings SET max_volume=?,eviction_days=? WHERE id=1",
+        "UPDATE admin_settings SET max_volume=? WHERE id=1",
         input.maxVolume ?? current.maxVolume,
-        input.evictionDays ?? current.evictionDays,
       );
       this.options.audit.append(actor, "admin.settings.set", null, input);
     });

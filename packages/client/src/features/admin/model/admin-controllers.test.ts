@@ -102,7 +102,6 @@ const settings = {
   idleLock: false,
   identitySignals: ["clientId"],
   maxVolume: 1,
-  evictionDays: 30,
 };
 const deviceRow = (n: number, extra: object = {}) => ({
   id: ulid(n),
