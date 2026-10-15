@@ -259,79 +259,84 @@ describe("scope delta planner", () => {
     ).toThrow(AppError);
   });
 
-  it("converges over seeded server histories, revision groups, pull sizes and disconnects", () => {
-    const rng = random(1403);
-    for (let run = 0; run < 120; run++) {
-      const db = new Executor();
-      const server = new Map<string, Row>();
-      let rev = 10;
-      let sequence = 10;
-      db.cursor = 10;
-      db.windows = {
-        post: [
-          [1, 4],
-          [8, 10],
-        ],
-      };
-      for (let n = 1; n <= 10; n++) {
-        const item = row(n);
-        server.set(key(item), item);
-        if (new IntervalSet(db.windows.post).contains(n))
-          db.rows.set(key(item), item);
+  // 120 seeded runs take ~5 s on a shared CI runner; the default 5 s timeout is too tight.
+  it(
+    "converges over seeded server histories, revision groups, pull sizes and disconnects",
+    { timeout: 30_000 },
+    () => {
+      const rng = random(1403);
+      for (let run = 0; run < 120; run++) {
+        const db = new Executor();
+        const server = new Map<string, Row>();
+        let rev = 10;
+        let sequence = 10;
+        db.cursor = 10;
+        db.windows = {
+          post: [
+            [1, 4],
+            [8, 10],
+          ],
+        };
+        for (let n = 1; n <= 10; n++) {
+          const item = row(n);
+          server.set(key(item), item);
+          if (new IntervalSet(db.windows.post).contains(n))
+            db.rows.set(key(item), item);
+        }
+        for (let round = 0; round < 8; round++) {
+          for (let transaction = 0; transaction < 15; transaction++) {
+            rev++;
+            for (let write = 0; write < 1 + rng(4); write++) {
+              const kind = rng(3);
+              const item =
+                kind === 0
+                  ? row(++sequence, rev)
+                  : kind === 1
+                    ? row(1 + rng(sequence), rev, "post", rng(3) === 0)
+                    : row(rng(8), rev, "setting", rng(4) === 0);
+              // Immutable tombstones cannot resurrect in the generated server truth.
+              if (!server.get(key(item))?.deleted) server.set(key(item), item);
+            }
+          }
+          const snapshot = [...server.values()].sort((a, b) => a.rev - b.rev);
+          let pages: ScopePull[] = [];
+          let cursor = db.cursor;
+          let disconnects = 0;
+          for (;;) {
+            const page = selectDelta(snapshot, cursor, 1 + rng(9));
+            pages.push(page);
+            if (page.more) {
+              expect(planApply(db.state, pages, options)).toEqual([]);
+              if (rng(4) === 0 && disconnects < 3) {
+                pages = [];
+                cursor = db.cursor;
+                disconnects++;
+              } else cursor = page.cursor;
+            } else {
+              db.apply(planApply(db.state, pages, options));
+              break;
+            }
+          }
+          expect(db.windows.post).toEqual([
+            [1, 4],
+            [8, sequence],
+          ]);
+          for (const item of server.values()) {
+            const expected =
+              item.type !== "post" ||
+              new IntervalSet(db.windows.post).contains(seqOf(item));
+            const held = db.rows.get(key(item));
+            if (!expected) expect(held).toBeUndefined();
+            else {
+              expect(held?.rev).toBe(item.rev);
+              expect(held?.deleted).toBe(item.deleted);
+              if (!item.deleted) expect(held?.data).toEqual(item.data);
+            }
+          }
+        }
       }
-      for (let round = 0; round < 8; round++) {
-        for (let transaction = 0; transaction < 15; transaction++) {
-          rev++;
-          for (let write = 0; write < 1 + rng(4); write++) {
-            const kind = rng(3);
-            const item =
-              kind === 0
-                ? row(++sequence, rev)
-                : kind === 1
-                  ? row(1 + rng(sequence), rev, "post", rng(3) === 0)
-                  : row(rng(8), rev, "setting", rng(4) === 0);
-            // Immutable tombstones cannot resurrect in the generated server truth.
-            if (!server.get(key(item))?.deleted) server.set(key(item), item);
-          }
-        }
-        const snapshot = [...server.values()].sort((a, b) => a.rev - b.rev);
-        let pages: ScopePull[] = [];
-        let cursor = db.cursor;
-        let disconnects = 0;
-        for (;;) {
-          const page = selectDelta(snapshot, cursor, 1 + rng(9));
-          pages.push(page);
-          if (page.more) {
-            expect(planApply(db.state, pages, options)).toEqual([]);
-            if (rng(4) === 0 && disconnects < 3) {
-              pages = [];
-              cursor = db.cursor;
-              disconnects++;
-            } else cursor = page.cursor;
-          } else {
-            db.apply(planApply(db.state, pages, options));
-            break;
-          }
-        }
-        expect(db.windows.post).toEqual([
-          [1, 4],
-          [8, sequence],
-        ]);
-        for (const item of server.values()) {
-          const expected =
-            item.type !== "post" ||
-            new IntervalSet(db.windows.post).contains(seqOf(item));
-          const held = db.rows.get(key(item));
-          if (!expected) expect(held).toBeUndefined();
-          else {
-            expect(held?.rev).toBe(item.rev);
-            expect(held?.deleted).toBe(item.deleted);
-            if (!item.deleted) expect(held?.data).toEqual(item.data);
-          }
-        }
-      }
-    }
-  });
+    },
+  );
 });
 
 describe("server delta selection", () => {

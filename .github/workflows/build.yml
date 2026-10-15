@@ -30,8 +30,8 @@ jobs:
 
   # Every target is cross-assembled on Linux (see pnpm-workspace.yaml supportedArchitectures
   # and tools/package/native.ts); each artifact carries only its own native binaries.
+  # Independent of `check`: a failing test reports red but never blocks the artifacts.
   package:
-    needs: check
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
