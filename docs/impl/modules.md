@@ -82,7 +82,8 @@ command and its LWW register remain the concurrency protocol, not a second acces
 accepted writes update membership and the register in the same UoW. Direct transfers/removals
 update that register too; the server generates a stamp later than its previous value. Offline
 replay updates every scoped copy of the built-in as well as the register, so the reader and
-booklist show the same pending state. Reconnect rechecks source transfer permission before an
+booklist show the same pending state. The reader advances a new favourite operation beyond the
+observed membership stamp even when the device clock is behind. Reconnect rechecks source transfer permission before an
 addition. A legitimately transferred favourite is an independent container after source revocation.
 
 All service membership changes reclaim zero-container documents in the same transaction.

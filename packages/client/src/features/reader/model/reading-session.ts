@@ -1,3 +1,4 @@
+import { compareStamp, HybridClock } from "@talos/base";
 import { contract } from "@talos/contract";
 import type { LibraryDoc, LibraryState } from "@talos/contract";
 import type {
@@ -270,9 +271,14 @@ export class ReadingSession {
     const op = this.port.operation();
     const favourite = !this.input.state.favourite?.v;
     try {
+      const previous = this.input.state.favourite?.t;
+      const t =
+        previous && compareStamp(op.t, previous) <= 0
+          ? new HybridClock(() => op.t.ms).observe(previous)
+          : op.t;
       await this.port.command(
         contract.library.favourite.set,
-        { doc: this.id, value: { v: favourite, ...op } },
+        { doc: this.id, value: { v: favourite, ...op, t } },
         { op: op.op },
       );
     } catch (e) {
