@@ -43,7 +43,7 @@ Chrome 70 supports. `scripts/css-check.mjs` lints every `.css` file under `src/`
 | `inputs` | `Field` (checkbox renders `Checkbox`), `TextArea`, `SearchField`, `Checkbox`, `Switch`, `SelectField` (custom listbox picker, `hideLabel`), `FileButton`, `FileField`, `DurationInput`, `SharedComposer` | forms; no native select |
 | `navigation` | `Rail`, `RailItem`, `RailSpacer`, `Segmented` (`block`), `Tabs` | area switch; two-to-five-way choices; pane views |
 | `data-grid` | `DataGrid`, `SelectionActionBar` | admin tables (virtualised rows, server paging) |
-| `virtual` | `VirtualList`, `VirtualListCore` | long lists (chat history, grids) |
+| `virtual` | `VirtualScroller`, `useArrayScroller` | bindings for `@talos/virtual` (chat, AI, reader, stickers, grids; see `virtual-scroller.md`) |
 | `icon` | `Icon` + `glyphs.ts` | Lucide glyphs (ISC) vendored as path data; add names to `glyphs.ts` |
 
 Disabled-with-reason: `Button`/`IconButton`/`RailItem`/`Menu` items take `disabledReason`;

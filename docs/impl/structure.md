@@ -7,15 +7,18 @@ Directories, not files: each directory exists to express one isolation rule, and
 
 `tools/boundaries/graph.mjs` is the one normative package graph (values or type-only):
 
-- `base` imports nothing. `link`, `sync`, `docpack`, `objectstore`, `launcher`: `base` only.
+- `base` imports nothing. `link`, `sync`, `docpack`, `objectstore`, `launcher`, `virtual`: `base` only.
 - `contract`: `base`, `docpack` (types). `docpipe`: `base`, `docpack`, `objectstore` (types).
 - `store`: `base` (browser, IndexedDB only, never Blob values). `shell`: nothing.
 - `server`: all of the above except `store`/`shell`/`client`. `client`: `base`, `link`, `sync`,
-  `docpack`, `contract`, `store`, `shell`.
+  `docpack`, `contract`, `store`, `shell`, `virtual`.
 - Policy lives only in `server` and `client`; they alone may depend on `contract`.
 - Environments are checked too: browser/isomorphic packages may not import Node built-ins.
 - Cross-package imports go through the published entry (`@talos/<pkg>`) or a named subpath
-  (`@talos/link/ws-node`, `@talos/objectstore/testing`, `@talos/server/migration`).
+  (`@talos/virtual/dom`, `@talos/link/ws-node`, `@talos/objectstore/testing`, `@talos/server/migration`).
+
+The `virtual` package isolates its DOM-free core and source adapters from the DOM driver;
+the core imports neither source adapters nor DOM code (`virtual-scroller.md`).
 
 Small mechanism packages are split by what they own, not by technical layer:
 `base` (async), `objectstore` (content, filesystem, lifecycle, memory, testing),

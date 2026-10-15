@@ -101,11 +101,11 @@ failures leave the existing app usable. Shell internals: `packaging.md`.
 ## Design system (`ui/`)
 
 Props in, callbacks out; types only from `@talos/contract`. Tokens, primitives, the frame
-and the rules for feature stylesheets are in `design-system.md`. `VirtualListCore` is
-DOM-free: Fenwick-indexed heights give O(log n) measurement, offset lookup and seek;
-replacing the key set is O(n) and keeps a surviving visible anchor; bottom pinning only
-while already at the bottom; the React binding bounds mounted rows independently of
-collection size and falls back to manual measurement where ResizeObserver is missing.
+and the rules for feature stylesheets are in `design-system.md`. `VirtualScroller` binds
+`@talos/virtual` to React. Feature models own sources and commands; the DOM driver owns
+measurement and layout. Loaded windows, rendered overscan and viewport intersections are
+separate, and source replies and pushes share one ordered stream. Anchoring, end following,
+Chrome 70 gesture handling and observer fallback are described in `virtual-scroller.md`.
 Icons are inline SVG paths (no icon fonts, remote fonts or third-party requests). Touch
 selection is suppressed in the app frame except inputs and `.selectable`; a mounted gesture
 guard cancels pinch. A scoped input-modality heuristic restores visible focus on keyboard

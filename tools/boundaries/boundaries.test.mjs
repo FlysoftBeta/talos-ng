@@ -4,8 +4,8 @@ import { ESLint } from "eslint";
 import { boundaries, checkImport } from "../boundaries.mjs";
 const options = { owner: "link", declared: { "@talos/base": "workspace:*" } };
 describe("package boundaries", () => {
-  it("predeclares all twelve packages and enforces dependencies", () => {
-    expect(Object.keys(boundaries)).toHaveLength(12);
+  it("predeclares all thirteen packages and enforces dependencies", () => {
+    expect(Object.keys(boundaries)).toHaveLength(13);
     expect(checkImport({ ...options, source: "@talos/base" })).toBeUndefined();
     expect(checkImport({ ...options, source: "@talos/contract" })).toContain(
       "may not import",
