@@ -22,7 +22,7 @@ interface SeedSticker {
   height: number;
 }
 /** Pure JS PNG/JPEG/GIF/BMP/TIFF decoder; no native addons or platform binaries. */
-export class ChatAssets {
+export class ChatAttachments {
   private seedTask: Promise<void> | undefined;
   private readonly images = new Semaphore(2);
   constructor(
@@ -44,11 +44,11 @@ export class ChatAssets {
     return this.seedTask;
   }
   private async seedAll(): Promise<void> {
-    let root = fileURLToPath(new URL("./", import.meta.url));
+    let root = fileURLToPath(new URL("../../../../stickers/", import.meta.url));
     try {
       await access(join(root, "catalog.json"));
     } catch {
-      root = fileURLToPath(new URL("./chat-assets/", import.meta.url));
+      root = fileURLToPath(new URL("./stickers/", import.meta.url));
     }
     const catalog = JSON.parse(
       await readFile(join(root, "catalog.json"), "utf8"),

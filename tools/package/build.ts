@@ -188,8 +188,8 @@ for (const platform of packageTargets) {
     payload.set(name, data);
   await addTree(
     payload,
-    join(root, "packages/server/dist/chat-assets"),
-    "chat-assets",
+    join(root, "packages/server/dist/stickers"),
+    "stickers",
   );
   // Ship exactly the installable shell; gallery and build diagnostics are dev-only.
   for (const name of [

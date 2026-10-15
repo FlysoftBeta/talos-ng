@@ -472,7 +472,7 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   busy timeout, savepoint transactions, online backup; the experimental-warning
   suppression is gone). Server image work uses `sharp` 0.35.5 (autoOrient, 480 px
   inside-fit JPEG quality 82, first frame of GIFs, transparency flattened on white).
-  libvips cannot read BMP, so `chat/assets/bmp.ts` decodes uncompressed 8/24/32-bit BMP
+  libvips cannot read BMP, so `chat/attachments/bmp.ts` decodes uncompressed 8/24/32-bit BMP
   to raw RGBA for sharp; RLE/16-bit BMP is now rejected as unsupported. Client-side canvas
   thumbnails were not reintroduced: the chat path was already server-generated (D-071) and
   nothing else needs them, so there is no client change and no Chrome 70 impact.

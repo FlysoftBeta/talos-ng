@@ -434,7 +434,7 @@ export async function chatSuite(browser, server) {
         mimeType: "image/png",
         buffer: await readFile(
           new URL(
-            "../../../../packages/server/src/modules/chat/assets/akendfield/akendfield-d-1.png",
+            "../../../../packages/server/stickers/akendfield/akendfield-d-1.png",
             import.meta.url,
           ),
         ),

@@ -607,7 +607,7 @@ it("streams a legacy image into the objects ledger and regenerates its thumbnail
   const imageId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
   const bytes = await readFile(
     new URL(
-      "../../../packages/server/src/modules/chat/assets/akendfield2/a_05.png",
+      "../../../packages/server/stickers/akendfield2/a_05.png",
       import.meta.url,
     ),
   );

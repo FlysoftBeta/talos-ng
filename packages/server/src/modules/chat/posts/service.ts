@@ -2,7 +2,7 @@ import { AppError, utf8Encode } from "@talos/base";
 import type { ArgsOf, ChatImage, ChatPost } from "@talos/contract";
 import { chat, CHAT_PREVIEW } from "@talos/contract";
 import type { WriteContext } from "../../../kernel/persistence/uow.ts";
-import type { ChatAssets } from "../assets/service.ts";
+import type { ChatAttachments } from "../attachments/service.ts";
 import { textChunk } from "../drafts/text-chunk.ts";
 import type { BodyChunk, ChatOptions } from "../options.ts";
 import type { ChatRepo } from "../repo.ts";
@@ -18,7 +18,7 @@ export interface PostsContext {
   >;
   now: () => number;
   touch(conversation: string, ctx: WriteContext): void;
-  assets: Pick<ChatAssets, "prepareImage">;
+  assets: Pick<ChatAttachments, "prepareImage">;
   requirePost(user: string, conversation: string): void;
 }
 export class Posts {

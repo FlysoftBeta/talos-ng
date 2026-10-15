@@ -1,7 +1,7 @@
 import { migrate } from "../../kernel/persistence/db.ts";
 import type { SyncHub } from "../../kernel/sync/sync-hub.ts";
 import { ChatAdminQueries } from "./admin-queries.ts";
-import { ChatAssets } from "./assets/service.ts";
+import { ChatAttachments } from "./attachments/service.ts";
 import { Drafts } from "./drafts/service.ts";
 import { Moderation } from "./moderation/service.ts";
 import type { ChatOptions } from "./options.ts";
@@ -16,7 +16,7 @@ export class ChatService {
   readonly adminQueries: ChatAdminQueries;
   readonly repo: ChatRepo;
   readonly now: () => number;
-  readonly assets: ChatAssets;
+  readonly assets: ChatAttachments;
   constructor(readonly options: ChatOptions) {
     const service = () => this;
     const posts = new Posts({
@@ -87,7 +87,7 @@ export class ChatService {
     this.now = options.now ?? Date.now;
     migrate(options.db, "chat", chatMigrations, this.now);
     this.repo = new ChatRepo(options.db);
-    this.assets = new ChatAssets(options, this.repo);
+    this.assets = new ChatAttachments(options, this.repo);
   }
   get ready(): Promise<void> {
     return this.assets.seed();

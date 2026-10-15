@@ -14,4 +14,4 @@ await build({
   },
 });
 
-await cp("src/modules/chat/assets", "dist/chat-assets", { recursive: true });
+await cp("stickers", "dist/stickers", { recursive: true });
