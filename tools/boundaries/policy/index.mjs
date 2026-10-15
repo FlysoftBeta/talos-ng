@@ -13,6 +13,7 @@ import product from "./product.mjs";
 import server from "./server.mjs";
 import store from "./store.mjs";
 import tools from "./tools.mjs";
+import virtual from "./virtual.mjs";
 
 // One small file per owner. Packages without a file only get the shared
 // product rules and the package DAG in ../graph.mjs. A policy file is
@@ -35,6 +36,7 @@ export const policies = {
   server,
   store,
   tools,
+  virtual,
 };
 export function policyFor(kind, owner) {
   const policy = policies[owner] ?? {};

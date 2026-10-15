@@ -44,11 +44,11 @@ function Conversation({ id }: { id: string }): ReactElement {
   return (
     <ConversationView
       state={state}
+      transcript={controller.transcript}
       actions={{
         onText: controller.setText,
         onSend: () => void controller.send(),
         onStop: controller.stop,
-        onLoadEarlier: controller.loadEarlier,
         onFork: controller.fork,
         onAddImage: controller.addImage,
         onRemoveImage: controller.removeImage,

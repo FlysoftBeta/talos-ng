@@ -21,6 +21,7 @@
     "@talos/shell": "workspace:*",
     "@talos/store": "workspace:*",
     "@talos/sync": "workspace:*",
+    "@talos/virtual": "workspace:*",
     "core-js": "3.50.0",
     "fflate": "^0.8.3",
     "katex": "0.16.22",

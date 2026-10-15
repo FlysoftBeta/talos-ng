@@ -1,6 +1,6 @@
 import { NumPad } from "../features/auth/index.ts";
 import type { StatusViewModel } from "../core/status/model.ts";
-import { useMemo, useReducer, useRef, useState } from "react";
+import { useMemo, useReducer, useState } from "react";
 import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
 import { createNav, navReducer, AREA_IDS } from "../core/navigation/index.ts";
@@ -39,10 +39,9 @@ import {
   BannerHost,
 } from "../ui/feedback/index.ts";
 import { Sheet, Dialog, ConfirmDialog } from "../ui/overlays/index.ts";
-import { VirtualList } from "../ui/virtual/index.ts";
+import { VirtualScroller, useArrayScroller } from "../ui/virtual/index.ts";
 import { TalosProvider } from "../ui/theme/index.ts";
 import type { ColorMode } from "../ui/theme/index.ts";
-import type { VirtualListHandle } from "../ui/virtual/index.ts";
 import type { PanelState } from "../ui/feedback/index.ts";
 const areaNames: Record<AreaId, string> = {
   chat: "对话",
@@ -59,7 +58,7 @@ const rows = Array.from({ length: 50000 }, (_, index) => ({
       ? "在长长的中文标题中寻找清晰的节奏，让每一条内容都有自己的位置。"
       : "本机内容 · 随时可读",
 }));
-const keyOf = (item: (typeof rows)[number]) => item.id;
+const keyOf = (item: (typeof rows)[number]) => String(item.id);
 export function Showcase({
   gallery = false,
   update,
@@ -87,7 +86,7 @@ export function Showcase({
   const [toast, setToast] = useState(false);
   const [detail, setDetail] = useState(true);
   const [number, setNumber] = useState("");
-  const virtual = useRef<VirtualListHandle>(null);
+  const virtual = useArrayScroller(rows, { key: keyOf, estimate: 64 });
   const status: StatusViewModel = {
     connection: "connected",
     lastSync: "刚刚",
@@ -582,28 +581,22 @@ export function Showcase({
                   title="长列表，平稳浏览"
                   hint="50,000 条内容 · 可变行高 · 本机渲染"
                   action={
-                    <Button
-                      onClick={() =>
-                        virtual.current?.scrollToIndex(49999, "end")
-                      }
-                    >
+                    <Button onClick={() => void virtual.jump({ edge: "end" })}>
                       跳到末尾
                     </Button>
                   }
                 />
                 <Pane>
-                  <VirtualList
-                    ref={virtual}
-                    items={rows}
-                    getKey={keyOf}
-                    height={360}
-                    estimatedItemHeight={64}
-                    renderItem={(item, index) => (
+                  <VirtualScroller
+                    scroller={virtual}
+                    label="列表"
+                    style={{ height: 360 }}
+                    renderItem={(item) => (
                       <ListRow
                         title={item.title}
                         hint={item.hint}
                         leading={<Icon name="library" />}
-                        trailing={index % 7 === 0 ? "已读" : ""}
+                        trailing={item.id % 7 === 0 ? "已读" : ""}
                       />
                     )}
                   />

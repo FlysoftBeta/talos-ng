@@ -24,8 +24,30 @@
   min-height: 0;
   overflow: hidden;
 }
-.chat-stream-top {
-  height: var(--s-3);
+.chat-stream {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+/* Leading and trailing slots of the history: spacing, loaders and failed loads. */
+.chat-edge {
+  min-height: var(--s-3);
+}
+.chat-edge > .notice,
+.chat-edge-status {
+  margin: var(--s-2) var(--gutter-content);
+}
+.chat-edge-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: var(--fs-1);
+}
+.chat-edge-status > .icon {
+  margin-right: 6px;
 }
 .chat-loader {
   position: absolute;

@@ -187,22 +187,3 @@ export async function draftBody(
   await runtime.setLocal(`text:${id}`, text);
   return text;
 }
-
-/** Find an uncached reply across disjoint history windows. */
-export async function loadReply(
-  runtime: CommandPort,
-  conversation: string,
-  id: string,
-  before: number,
-): Promise<ChatPost | undefined> {
-  let anchor = before;
-  while (anchor > 1) {
-    const result = await page(runtime, conversation, "before", anchor);
-    const found = result.posts.find((post) => post.id === id);
-    if (found) return found;
-    if (!result.hasBefore || result.first >= anchor || result.first === 0)
-      return;
-    anchor = result.first;
-  }
-  return;
-}

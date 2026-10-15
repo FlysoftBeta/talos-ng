@@ -17,6 +17,7 @@ export const boundaries = {
     imports: { base: "all", docpack: "all", objectstore: "type" },
   },
   store: { environment: "browser", imports: { base: "all" } },
+  virtual: { environment: "browser", imports: {} },
   server: {
     environment: "node",
     imports: {
@@ -40,6 +41,7 @@ export const boundaries = {
       contract: "all",
       store: "all",
       shell: "all",
+      virtual: "all",
     },
   },
   shell: { environment: "browser", imports: {} },
@@ -90,6 +92,8 @@ export function checkImport({
     return;
   }
   if (target === "link" && source === "@talos/link/ws-browser") return;
+  // The DOM driver of the virtual scroller is its browser entry.
+  if (target === "virtual" && source === "@talos/virtual/dom") return;
   // A named subpath entry: the one way a tool may reach a package's internals.
   const entry = rule.entries?.[target];
   if (entry) {

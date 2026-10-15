@@ -1,18 +1,12 @@
 import { characterAt, characterTop } from "../adapters/anchor.ts";
-import {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import type { Unit } from "@talos/docpack";
+import { ArraySource, Scroller } from "@talos/virtual";
 import { Button, IconButton } from "../../../ui/actions/index.ts";
 import { Icon } from "../../../ui/icon/index.ts";
 import { StatePanel } from "../../../ui/feedback/index.ts";
-import { VirtualListCore } from "../../../ui/virtual/index.ts";
+import { VirtualScroller } from "../../../ui/virtual/index.ts";
 import { estimateUnit } from "../model/resources.ts";
 import type { DocumentResources } from "../model/resources.ts";
 import type { ReaderPosition } from "../model/reading-session.ts";
@@ -22,7 +16,6 @@ function ReaderUnit({
   resources,
   width,
   zoom,
-  onMeasure,
   onScroll,
   onReady,
 }: {
@@ -30,7 +23,6 @@ function ReaderUnit({
   resources: DocumentResources;
   width: number;
   zoom: string;
-  onMeasure: (height: number) => void;
   onScroll: (delta: number) => void;
   onReady: (element: HTMLElement) => void;
 }): ReactElement {
@@ -66,11 +58,8 @@ function ReaderUnit({
     };
   }, [resources, unit, retry]);
   useLayoutEffect(() => {
-    if (host.current) {
-      onMeasure(host.current.getBoundingClientRect().height);
-      const flow = host.current.querySelector<HTMLElement>(".reader-flow");
-      if (flow) onReady(flow);
-    }
+    const flow = host.current?.querySelector<HTMLElement>(".reader-flow");
+    if (flow) onReady(flow);
   }, [value, error, width, zoom]);
   useEffect(() => {
     const message = (event: MessageEvent) => {
@@ -189,6 +178,12 @@ function ReaderUnit({
   );
 }
 const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+/** One unit with its size estimate for the current width and zoom. */
+interface Page {
+  unit: Unit;
+  ordinal: number;
+  size: number;
+}
 export function ReaderViewer({
   resources,
   initial,
@@ -205,29 +200,46 @@ export function ReaderViewer({
   /** Total reading time, shown in the completion footer. */
   readingTime: string;
 }): ReactElement {
-  const viewport = useRef<HTMLDivElement>(null),
-    [size, setSize] = useState({ width: 800, height: 600 }),
-    [, refresh] = useReducer((n: number) => n + 1, 0),
+  const stage = useRef<HTMLDivElement>(null),
+    [width, setWidth] = useState(800),
+    [current, setCurrent] = useState(0),
     [jump, setJump] = useState<string>();
-  const units = resources.document.manifest.units;
-  const core = useMemo(
+  const manifest = resources.document.manifest;
+  const units = manifest.units;
+  const pages = useMemo(
     () =>
-      new VirtualListCore<number>({ estimatedItemHeight: 1000, overscan: 600 }),
-    [resources],
+      units.map((unit, ordinal) => ({
+        unit,
+        ordinal,
+        size: estimateUnit(manifest, unit, width, zoom),
+      })),
+    [manifest, units, width, zoom],
   );
-  const position = useRef(initial),
-    restored = useRef(false),
-    restoring = useRef<number | undefined>(undefined),
-    callback = useRef(onPosition);
+  const { source, scroller } = useMemo(() => {
+    const source = new ArraySource<Page>(
+      {
+        key: (page) => page.unit.id,
+        size: (page) => page.size,
+        equals: (a, b) => a.size === b.size,
+      },
+      pages,
+    );
+    return {
+      source,
+      scroller: new Scroller<Page>(source, { estimate: 1000, overscan: 600 }),
+    };
+    // A new document gets a new scroller; later sizes arrive through `source.set`.
+  }, [resources]);
+  const callback = useRef(onPosition);
   callback.current = onPosition;
+  /** A saved position still to be refined to its character once the text is laid out. */
+  const restore = useRef<ReaderPosition & { unitId: string }>(undefined);
+  const scrollElement = () =>
+    stage.current?.querySelector<HTMLElement>('[data-testid="reader.scroll"]');
   useLayoutEffect(() => {
-    const node = viewport.current;
+    const node = stage.current;
     if (!node) return;
-    const measure = () =>
-      setSize({
-        width: Math.max(100, node.clientWidth),
-        height: Math.max(200, node.clientHeight),
-      });
+    const measure = () => setWidth(Math.max(100, node.clientWidth));
     measure();
     window.addEventListener("resize", measure);
     const observer =
@@ -241,149 +253,120 @@ export function ReaderViewer({
     };
   }, []);
   useLayoutEffect(() => {
-    core.setItems(units.map((unit) => unit.ordinal));
-    core.setViewport(0, size.height);
-    units.forEach((unit, i) =>
-      core.measure(
-        i,
-        estimateUnit(resources.document.manifest, unit, size.width, zoom),
-      ),
-    );
-    const anchored = units.findIndex(
-      (unit) => unit.id === position.current.unitId,
-    );
-    const target = Math.min(
+    if (!units.length) return;
+    const anchored = units.findIndex((unit) => unit.id === initial.unitId);
+    const ordinal = Math.min(
       units.length - 1,
-      anchored >= 0 ? anchored : position.current.unit,
+      anchored >= 0 ? anchored : Math.max(0, initial.unit),
     );
-    position.current.unit = target;
-    if (target >= 0)
-      core.setViewport(
-        core.offsetOf(target) + position.current.offset,
-        size.height,
-      );
-    if (viewport.current) {
-      restoring.current = core.offset;
-      viewport.current.scrollTop = core.offset;
-    }
-    restored.current = true;
-    refresh();
-  }, [core, resources, size.width, size.height, zoom]);
-  const scroll = (delta: number) => {
-    if (viewport.current) viewport.current.scrollTop += delta;
-  };
+    const unitId = units[ordinal]!.id;
+    restore.current = { ...initial, unit: ordinal, unitId };
+    setCurrent(ordinal);
+    void scroller.start({ id: unitId, offset: -initial.offset });
+    return () => scroller.dispose();
+    // The saved position is read once per document.
+  }, [scroller]);
+  // New estimates (width or zoom) keep the first visible unit at the same relative depth.
+  const shown = useRef(pages);
+  useLayoutEffect(() => {
+    const previous = shown.current;
+    if (previous === pages) return;
+    shown.current = pages;
+    const at = scroller.position();
+    source.set(pages);
+    if (!at || restore.current) return;
+    const before = previous.find((page) => page.unit.id === at.id)?.size;
+    const after = pages.find((page) => page.unit.id === at.id)?.size;
+    if (before && after && before !== after)
+      void scroller.jump({ id: at.id, offset: (at.offset * after) / before });
+  }, [pages, scroller, source]);
+  useEffect(
+    () =>
+      scroller.observe(() => {
+        // Placements (opening, jumping, zooming) are ours; only reading moves the position.
+        if (scroller.placing()) return;
+        const at = scroller.position();
+        const page = at && pages.find((value) => value.unit.id === at.id);
+        if (!at || !page) return;
+        const position: ReaderPosition = {
+          unit: page.ordinal,
+          offset: Math.round(-at.offset),
+          unitId: at.id,
+        };
+        const view = scrollElement();
+        const flow = view?.querySelector<HTMLElement>(
+          `[data-reader-unit="${page.ordinal}"] .reader-flow`,
+        );
+        if (view && flow)
+          position.charOffset = characterAt(
+            flow,
+            view.getBoundingClientRect().top - flow.getBoundingClientRect().top,
+          );
+        setCurrent(page.ordinal);
+        callback.current(position);
+      }),
+    [scroller, pages],
+  );
   const go = (page: number) => {
     const value = Math.min(units.length - 1, Math.max(0, page - 1));
-    if (Number.isInteger(value) && viewport.current) {
-      core.scrollToIndex(value, "start");
-      viewport.current.scrollTop = core.offset;
-      refresh();
-    }
+    if (Number.isInteger(value) && units[value])
+      void scroller.jump({ id: units[value]!.id, align: "start" });
   };
-  const paged = resources.document.manifest.kind === "paged",
-    fit = Math.max(100, size.width - 32) / (units[0]?.w ?? 750),
+  const paged = manifest.kind === "paged",
+    fit = Math.max(100, width - 32) / (units[0]?.w ?? 750),
     scale = zoom === "fit" ? fit : Number(zoom),
     larger = ZOOM_STEPS.filter((step) => step > scale + 0.01),
     smaller = ZOOM_STEPS.filter((step) => step < scale - 0.01);
-  const range = core.range();
-  const rows: ReactElement[] = [];
-  for (let i = range.start; i < Math.min(range.end, units.length); i++)
-    rows.push(
-      <ReaderUnit
-        key={units[i]!.id}
-        unit={units[i]!}
-        resources={resources}
-        width={size.width}
-        zoom={zoom}
-        onScroll={scroll}
-        onReady={(element) => {
-          if (i !== position.current.unit || !viewport.current) return;
-          // Legacy pixel positions migrate once their text has been laid out.
-          const charOffset =
-            position.current.charOffset ??
-            characterAt(element, position.current.offset);
-          position.current = {
-            ...position.current,
-            unitId: units[i]!.id,
-            charOffset,
-          };
-          const offset =
-            element.getBoundingClientRect().top -
-            element.parentElement!.getBoundingClientRect().top +
-            characterTop(element, charOffset);
-          position.current.offset = Math.round(offset);
-          core.setViewport(core.offsetOf(i) + offset, size.height);
-          restoring.current = core.offset;
-          viewport.current.scrollTop = core.offset;
-          callback.current(position.current);
-        }}
-        onMeasure={(height) => {
-          if (height > 0 && core.sizeOf(i) !== height) {
-            core.measure(i, height);
-            if (viewport.current) viewport.current.scrollTop = core.offset;
-            refresh();
-          }
-        }}
-      />,
-    );
   return (
-    <div className={`reader-stage${paged ? " is-paged" : ""}`}>
-      <div
-        ref={viewport}
+    <div ref={stage} className={`reader-stage${paged ? " is-paged" : ""}`}>
+      <VirtualScroller
+        scroller={scroller}
         className="reader-scroll"
-        data-testid="reader.scroll"
-        tabIndex={0}
+        testId="reader.scroll"
         role="region"
-        aria-label="文档阅读区"
-        onScroll={(event) => {
-          if (!restored.current) return;
-          if (
-            restoring.current !== undefined &&
-            Math.abs(event.currentTarget.scrollTop - restoring.current) < 1
-          ) {
-            restoring.current = undefined;
-            refresh();
-            return;
-          }
-          restoring.current = undefined;
-          core.setViewport(event.currentTarget.scrollTop, size.height);
-          const unit = core.range(0).start;
-          position.current = {
-            unit,
-            offset: Math.round(core.offset - core.offsetOf(unit)),
-          };
-          const flow = event.currentTarget.querySelector<HTMLElement>(
-            `[data-reader-unit="${unit}"] .reader-flow`,
-          );
-          if (flow) {
-            position.current.unitId = units[unit]!.id;
-            position.current.charOffset = characterAt(
-              flow,
-              event.currentTarget.getBoundingClientRect().top -
-                flow.getBoundingClientRect().top,
-            );
-          }
-          callback.current(position.current);
-          refresh();
-        }}
-      >
-        <div style={{ height: range.total, position: "relative" }}>
-          <div
-            style={{ position: "absolute", left: 0, right: 0, top: range.top }}
-          >
-            {rows}
-            {range.end >= units.length && (
-              <div className="reader-end">
-                <span className="reader-end-mark">
-                  <Icon name="check" size={18} />
-                </span>
-                <strong>已读完</strong>
-                <span>阅读 {readingTime}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+        itemRole="presentation"
+        label="文档阅读区"
+        renderItem={(page) => (
+          <ReaderUnit
+            unit={page.unit}
+            resources={resources}
+            width={width}
+            zoom={zoom}
+            onScroll={(delta) => scroller.scrollBy(delta)}
+            onReady={(element) => {
+              const pending = restore.current;
+              if (!pending || pending.unitId !== page.unit.id) return;
+              restore.current = undefined;
+              // Legacy pixel positions migrate once their text has been laid out.
+              const charOffset =
+                pending.charOffset ?? characterAt(element, pending.offset);
+              const offset = Math.round(
+                element.getBoundingClientRect().top -
+                  element.parentElement!.getBoundingClientRect().top +
+                  characterTop(element, charOffset),
+              );
+              void scroller.jump({ id: page.unit.id, offset: -offset });
+              callback.current({
+                unit: page.ordinal,
+                offset,
+                unitId: page.unit.id,
+                charOffset,
+              });
+            }}
+          />
+        )}
+        renderEdge={(direction, edge) =>
+          direction === "after" && !edge.more && units.length ? (
+            <div className="reader-end">
+              <span className="reader-end-mark">
+                <Icon name="check" size={18} />
+              </span>
+              <strong>已读完</strong>
+              <span>阅读 {readingTime}</span>
+            </div>
+          ) : null
+        }
+      />
       {paged && (
         <div className="reader-controls" role="toolbar" aria-label="页面控制">
           <IconButton
@@ -413,13 +396,9 @@ export function ReaderViewer({
             type="number"
             min={1}
             max={units.length}
-            value={
-              jump ?? String(Math.min(units.length, position.current.unit + 1))
-            }
+            value={jump ?? String(Math.min(units.length, current + 1))}
             onFocus={(e) => {
-              setJump(
-                String(Math.min(units.length, position.current.unit + 1)),
-              );
+              setJump(String(Math.min(units.length, current + 1)));
               e.currentTarget.select();
             }}
             onChange={(e) => setJump(e.target.value)}

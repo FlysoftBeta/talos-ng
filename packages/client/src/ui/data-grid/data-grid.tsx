@@ -2,7 +2,8 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { Dialog } from "../overlays/overlays.tsx";
 import { StatePanel } from "../feedback/feedback.tsx";
-import { VirtualList } from "../virtual/VirtualList.tsx";
+import { VirtualScroller } from "../virtual/virtual-scroller.tsx";
+import { useArrayScroller } from "../virtual/use-array-scroller.ts";
 import { Button } from "../actions/button.tsx";
 import { Icon } from "../icon/icon.tsx";
 import { Checkbox, SearchField } from "../inputs/field.tsx";
@@ -111,6 +112,15 @@ export function DataGrid<Row>({
       observer?.disconnect();
     };
   });
+  const scroller = useArrayScroller(rows, {
+    key: rowKey,
+    estimate: 44,
+    overscan: 216,
+  });
+  const indices = useMemo(
+    () => new Map(rows.map((row, index) => [rowKey(row), index])),
+    [rows, rowKey],
+  );
   const [expanded, setExpanded] = useState<{
     title: string;
     text: string;
@@ -307,79 +317,84 @@ export function DataGrid<Row>({
         </div>
       </div>
       {rows.length ? (
-        <VirtualList
-          items={rows}
-          getKey={rowKey}
-          height={height === "fill" ? bodyHeight : height}
-          estimatedItemHeight={44}
-          overscan={216}
+        <VirtualScroller
+          scroller={scroller}
           role="rowgroup"
           itemRole="presentation"
-          ariaLabel={ariaLabel}
+          label={ariaLabel}
           className="data-grid-body"
-          style={{ width: "100%" }}
-          renderItem={(row, index) => (
-            <div
-              className="data-grid-row"
-              role="row"
-              aria-rowindex={
-                (paging ? paging.page * paging.pageSize : 0) + index + 1
-              }
-              style={{ gridTemplateColumns: template, width }}
-            >
-              {selection && (
-                <div className="data-grid-cell grid-cell-selection" role="cell">
-                  <input
-                    type="checkbox"
-                    aria-label={`选择第${index + 1}行`}
-                    disabled={selection.isRowSelectable?.(row) === false}
-                    checked={selection.selectedKeys.has(rowKey(row))}
-                    onChange={(event) => {
-                      const next = new Set(selection.selectedKeys);
-                      if (event.target.checked) next.add(rowKey(row));
-                      else next.delete(rowKey(row));
-                      selection.onChange(next);
-                    }}
-                  />
-                </div>
-              )}
-              {visible.map((column) => {
-                const text = column.longText?.(row);
-                return (
+          style={{
+            width: "100%",
+            height: height === "fill" ? bodyHeight : height,
+          }}
+          renderItem={(row, id) => {
+            const index = indices.get(id) ?? 0;
+            return (
+              <div
+                className="data-grid-row"
+                role="row"
+                aria-rowindex={
+                  (paging ? paging.page * paging.pageSize : 0) + index + 1
+                }
+                style={{ gridTemplateColumns: template, width }}
+              >
+                {selection && (
                   <div
-                    className={`data-grid-cell${pinned(column)}`}
+                    className="data-grid-cell grid-cell-selection"
                     role="cell"
-                    key={column.id}
                   >
-                    {text ? (
-                      <button
-                        type="button"
-                        className="data-grid-cell-expand"
-                        title="展开完整内容"
-                        onClick={() =>
-                          setExpanded({ title: column.label, text })
-                        }
-                      >
-                        {column.render(row)}
-                      </button>
-                    ) : onRowClick ? (
-                      <button
-                        type="button"
-                        className="data-grid-cell-expand"
-                        onClick={() => onRowClick(row)}
-                      >
-                        {column.render(row)}
-                      </button>
-                    ) : (
-                      <span className="data-grid-cell-content">
-                        {column.render(row)}
-                      </span>
-                    )}
+                    <input
+                      type="checkbox"
+                      aria-label={`选择第${index + 1}行`}
+                      disabled={selection.isRowSelectable?.(row) === false}
+                      checked={selection.selectedKeys.has(rowKey(row))}
+                      onChange={(event) => {
+                        const next = new Set(selection.selectedKeys);
+                        if (event.target.checked) next.add(rowKey(row));
+                        else next.delete(rowKey(row));
+                        selection.onChange(next);
+                      }}
+                    />
                   </div>
-                );
-              })}
-            </div>
-          )}
+                )}
+                {visible.map((column) => {
+                  const text = column.longText?.(row);
+                  return (
+                    <div
+                      className={`data-grid-cell${pinned(column)}`}
+                      role="cell"
+                      key={column.id}
+                    >
+                      {text ? (
+                        <button
+                          type="button"
+                          className="data-grid-cell-expand"
+                          title="展开完整内容"
+                          onClick={() =>
+                            setExpanded({ title: column.label, text })
+                          }
+                        >
+                          {column.render(row)}
+                        </button>
+                      ) : onRowClick ? (
+                        <button
+                          type="button"
+                          className="data-grid-cell-expand"
+                          onClick={() => onRowClick(row)}
+                        >
+                          {column.render(row)}
+                        </button>
+                      ) : (
+                        <span className="data-grid-cell-content">
+                          {column.render(row)}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          }}
         />
       ) : (
         <StatePanel state="empty" title={empty} />

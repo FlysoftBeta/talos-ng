@@ -1,0 +1,5 @@
+{
+  "extends": "../../tools/tsconfig/isomorphic.json",
+  "include": ["src/index.ts", "src/core/**/*.ts", "src/sources/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"]
+}

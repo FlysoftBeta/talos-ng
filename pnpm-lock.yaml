@@ -219,6 +219,9 @@ importers:
       '@talos/sync':
         specifier: workspace:*
         version: link:../sync
+      '@talos/virtual':
+        specifier: workspace:*
+        version: link:../virtual
       core-js:
         specifier: 3.50.0
         version: 3.50.0
@@ -409,6 +412,8 @@ importers:
       '@talos/base':
         specifier: workspace:*
         version: link:../base
+
+  packages/virtual: {}
 
   tools/boundaries: {}
 

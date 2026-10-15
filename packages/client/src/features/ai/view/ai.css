@@ -42,6 +42,26 @@
   overflow: auto;
   padding: var(--s-5) var(--gutter-content);
 }
+.ai-transcript {
+  /* Vertical spacing lives in the edge slots: the scroll element has none. */
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.ai-transcript-edge {
+  max-width: 760px;
+  margin: 0 auto;
+  padding-top: var(--s-5);
+}
+.ai-transcript-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: var(--fs-2);
+}
+.ai-transcript-status > * + * {
+  margin-left: var(--s-2);
+}
 .ai-column,
 .ai-compose {
   /* Reading column requested for assistant answers. */

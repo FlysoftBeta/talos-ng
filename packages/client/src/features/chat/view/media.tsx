@@ -9,7 +9,10 @@ import { Dialog } from "../../../ui/overlays/index.ts";
 import { FileButton } from "../../../ui/inputs/index.ts";
 import { Icon } from "../../../ui/icon/index.ts";
 import { StatePanel } from "../../../ui/feedback/index.ts";
-import { VirtualList } from "../../../ui/virtual/index.ts";
+import {
+  VirtualScroller,
+  useArrayScroller,
+} from "../../../ui/virtual/index.ts";
 export interface CachedImageProps {
   file: ChatFile;
   conversation?: string;
@@ -103,6 +106,12 @@ export function StickerPickerView({
   ReturnType<StickerController["presentation"]> & {
     CachedImage: ImageSlot;
   }): ReactElement {
+  const scroller = useArrayScroller(rows, {
+    key: stickerRowKey,
+    equals: (a, b) => stickerRowKey(a) === stickerRowKey(b),
+    size: () => 96,
+    estimate: 96,
+  });
   return (
     <Dialog open={open} size="lg" title="发送贴纸" onClose={onClose}>
       <div className="tabs chat-pack-tabs" role="tablist" aria-label="贴纸包">
@@ -125,12 +134,10 @@ export function StickerPickerView({
           hint="从贴纸包中选择一张贴纸"
         />
       ) : (
-        <VirtualList
-          items={rows}
-          getKey={(_, i) => i}
-          height={384}
-          estimatedItemHeight={96}
-          ariaLabel="贴纸"
+        <VirtualScroller
+          scroller={scroller}
+          label="贴纸"
+          style={{ height: 384 }}
           renderItem={(row) => (
             <div className="chat-sticker-row">
               {row.map((sticker) => (
@@ -153,6 +160,8 @@ export function StickerPickerView({
     </Dialog>
   );
 }
+const stickerRowKey = (row: readonly ChatSticker[]): string =>
+  row.map((sticker) => sticker.id).join(" ");
 export function ImageField({
   disabled,
   onFile,

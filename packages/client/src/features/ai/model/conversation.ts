@@ -1,5 +1,6 @@
 import { ai } from "@talos/contract";
 import type { AiConversation, AiCredit, AiMessage } from "@talos/contract";
+import { ArraySource, Scroller } from "@talos/virtual";
 import { StateStore } from "../../../core/controller-state.ts";
 import type { Capability } from "../../../core/lifecycle/snapshot.ts";
 import type {
@@ -41,19 +42,9 @@ export type AiConversationPort = Pick<
 
 /** Maximum number of images attached to one message. */
 export const MAX_IMAGES = 4;
-/** Distance from the bottom, in pixels, within which the transcript follows new text. */
+/** Distance from the end, in px, within which the transcript follows new text. */
 export const FOLLOW_THRESHOLD_PX = 80;
 
-export function isFollowingEnd(metrics: {
-  scrollHeight: number;
-  scrollTop: number;
-  clientHeight: number;
-}): boolean {
-  return (
-    metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight <
-    FOLLOW_THRESHOLD_PX
-  );
-}
 /** `a，b, c` becomes `["a","b","c"]`. */
 export function parseTags(text: string): string[] {
   return text
@@ -119,10 +110,18 @@ export interface ConversationState {
   canAddImage: boolean;
 }
 
+const sameMessage = (a: AiMessage, b: AiMessage): boolean =>
+  a.rev === b.rev &&
+  a.status === b.status &&
+  a.text === b.text &&
+  a.error === b.error;
+
 /**
  * One open conversation: durable draft text, picked images, message paging,
  * read cursor, run start/stop and forking. `attach()` starts the runtime
  * subscriptions and `detach()` releases them and the preview URLs.
+ * `transcript` scrolls the messages: it opens at the end, follows a growing answer
+ * while the reader is at the end, and pages earlier messages in at the top.
  */
 export class ConversationController<
   F extends AiPickedFile = AiPickedFile,
@@ -137,6 +136,8 @@ export class ConversationController<
   private seenDraft: string | undefined;
   private seenSend: boolean | undefined;
   private seenRead: string | undefined;
+  private readonly messages: ArraySource<AiMessage>;
+  readonly transcript: Scroller<AiMessage>;
   constructor(
     private readonly port: AiConversationPort,
     readonly id: string,
@@ -158,6 +159,17 @@ export class ConversationController<
       canAddImage: false,
     });
     this.rows = aiRowSource(port);
+    this.messages = new ArraySource<AiMessage>({
+      key: (m) => m.id,
+      equals: sameMessage,
+      load: () => this.earlier(),
+    });
+    this.transcript = new Scroller<AiMessage>(this.messages, {
+      estimate: 120,
+      overscan: 800,
+      stickToEnd: true,
+      endThreshold: FOLLOW_THRESHOLD_PX,
+    });
     const draft = draftOf(this.rows.getSnapshot(), id);
     this.state = { ...this.state, text: draft ? draft.value.v : "" };
     this.refresh();
@@ -173,12 +185,14 @@ export class ConversationController<
       this.rows.subscribe(() => this.refresh()),
     ];
     this.refresh();
+    void this.transcript.start({ edge: "end" });
   }
   detach(): void {
     this.attached = false;
     this.disposed = true;
     this.cleanups.forEach((fn) => fn());
     this.cleanups = [];
+    this.transcript.dispose();
     Object.values(this.state.previews).forEach((url) => this.files.revoke(url));
   }
   setText = (value: string): void => {
@@ -232,11 +246,11 @@ export class ConversationController<
     if (!run) return;
     void call(this.port, ai.run.stop, { id: run }).catch((e) => this.fail(e));
   };
-  loadEarlier = (): void => {
-    void page(this.port, this.id, this.state.messages[0]?.seq)
-      .then((more) => this.set({ more }))
-      .catch((e) => this.fail(e));
-  };
+  /** The transcript reached the first loaded message while older ones exist. */
+  private async earlier(): Promise<void> {
+    const more = await page(this.port, this.id, this.state.messages[0]?.seq);
+    this.set({ more, messages: messagesOf(this.rows.getSnapshot(), this.id) });
+  }
   fork = (message: string): void => {
     void call(this.port, ai.conversation.fork, { message })
       .then(async (next) => {
@@ -282,6 +296,8 @@ export class ConversationController<
   private set(value: Partial<ConversationState>): void {
     if (this.disposed) return;
     const next = { ...this.state, ...value };
+    if (value.messages || value.more !== undefined)
+      this.messages.set(next.messages, { before: next.more });
     this.patch({
       ...value,
       reason: composerReason({
