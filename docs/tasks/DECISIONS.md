@@ -495,3 +495,9 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   Per owner instruction, this update requires a successful build rather than full
   test gates. The unmodified main `pnpm build` passed; package/runtime behavior
   under the newer bundled Node is not established by that build.
+
+- **D-113 — Node 24 baseline (supersedes D-112's Node choices).** Owner upgraded
+  the host to Node 24 and requested the project use that major. Workspace engines
+  are ^24.18.0, direct @types/node is 24.19.2, CI and packaged runtime pin 24.22.0,
+  and server/launcher/migration emit for node24. Chrome 70 and Zod remain unchanged.
+  Verification is the normal build on host Node 24.18.0, not a runtime/package gate.

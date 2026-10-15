@@ -1,15 +1,23 @@
+# Node 24 alignment — 2026-10-15
+
+- Host is Node 24.18.0; workspace requires ^24.18.0. Packaged runtime and CI pin
+  24.22.0; direct @types/node is 24.19.2. Server/launcher/migration target node24.
+- Main at 6d0e151: frozen install and unmodified pnpm build passed on Node 24.18.0.
+  No separate tests/e2e/package run, per user instruction. Packaged 24.22.0 runtime
+  and native Windows execution remain unverified. D-113 supersedes D-112's Node pins.
+
 # Dependency refresh — 2026-10-15
 
-- Updated workspace dependencies/lockfile, CI actions, bundled Node to 26.12.0,
+- Updated workspace dependencies/lockfile, CI actions, bundled Node to 24.22.0,
   and yt-dlp to 2026.08.19 with official Linux/Windows SHA-256 values.
 - Removed forced `youtube:player_client=web_music`; upstream defaults now apply.
-- Retained Zod 3 for contract/Chrome 70 compatibility, Node 22 declarations for the
+- Retained Zod 3 for contract/Chrome 70 compatibility, Node 24 declarations for the
   supported runtime baseline, dual TypeScript compiler roles, fixed Chrome 70
   fixture and vendored pdfrender provenance (D-112).
 - Verified on main at 9fc3b6b: `pnpm install --frozen-lockfile` and unmodified
   `pnpm build` exit 0. Build includes its existing typechecks and static compatibility
   checks (0 violations). No separate test/e2e/package gates per user instruction.
-- Node 26 packaged native loading, real Chrome 70 and live yt-dlp behavior were not
+- Node 24.22.0 packaged native loading, real Chrome 70 and live yt-dlp behavior were not
   exercised in this update. Prior verification below predates these dependency changes.
 
 # Handoff
