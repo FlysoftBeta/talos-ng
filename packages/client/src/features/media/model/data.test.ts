@@ -109,3 +109,54 @@ describe("playlist write access", () => {
     );
   });
 });
+
+it("offers tracks only from the selected accessible playlist or live search results, including after reclamation", async () => {
+  const { addableTracks, tabTracks } = await import("./actions.ts");
+  const user = id();
+  const song = (title: string) => ({
+    id: id(),
+    source: "fake",
+    providerId: title,
+    title,
+    artists: [],
+    album: null,
+    durationMs: 1000,
+    audio: null,
+  });
+  const searched = song("搜索"),
+    shared = song("歌单"),
+    unrelated = song("其他本地曲目");
+  const target = {
+    id: id(),
+    owner: user,
+    title: "目标",
+    tracks: [],
+    retentionDays: 7,
+    lastPlayed: 0,
+    created: 1,
+  };
+  const source = { ...target, id: id(), title: "来源", tracks: [shared.id] };
+  const data = {
+    tracks: [searched, shared, unrelated],
+    playlists: [target, source],
+    state: null,
+    rows: [],
+  };
+  expect(addableTracks(data, target, "search", [searched])).toEqual([searched]);
+  expect(addableTracks(data, target, source.id, [searched])).toEqual([shared]);
+  expect(addableTracks(data, target, "unknown", [searched])).toEqual([]);
+  expect(
+    addableTracks(data, { ...target, tracks: [shared.id] }, source.id, [
+      searched,
+    ]),
+  ).toEqual([]);
+  const expired = { ...data, tracks: [shared, unrelated] };
+  expect(tabTracks("search", expired, [searched])).toEqual([]);
+  expect(addableTracks(expired, target, "search", [searched])).toEqual([]);
+  const revoked = {
+    ...data,
+    playlists: [target],
+    tracks: [searched, unrelated],
+  };
+  expect(addableTracks(revoked, target, source.id, [searched])).toEqual([]);
+});

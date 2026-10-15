@@ -13,7 +13,7 @@ async function click(cdp, label) {
   );
 }
 async function fill(cdp, label, value) {
-  if (label === "曲目" || label === "目标歌单") {
+  if (label === "曲目来源" || label === "曲目" || label === "目标歌单") {
     await cdp.evaluate(
       `(function(){var trigger=Array.prototype.slice.call(document.querySelectorAll('button[aria-haspopup=listbox]')).find(function(b){var l=document.getElementById(b.getAttribute('aria-labelledby').split(' ')[0]);return l&&l.textContent===${JSON.stringify(label)}});if(!trigger)throw Error('Missing picker '+${JSON.stringify(label)});trigger.click()})()`,
     );
@@ -120,7 +120,6 @@ export async function mediaSuite(browser, server, { legacy = false } = {}) {
       principalType: "user",
       principal: second.user.id,
       level: "read",
-      delegate: false,
     });
     assert.ok(
       (await second.call("media.library.get", {})).data.playlists.some(
@@ -188,6 +187,7 @@ export async function mediaSuite(browser, server, { legacy = false } = {}) {
       "document.querySelector('[data-testid=\"media.content.title\"]').textContent==='临时歌单'",
     );
     await click(cdp, "添加曲目");
+    await fill(cdp, "曲目来源", playlist.id);
     await fill(cdp, "曲目", tracks[0].id);
     await cdp.wait(
       "(function(){var b=Array.prototype.slice.call(document.querySelectorAll('[role=dialog] button')).find(function(x){return x.textContent.trim()==='添加'});return !!b&&!b.disabled})()",
@@ -212,6 +212,12 @@ export async function mediaSuite(browser, server, { legacy = false } = {}) {
     await click(cdp, "保存天数");
     await click(cdp, "分享");
     await cdp.wait("!!document.querySelector('[role=dialog]')");
+    assert.equal(
+      await cdp.evaluate(
+        "document.querySelector('[role=dialog]').textContent.indexOf('可转授')<0",
+      ),
+      true,
+    );
     await cdp.evaluate(
       "Array.prototype.slice.call(document.querySelectorAll('[role=dialog]')).pop().querySelector('button[aria-label=关闭]').click()",
     );
@@ -292,7 +298,6 @@ export async function mediaSuite(browser, server, { legacy = false } = {}) {
       principalType: "user",
       principal: second.user.id,
       level: null,
-      delegate: false,
     });
     await cdp.wait(
       "document.querySelector('[data-testid=\"media.audio\"]').paused && document.body.textContent.indexOf('离线歌单')<0",

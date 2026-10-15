@@ -32,7 +32,7 @@ export function tabTracks(
       .filter((t): t is MediaTrack => !!t);
   if (tab === "favorite")
     return data.tracks.filter((t) => data.state?.favorites[t.id]?.v);
-  return [...results];
+  return results.filter((t) => data.tracks.some((known) => known.id === t.id));
 }
 export const isFavorite = (data: MediaData, track: string): boolean =>
   !!data.state?.favorites[track]?.v;
@@ -46,10 +46,22 @@ export function writablePlaylists(
     (p) => !p.tracks.includes(track) && canEditPlaylist(data, p, user),
   );
 }
-export const addableTracks = (
+/** A picker always names one accessible playlist or the current search results. */
+export function addableTracks(
   data: MediaData,
   playlist: MediaPlaylist,
-): MediaTrack[] => data.tracks.filter((t) => !playlist.tracks.includes(t.id));
+  source: string,
+  results: readonly MediaTrack[],
+): MediaTrack[] {
+  const ids = new Set(
+    data.playlists.find((p) => p.id === source)?.tracks ?? [],
+  );
+  const candidates =
+    source === "search"
+      ? tabTracks("search", data, results)
+      : data.tracks.filter((t) => ids.has(t.id));
+  return candidates.filter((t) => !playlist.tracks.includes(t.id));
+}
 const playlistPrefix = "playlist:";
 export const playlistPageId = (id: string): string => playlistPrefix + id;
 export function playlistOfPage(
@@ -174,10 +186,17 @@ export function playlistSharing(
       const v = await port.command(contract.media.playlist.grants, {
         playlist,
       });
-      return "queued" in v ? { grants: [], canShare: false } : v;
+      return "queued" in v
+        ? { grants: [], canShare: false }
+        : { ...v, grants: v.grants.map((g) => ({ ...g, delegate: false })) };
     },
     set: async (value) => {
-      await port.command(contract.media.playlist.share, { playlist, ...value });
+      await port.command(contract.media.playlist.share, {
+        playlist,
+        principalType: value.principalType,
+        principal: value.principal,
+        level: value.level,
+      });
     },
   };
 }
