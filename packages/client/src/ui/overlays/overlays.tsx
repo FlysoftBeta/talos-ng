@@ -1,8 +1,9 @@
 import type { ReactElement } from "react";
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Button, IconButton } from "../actions/button.tsx";
 import "./overlays.css";
+import { FloatingLayer, Portal } from "../floating/layers.tsx";
 export interface OverlayProps {
   open: boolean;
   title: string;
@@ -38,6 +39,7 @@ function Overlay({
   "data-testid": testId,
 }: OverlayProps & { sheet?: boolean }) {
   const root = useRef<HTMLDivElement>(null);
+  const [floating, setFloating] = useState<HTMLDivElement | null>(null);
   const titleId = useId();
   const close = useRef(onClose);
   close.current = onEscape ?? (dismissible ? onClose : () => {});
@@ -48,15 +50,21 @@ function Overlay({
         ? document.activeElement
         : undefined;
     const node = root.current;
-    node?.focus();
+    if (!node) return;
+    node.focus();
     const focusables = () =>
       Array.from(node?.querySelectorAll<HTMLElement>(FOCUSABLE) || []).filter(
         (element) =>
+          element.tabIndex >= 0 &&
           !element.closest('[hidden], [aria-hidden="true"]') &&
           getComputedStyle(element).visibility !== "hidden" &&
           getComputedStyle(element).display !== "none",
       );
     const key = (event: KeyboardEvent) => {
+      const dialogs = document.querySelectorAll(
+        '[role="dialog"][aria-modal="true"]',
+      );
+      if (dialogs[dialogs.length - 1] !== node) return;
       if (event.key === "Escape") {
         event.stopPropagation();
         close.current();
@@ -102,40 +110,45 @@ function Overlay({
       node?.removeEventListener("keydown", key);
       prior?.focus();
     };
-  }, [open, dismissible]);
+  }, [open, dismissible, floating]);
   if (!open) return null;
   return (
-    <div
-      className={`overlay-backdrop ${sheet ? "is-sheet" : "is-dialog"}`}
-      onMouseDown={(e) => {
-        if (dismissible && e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={root}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        className={`overlay-surface ${sheet ? "sheet" : `dialog dialog-${size}`}`}
-        data-testid={testId}
-      >
-        <header className="overlay-header">
-          <div className="overlay-title">
-            <h2 id={titleId} className="ellipsis">
-              {title}
-            </h2>
-            {subtitle && <p className="ellipsis">{subtitle}</p>}
+    <Portal modal>
+      <FloatingLayer.Provider value={floating}>
+        <div
+          ref={root}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          data-testid={testId}
+          className={`overlay-backdrop ${sheet ? "is-sheet" : "is-dialog"}`}
+          onMouseDown={(e) => {
+            if (dismissible && e.target === e.currentTarget) onClose();
+          }}
+        >
+          <div
+            className={`overlay-surface ${sheet ? "sheet" : `dialog dialog-${size}`}`}
+          >
+            <header className="overlay-header">
+              <div className="overlay-title">
+                <h2 id={titleId} className="ellipsis">
+                  {title}
+                </h2>
+                {subtitle && <p className="ellipsis">{subtitle}</p>}
+              </div>
+              {actions && <div className="overlay-actions">{actions}</div>}
+              {dismissible && (
+                <IconButton label="关闭" icon="close" onClick={onClose} />
+              )}
+            </header>
+            <div className="overlay-body scroll">{children}</div>
+            {footer && <footer className="overlay-footer">{footer}</footer>}
           </div>
-          {actions && <div className="overlay-actions">{actions}</div>}
-          {dismissible && (
-            <IconButton label="关闭" icon="close" onClick={onClose} />
-          )}
-        </header>
-        <div className="overlay-body scroll">{children}</div>
-        {footer && <footer className="overlay-footer">{footer}</footer>}
-      </div>
-    </div>
+          <div ref={setFloating} className="modal-floating" />
+        </div>
+      </FloatingLayer.Provider>
+    </Portal>
   );
 }
 /** Side panel from the right: settings, status, tasks, details, one-record editors. */

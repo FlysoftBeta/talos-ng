@@ -1,6 +1,4 @@
-import { useEffect, useState } from "react";
 import type { ReactElement } from "react";
-import { createPortal } from "react-dom";
 import type { Netbook } from "@talos/contract";
 import { Button, IconButton } from "../../../ui/actions/index.ts";
 import { Dialog } from "../../../ui/overlays/index.ts";
@@ -214,13 +212,10 @@ export function NetbooksEntryView({
   onOpen: () => void;
   children: ReactElement;
 }): ReactElement {
-  // The dialog mounts at the app root, not inside the list pane it is opened from.
-  const [root, setRoot] = useState<HTMLElement | null>(null);
-  useEffect(() => setRoot(document.querySelector<HTMLElement>(".talos")), []);
   return (
     <span className="netbooks-entry">
       <IconButton label="网络书籍" icon="globe" onClick={onOpen} />
-      {open && root && createPortal(children, root)}
+      {open && children}
     </span>
   );
 }

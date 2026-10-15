@@ -14,6 +14,7 @@ import {
   ready,
   captures,
 } from "./helpers.mjs";
+import { sharingPicker } from "./overlays.mjs";
 import { pagePlacement } from "./placement.mjs";
 import { libraryPdf } from "../../harness/library-pdf.mjs";
 
@@ -22,6 +23,18 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
   const { cdp } = browser;
   const name = legacy ? "chrome70" : "current";
   const errors = browser.errors.length;
+  const leaveReader = async () => {
+    const visible = `Array.from(document.querySelectorAll('button[aria-haspopup="menu"]')).some(function(b){return b.getAttribute('aria-label')==='添加'&&b.getClientRects().length>0;})`;
+    for (let i = 0; i < 10 && !(await cdp.evaluate(visible)); i++) {
+      await click(cdp, "返回");
+      await cdp.evaluate("new Promise(function(r){requestAnimationFrame(r);})");
+    }
+    assert.equal(
+      await cdp.evaluate(visible),
+      true,
+      "leave reader focus mode before using library menus",
+    );
+  };
   const contexts = new Set();
   cdp.on("Runtime.executionContextCreated", ({ context }) =>
     contexts.add(context.id),
@@ -77,6 +90,8 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     await close(cdp);
     const pdfPath = path.join(directory, "中文.pdf");
     await writeFile(pdfPath, libraryPdf(2));
+    // Leave reader focus mode before opening a menu in the library pane.
+    await leaveReader();
     await click(cdp, "添加");
     await click(cdp, "导入文档");
     await click(cdp, "PDF");
@@ -248,6 +263,7 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
       "500-page pack mounted window bounded",
     );
     await captures(cdp, name, "pdf-window");
+    await leaveReader();
     await click(cdp, "书单");
     await click(cdp, "添加");
     await click(cdp, "新建书单");
@@ -266,6 +282,7 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     await captures(cdp, name, "collection");
     await click(cdp, "分享");
     await captures(cdp, name, "sharing");
+    await sharingPicker(cdp, name);
     await close(cdp);
     const collection = (
       await wire.call("sync.pull", { cursors: {} })

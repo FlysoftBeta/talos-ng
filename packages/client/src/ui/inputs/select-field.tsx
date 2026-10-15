@@ -4,16 +4,11 @@ import type {
   ChangeEvent,
   SelectHTMLAttributes,
 } from "react";
+import { Portal } from "../floating/layers.tsx";
+import { useFloating, moveFloatingFocus } from "../floating/use-floating.ts";
 import { Icon } from "../icon/icon.tsx";
 import "./inputs.css";
-import {
-  Children,
-  isValidElement,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import { Children, isValidElement, useId, useRef, useState } from "react";
 /** A picker that replaces the native select; renders identically on Chrome 70. */
 export function SelectField({
   label,
@@ -30,15 +25,16 @@ export function SelectField({
   const [localValue, setLocalValue] = useState(
     String(props.defaultValue ?? ""),
   );
-  const host = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: MouseEvent) => {
-      if (!host.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [open]);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  useFloating({
+    open,
+    anchor: trigger,
+    surface: list,
+    onClose: () => setOpen(false),
+    matchWidth: true,
+    focus: true,
+  });
   const options = Children.toArray(children)
     .filter(isValidElement)
     .map((child) => ({
@@ -49,10 +45,7 @@ export function SelectField({
   const selectedValue = String(props.value ?? localValue);
   const current = options.find((option) => option.value === selectedValue);
   return (
-    <div
-      ref={host}
-      className={`field select-field${hideLabel ? " is-bare" : ""}`}
-    >
+    <div className={`field select-field${hideLabel ? " is-bare" : ""}`}>
       <span
         className={hideLabel ? "visually-hidden" : "field-label"}
         id={`${id}-label`}
@@ -61,36 +54,19 @@ export function SelectField({
       </span>
       <button
         type="button"
+        ref={trigger}
         id={id}
         className="input select-trigger"
         aria-labelledby={`${id}-label ${id}`}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls={open ? `${id}-options` : undefined}
         disabled={props.disabled}
         onClick={() => setOpen(!open)}
         onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            setOpen(false);
-            return;
-          }
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
-            if (!open) {
-              setOpen(true);
-              return;
-            }
-            const currentIndex = options.findIndex(
-              (option) => option.value === selectedValue,
-            );
-            const delta = event.key === "ArrowDown" ? 1 : -1;
-            const next =
-              options[(currentIndex + delta + options.length) % options.length];
-            if (next && !next.disabled) {
-              setLocalValue(next.value);
-              props.onChange?.({
-                target: { value: next.value },
-              } as ChangeEvent<HTMLSelectElement>);
-            }
+            setOpen(true);
           }
         }}
       >
@@ -100,34 +76,42 @@ export function SelectField({
         <Icon name="down" size={16} />
       </button>
       {open && (
-        <div
-          className="select-options"
-          role="listbox"
-          aria-labelledby={`${id}-label`}
-        >
-          {options.map((option) => (
-            <button
-              type="button"
-              role="option"
-              data-value={option.value}
-              key={option.value}
-              aria-selected={option.value === selectedValue}
-              disabled={option.disabled}
-              onClick={() => {
-                setLocalValue(option.value);
-                props.onChange?.({
-                  target: { value: option.value },
-                } as ChangeEvent<HTMLSelectElement>);
-                setOpen(false);
-              }}
-            >
-              <span className="select-option-label">{option.label}</span>
-              {option.value === selectedValue && (
-                <Icon name="check" size={16} />
-              )}
-            </button>
-          ))}
-        </div>
+        <Portal>
+          <div
+            ref={list}
+            id={`${id}-options`}
+            tabIndex={-1}
+            onKeyDown={moveFloatingFocus}
+            className="select-options floating-surface"
+            role="listbox"
+            aria-labelledby={`${id}-label`}
+          >
+            {options.map((option) => (
+              <button
+                type="button"
+                role="option"
+                tabIndex={-1}
+                data-value={option.value}
+                key={option.value}
+                aria-selected={option.value === selectedValue}
+                disabled={option.disabled}
+                onClick={() => {
+                  trigger.current?.focus({ preventScroll: true });
+                  setLocalValue(option.value);
+                  props.onChange?.({
+                    target: { value: option.value },
+                  } as ChangeEvent<HTMLSelectElement>);
+                  setOpen(false);
+                }}
+              >
+                <span className="select-option-label">{option.label}</span>
+                {option.value === selectedValue && (
+                  <Icon name="check" size={16} />
+                )}
+              </button>
+            ))}
+          </div>
+        </Portal>
       )}
     </div>
   );

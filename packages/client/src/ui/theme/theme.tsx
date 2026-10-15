@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AppError } from "@talos/base";
 import { tokens } from "./tokens.ts";
 import type { ColorMode } from "./tokens.ts";
+import { LayerProvider } from "../floating/layers.tsx";
 import { ToastHost } from "../feedback/toast.tsx";
 import "./base.css";
 
@@ -50,7 +51,9 @@ export function TalosProvider({
       onTouchStartCapture={() => setKeyboard(false)}
       style={variables[mode]}
     >
-      <ToastHost>{children}</ToastHost>
+      <ToastHost>
+        <LayerProvider>{children}</LayerProvider>
+      </ToastHost>
     </div>
   );
 }
