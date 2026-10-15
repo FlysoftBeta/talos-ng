@@ -745,6 +745,25 @@ describe("library container invariants", () => {
       a.api.library.favourite.set({ doc, value }, { op: id() }),
     ).rejects.toMatchObject({ code: "E_DENIED" });
   });
+  it("replayed favourite values do not reorder an existing booklist", async () => {
+    const k = setup(),
+      a = await connect(k);
+    const first = await text(k, a.user.id),
+      second = await text(k, a.user.id, "second");
+    const favourites = k.library.ensureBuiltins(a.user.id).favourites;
+    for (const doc of [first, second])
+      k.library.preference(a.user.id, doc, "favourite", {
+        v: true,
+        t: { ms: 20, counter: 0 },
+        op: id(),
+      });
+    k.library.preference(a.user.id, first, "favourite", {
+      v: false,
+      t: { ms: 10, counter: 0 },
+      op: id(),
+    });
+    expect(k.library.collection(favourites).docs).toEqual([first, second]);
+  });
   it("deleting a booklist reclaims only its last-contained books, including books owned by another user", async () => {
     const k = setup(),
       a = await connect(k),
@@ -887,6 +906,27 @@ describe("library reclamation edges", () => {
     expect(k.library.repo.delegation(collection, "user", b.user.id)).toBe(
       false,
     );
+  });
+  it("account purge removes built-ins and reclaims foreign-owned books with no remaining container", async () => {
+    const k = setup(),
+      owner = await connect(k, "123456"),
+      removed = await connect(k, "654321");
+    const builtins = k.library.ensureBuiltins(removed.user.id);
+    const doc = await k.library.importText(owner.user.id, {
+      title: "foreign",
+      body: "foreign",
+      collection: builtins.shelf,
+    });
+    await converted(k, doc.job);
+    await k.purge.run(removed.user.id);
+    expect(
+      k.library.repo.collections().some((row) => row.owner === removed.user.id),
+    ).toBe(false);
+    expect(() => k.library.document(doc.doc)).toThrow();
+    expect(k.library.repo.hasContainer(doc.doc)).toBe(false);
+    expect(
+      k.db.all("SELECT * FROM object_refs WHERE owner_id=?", doc.doc),
+    ).toEqual([]);
   });
   it("preserves the container invariant through deterministic mixed detach/delete sequences", async () => {
     const k = setup(),

@@ -78,7 +78,7 @@ export function ImportDialogView(props: ImportDialogViewProps): ReactElement {
             value={props.collection}
             onChange={(e) => props.onCollection(e.target.value)}
           >
-            <option value="">不加入书单</option>
+            <option value="">我的书架（默认）</option>
             {props.destinations.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.title}

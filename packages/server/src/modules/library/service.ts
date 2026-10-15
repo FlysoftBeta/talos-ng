@@ -1,5 +1,5 @@
 import type { CancellationSignal } from "@talos/base";
-import { AppError, createUlid, utf8Encode } from "@talos/base";
+import { AppError, HybridClock, createUlid, utf8Encode } from "@talos/base";
 import { emptyLibraryState, applyLibraryProgress } from "@talos/contract";
 import type {
   LibraryDoc,
@@ -175,12 +175,12 @@ export class LibraryService {
           const state = this.state(collection.owner, doc);
           const included = docs.includes(doc);
           if (!!state.favourite?.v !== included) {
+            const clock = new HybridClock(this.now);
             state.favourite = {
               v: included,
-              t: {
-                ms: Math.max(this.now(), state.favourite?.t.ms ?? 0),
-                counter: (state.favourite?.t.counter ?? 0) + 1,
-              },
+              t: state.favourite
+                ? clock.observe(state.favourite.t)
+                : clock.now(),
               op: this.id(),
             };
             this.writeState(collection.owner, state);
@@ -457,9 +457,14 @@ export class LibraryService {
         const collection = this.collection(
           this.ensureBuiltins(user).favourites,
         );
-        const docs = collection.docs.filter((doc) => doc !== id);
-        if (state.favourite?.v) docs.push(id);
-        this.setItems(collection.id, docs);
+        const included = !!state.favourite?.v;
+        if (collection.docs.includes(id) !== included)
+          this.setItems(
+            collection.id,
+            included
+              ? [...collection.docs, id]
+              : collection.docs.filter((doc) => doc !== id),
+          );
       }
     });
   }

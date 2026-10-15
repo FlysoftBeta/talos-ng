@@ -63,6 +63,38 @@ deduplicate across personal and shared scopes by latest revision on the client; 
 document rows are admitted only while their collection still lists them. Item removals use
 durable tombstones so removals reconcile after disconnection.
 
+Each user has private physical collections marked `builtin: shelf | favourites`; ordinary
+collections omit the marker. Provisioning is idempotent and runs before the sync snapshot and
+inside default import publication. Built-ins use ordinary collection/item sync and offline
+storage, and collection access explicitly excludes all other users regardless of generic grants.
+The library rejects built-in deletion and sharing; account purge uses the internal deletion
+path. There is no collection metadata-edit endpoint.
+
+`collection.items` only reorders/removes existing members. `collection.transfer` names source,
+destination and document; the source must contain the document and allow transfer (owner or
+an explicit delegable grant), and the destination must be writable. The client initiates this
+command on the source row. External imports retain their destination selector and default to
+the user's shelf; permissions are checked again at asynchronous text/file publication.
+Generated-text publication rechecks permissions in the source workflow's transactional callback.
+
+Favourite membership lives in the built-in favourites collection. The queueable favourite
+command and its LWW register remain the concurrency protocol, not a second access mechanism:
+accepted writes update membership and the register in the same UoW. Direct transfers/removals
+update that register too; the server generates a stamp later than its previous value. Offline
+replay updates every scoped copy of the built-in as well as the register, so the reader and
+booklist show the same pending state. Reconnect rechecks source transfer permission before an
+addition. A legitimately transferred favourite is an independent container after source revocation.
+
+All service membership changes reclaim zero-container documents in the same transaction.
+Reclamation tombstones document/state/item projections, cancels and clears conversion jobs,
+releases object references, and calls application-composed hooks to remove network-source
+checkpoints/jobs and collection grants. The outer UoW owns rollback, including purge. Physical
+object reclamation runs immediately after commit through the object ledger's publication/GC
+sequencer, bypassing orphan grace only for the explicitly released objects; deduplicated objects
+with any surviving reference stay intact. Filesystem failures are reported through the existing
+post-commit effect reporter and remain eligible for normal GC. Conversion checks document
+existence and cancellation before retaining a completed pack, preventing resurrection.
+
 ## Netbooks
 
 `NetbooksProvider` splits search, catalog and chapter fetch. The production provider uses

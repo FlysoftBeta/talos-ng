@@ -49,12 +49,12 @@ export class LibraryRepo {
     deleted = false,
   ): void {
     this.db.run(
-      "INSERT INTO library_documents VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body,rev=excluded.rev,deleted=excluded.deleted",
+      "INSERT INTO library_documents VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET source=excluded.source,filename=excluded.filename,body=excluded.body,rev=excluded.rev,deleted=excluded.deleted",
       doc.id,
       doc.owner,
-      source,
-      filename,
-      JSON.stringify(doc),
+      deleted ? "" : source,
+      deleted ? "" : filename,
+      JSON.stringify(deleted ? {} : doc),
       rev,
       +deleted,
     );
