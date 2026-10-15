@@ -54,10 +54,11 @@ export function registerMediaApi(
       .grants(`coll:${id}`)
       .reduce(
         (power, g) =>
-          (g.principal_type === "user"
-            ? g.principal === user
-            : groups.includes(g.principal)) &&
-          service.repo.delegation(id, g.principal_type, g.principal)
+          (
+            g.principal_type === "user"
+              ? g.principal === user
+              : groups.includes(g.principal)
+          )
             ? Math.max(power, { read: 1, write: 2, own: 3 }[g.level])
             : power,
         0,
@@ -74,16 +75,13 @@ export function registerMediaApi(
       ),
     };
   });
-  host.register(contract.media.resolve, async (ctx, args, _body, signal) => {
+  host.register(contract.media.resolve, (ctx, args) => {
     enabled(ctx.user!);
-    return {
-      track: await service.resolve(
-        args.source,
-        args.providerId,
-        ctx.user!,
-        signal,
-      ),
-    };
+    const row = service.repo.source(args.source, args.providerId);
+    if (!row)
+      throw new AppError("E_DENIED", "请先搜索曲目或打开有权访问的歌单");
+    access.require(ctx.user!, row.id);
+    return { track: service.track(row.id) };
   });
   host.register(contract.media.library, (ctx) => {
     enabled(ctx.user!);
@@ -166,10 +164,8 @@ export function registerMediaApi(
     return { ok: true as const };
   });
   host.register(contract.media.playlist.items, (ctx, args) => {
-    const target = can(ctx.user!, args.playlist, "write");
-    args.tracks.forEach((id) =>
-      access.require(ctx.user!, id, !target.tracks.includes(id)),
-    );
+    can(ctx.user!, args.playlist, "write");
+    args.tracks.forEach((id) => access.require(ctx.user!, id));
     return {
       playlist: service.updatePlaylist(args.playlist, { tracks: args.tracks }),
     };
@@ -196,8 +192,7 @@ export function registerMediaApi(
     const power = sharePower(ctx.user!, args.playlist);
     if (
       power === 0 ||
-      (args.level ? { read: 1, write: 2, own: 3 }[args.level] : 3) > power ||
-      (args.delegate && power < 2)
+      (args.level ? { read: 1, write: 2, own: 3 }[args.level] : 3) > power
     )
       throw new AppError("E_DENIED", "没有此歌单的转授权限");
     const playlist = service.playlist(args.playlist);
@@ -225,12 +220,6 @@ export function registerMediaApi(
         principal: args.principal,
         level: args.level,
       });
-      service.repo.delegate(
-        args.playlist,
-        args.principalType,
-        args.principal,
-        args.level !== null && args.delegate,
-      );
     });
     return { ok: true as const };
   });
@@ -242,11 +231,6 @@ export function registerMediaApi(
         principalType: g.principal_type,
         principal: g.principal,
         level: g.level,
-        delegate: service.repo.delegation(
-          args.playlist,
-          g.principal_type,
-          g.principal,
-        ),
       })),
       canShare: sharePower(ctx.user!, args.playlist) > 0,
     };

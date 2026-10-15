@@ -132,7 +132,6 @@ describe("media API availability", () => {
       principalType: "user",
       principal: peer.id,
       level: "read",
-      delegate: false,
     });
     const grants = await api.media.playlist.grants({ playlist: playlist.id });
     expect(grants.canShare).toBe(true);
@@ -201,7 +200,6 @@ describe("media API availability", () => {
         principalType: "user",
         principal: id,
         level: "read",
-        delegate: false,
       },
       "media.playlist.grants": { playlist: id },
       "media.playlist.principals": {},

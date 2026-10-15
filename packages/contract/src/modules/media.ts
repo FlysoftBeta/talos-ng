@@ -210,7 +210,6 @@ export const media = Object.freeze({
         principalType: z.enum(["user", "group"]),
         principal: idSchema,
         level: z.enum(["read", "write", "own"]).nullable(),
-        delegate: z.boolean(),
       }),
       result: okSchema,
       auth: "user",
@@ -228,7 +227,6 @@ export const media = Object.freeze({
                 principalType: z.enum(["user", "group"]),
                 principal: idSchema,
                 level: z.enum(["read", "write", "own"]),
-                delegate: z.boolean(),
               })
               .strict(),
           ),
