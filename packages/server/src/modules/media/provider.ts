@@ -85,12 +85,7 @@ export class YtDlpProvider implements MediaProvider {
     try {
       const { stdout } = await execute(
         this.binaryPath,
-        [
-          "--no-warnings",
-          "--extractor-args",
-          "youtube:player_client=web_music",
-          ...args,
-        ],
+        ["--no-warnings", ...args],
         {
           timeout: 120_000,
           maxBuffer: 64 * 1024 * 1024,

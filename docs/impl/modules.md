@@ -103,7 +103,8 @@ existing database with the same rules.
 bounded output, timeout and cancellation (search uses yt-dlp's native `ytsearch`; audio is
 materialised as WebM so MIME matches bytes). The pinned yt-dlp version and per-platform
 SHA-256 are in the package manifest and verified at package time; a config entry overrides
-the binary path.
+the binary path. YouTube player clients are selected by yt-dlp’s upstream defaults;
+Talos does not pass a `player_client` extractor override.
 
 - Search and resolve store only metadata with immutable track identities. Playback and
   retention enqueue a bounded `media.materialise` job that publishes audio into the object

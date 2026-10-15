@@ -14,9 +14,9 @@
   },
   "dependencies": {
     "@talos/base": "workspace:*",
-    "fflate": "0.8.2"
+    "fflate": "0.8.3"
   },
   "devDependencies": {
-    "esbuild": "0.25.12"
+    "esbuild": "0.28.2"
   }
 }

@@ -24,12 +24,12 @@
     "@talos/objectstore": "workspace:*",
     "@talos/sync": "workspace:*",
     "better-sqlite3": "13.0.3",
-    "cheerio": "1.0.0",
+    "cheerio": "1.2.0",
     "sharp": "0.35.5",
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^9.6.0",
-    "esbuild": "0.25.12"
+    "@types/better-sqlite3": "9.6.0",
+    "esbuild": "0.28.2"
   }
 }

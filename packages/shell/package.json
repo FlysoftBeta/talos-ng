@@ -13,7 +13,7 @@
     "build": "pnpm typecheck && esbuild src/sw.ts --bundle --format=iife --target=es2017 --outfile=dist/sw.js && node ../../tools/compat-check/cli.mjs dist"
   },
   "devDependencies": {
-    "fake-indexeddb": "^6.2.4",
-    "esbuild": "^0.25.0"
+    "fake-indexeddb": "6.2.5",
+    "esbuild": "0.28.2"
   }
 }
