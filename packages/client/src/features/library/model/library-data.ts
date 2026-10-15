@@ -78,7 +78,7 @@ export interface ListRowModel {
   hint: string;
   selected: boolean;
 }
-export type LibraryTab = "recent" | "favourite" | "collections";
+export type LibraryTab = "recent" | "collections";
 /** The page on top of the library area's navigation stack. */
 export interface ActivePage {
   kind: string;
@@ -114,22 +114,17 @@ export function documentHint(doc: LibraryDoc): string {
     ? "正在转换 · 查看任务"
     : `${doc.kind === "paged" ? `${doc.units} 页` : `${doc.chars} 字`} · ${new Date(doc.created).toLocaleDateString("zh-CN")}`;
 }
-/** Document rows of the recent and favourite tabs. */
+/** Recently read or imported documents, ordered by decodeLibrary. */
 export function documentRows(
   data: LibraryData,
-  tab: LibraryTab,
   active: ActivePage | undefined,
 ): ListRowModel[] {
-  return data.docs
-    .filter(
-      (doc) => tab !== "favourite" || data.states.get(doc.id)?.favourite?.v,
-    )
-    .map((doc) => ({
-      id: doc.id,
-      title: doc.title,
-      selected: active?.kind === "document" && active.id === doc.id,
-      hint: documentHint(doc),
-    }));
+  return data.docs.map((doc) => ({
+    id: doc.id,
+    title: doc.title,
+    selected: active?.kind === "document" && active.id === doc.id,
+    hint: documentHint(doc),
+  }));
 }
 /** Collection rows of the booklist tab, optionally narrowed to one group. */
 export function collectionRows(
@@ -146,6 +141,25 @@ export function collectionRows(
       selected: active?.kind === "page" && active.id === collectionPageId(c.id),
     }));
 }
+/** Built-ins stay in a fixed order at the top of recent view, even when empty. */
+export function builtinRows(
+  data: LibraryData,
+  active: ActivePage | undefined,
+): ListRowModel[] {
+  return collectionRows(
+    {
+      ...data,
+      collections: data.collections
+        .filter((c) => !!c.builtin)
+        .sort(
+          (a, b) =>
+            (a.builtin === "shelf" ? 0 : 1) - (b.builtin === "shelf" ? 0 : 1),
+        ),
+    },
+    "",
+    active,
+  );
+}
 /** Collections a user may add documents to; targets of downloads and imports. */
 export function writableCollections(
   data: LibraryData,
@@ -155,13 +169,13 @@ export function writableCollections(
     .filter((c) => collectionLevel(data, c, user) !== "read")
     .map((c) => ({ id: c.id, title: c.title }));
 }
-/** Placeholder shown when the recent or favourite tab has no documents. */
-export function emptyShelf(
-  tab: LibraryTab,
-  connection: string,
-): { state: "offline" | "empty"; title: string } {
+/** Placeholder shown when recent view has no documents. */
+export function emptyShelf(connection: string): {
+  state: "offline" | "empty";
+  title: string;
+} {
   return {
     state: connection === "offline" ? "offline" : "empty",
-    title: tab === "favourite" ? "还没有收藏" : "书架还是空的",
+    title: "还没有文档",
   };
 }

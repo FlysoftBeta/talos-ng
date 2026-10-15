@@ -9,6 +9,7 @@ import {
 import { canCreateCollection, createCollection } from "../model/collections.ts";
 import {
   collectionPageId,
+  builtinRows,
   collectionRows,
   documentRows,
   emptyShelf,
@@ -53,7 +54,8 @@ export function LibraryList({
       onGroup={setGroup}
       onCreate={() => setCreating(true)}
       collections={collectionRows(data, group, active)}
-      documents={documentRows(data, tab, active).map((row) => {
+      builtins={builtinRows(data, active)}
+      documents={documentRows(data, active).map((row) => {
         const doc = data.docs.find((d) => d.id === row.id);
         return doc
           ? {
@@ -62,7 +64,7 @@ export function LibraryList({
             }
           : row;
       })}
-      emptyShelf={emptyShelf(tab, state.status.connection)}
+      emptyShelf={emptyShelf(state.status.connection)}
       onOpenCollection={(id) =>
         runtime.dispatch({
           type: "pushPage",

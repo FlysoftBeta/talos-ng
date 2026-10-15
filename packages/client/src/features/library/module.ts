@@ -3,6 +3,7 @@ import {
   contract,
   emptyLibraryState,
   libraryStateSchema,
+  libraryCollectionSchema,
 } from "@talos/contract";
 import { lwwMerge } from "@talos/sync";
 import { defineClientModule } from "../../core/data/modules.ts";
@@ -50,7 +51,30 @@ const reduce =
       deleted: false,
       data,
     };
-    return [...rows.filter((row) => row !== previous), row];
+    const next = rows
+      .filter((row) => row !== previous)
+      .map((row) => {
+        if (
+          kind !== "favourite" ||
+          row.type !== "libraryCollection" ||
+          row.deleted
+        )
+          return row;
+        const parsed = libraryCollectionSchema.safeParse(row.data);
+        if (
+          !parsed.success ||
+          parsed.data.owner !== user ||
+          parsed.data.builtin !== "favourites"
+        )
+          return row;
+        const included = !!data.favourite?.v;
+        if (parsed.data.docs.includes(input.doc) === included) return row;
+        const docs = included
+          ? [...parsed.data.docs, input.doc]
+          : parsed.data.docs.filter((id) => id !== input.doc);
+        return { ...row, data: { ...parsed.data, docs } };
+      });
+    return [...next, row];
   };
 export const libraryModule = defineClientModule({
   id: "library",

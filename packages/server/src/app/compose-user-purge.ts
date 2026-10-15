@@ -71,7 +71,7 @@ export function composeUserPurge(
   registry.register(
     libraryPurge(db, {
       deleteDoc: (id) => library.deleteDoc(id),
-      deleteCollection: (id) => library.deleteCollection(id),
+      deleteCollection: (id) => library.deleteCollection(id, true),
       removeRefs,
       revokeResource,
     }),

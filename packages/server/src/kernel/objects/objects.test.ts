@@ -35,6 +35,29 @@ function fixture() {
   };
 }
 describe("object ledger", () => {
+  it("explicit reclamation bypasses grace only for requested unreferenced objects", async () => {
+    const f = fixture();
+    try {
+      const objects = await Promise.all(
+        [1, 2, 3].map((n) => f.store.put(Uint8Array.of(n))),
+      );
+      f.uow.write(() => {
+        objects.forEach((object) => f.ledger.register(object));
+        f.ledger.addRef(objects[0]!.id, "doc", "retained");
+      });
+      expect(await f.ledger.reclaim(objects.slice(0, 2).map((o) => o.id))).toBe(
+        1,
+      );
+      expect(await Promise.all(objects.map((o) => f.store.has(o.id)))).toEqual([
+        true,
+        false,
+        true,
+      ]);
+      expect(await f.ledger.sweep()).toBe(0);
+    } finally {
+      f.db.close();
+    }
+  });
   it("requires a Uow, preserves references on rollback, and sweeps only after grace", async () => {
     const f = fixture();
     try {

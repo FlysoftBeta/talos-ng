@@ -1,4 +1,4 @@
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { ReactElement, ReactNode } from "react";
 import type { LibraryCollection } from "@talos/contract";
 import { contract } from "@talos/contract";
@@ -10,13 +10,15 @@ import {
 import { GrantSheet } from "../../sharing/index.ts";
 import {
   CollectionEditor,
-  addableDocuments,
   collectionSharing,
   moveDocument,
-  withDocument,
   withoutDocument,
 } from "../model/collections.ts";
-import { collectionLevel, collectionOfPage } from "../model/library-data.ts";
+import {
+  collectionLevel,
+  collectionOfPage,
+  writableCollections,
+} from "../model/library-data.ts";
 import { CollectionView } from "../view/collection-view.tsx";
 import {
   CollectionMissingView,
@@ -37,7 +39,10 @@ function ConnectedCollection({
   const level = collectionLevel(data, collection, state.user!.id);
   const [sharing, setSharing] = useState(false),
     [deleting, setDeleting] = useState(false),
-    [adding, setAdding] = useState(false),
+    [transferring, setTransferring] = useState(""),
+    [canTransfer, setCanTransfer] = useState(
+      collection.owner === state.user!.id,
+    ),
     [selected, setSelected] = useState("");
   const editor = useMemo(
     () => new CollectionEditor(runtime, collection.id),
@@ -51,14 +56,37 @@ function ConnectedCollection({
     () => collectionSharing(runtime, collection.id),
     [runtime, collection.id],
   );
+  const permissionRevision = data.rows.reduce(
+    (rev, row) =>
+      row.type === "libraryCollection" && row.id === collection.id
+        ? Math.max(rev, row.rev)
+        : rev,
+    0,
+  );
+  useEffect(() => {
+    let active = true;
+    setCanTransfer(collection.owner === state.user!.id);
+    if (!collection.builtin && collection.owner !== state.user!.id)
+      void adapter
+        .list()
+        .then((value) => {
+          if (active) setCanTransfer(value.canShare);
+        })
+        .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [
+    adapter,
+    collection.id,
+    collection.owner,
+    collection.builtin,
+    permissionRevision,
+    state.status.connection,
+    state.user!.id,
+  ]);
   const reason = can.ok ? undefined : can.reason;
-  const save = (docs: string[]) =>
-    editor.save(docs).then((ok) => {
-      if (ok) {
-        setSelected("");
-        setAdding(false);
-      }
-    });
+  const save = (docs: string[]) => editor.save(docs);
   return (
     <CollectionView
       title={collection.title}
@@ -73,7 +101,9 @@ function ConnectedCollection({
           : { id, title: undefined };
       })}
       canWrite={level !== "read"}
-      canDelete={level === "own"}
+      canDelete={!collection.builtin && level === "own"}
+      canShare={!collection.builtin}
+      canTransfer={canTransfer}
       busy={busy}
       error={error}
       unavailableReason={reason}
@@ -83,13 +113,25 @@ function ConnectedCollection({
         void save(moveDocument(collection.docs, index, direction))
       }
       onRemove={(id) => void save(withoutDocument(collection.docs, id))}
-      adding={adding}
-      onAdd={() => setAdding(true)}
-      onCloseAdd={() => setAdding(false)}
-      candidates={addableDocuments(data.docs, collection)}
+      transferring={transferring}
+      onTransfer={setTransferring}
+      onCloseTransfer={() => {
+        setTransferring("");
+        setSelected("");
+      }}
+      destinations={writableCollections(data, state.user!.id).filter(
+        (target) => target.id !== collection.id,
+      )}
       selected={selected}
       onSelect={setSelected}
-      onConfirmAdd={() => void save(withDocument(collection.docs, selected))}
+      onConfirmTransfer={() =>
+        void editor.transfer(transferring, selected).then((ok) => {
+          if (ok) {
+            setTransferring("");
+            setSelected("");
+          }
+        })
+      }
       onShare={() => setSharing(true)}
       shareSheet={
         sharing && (
