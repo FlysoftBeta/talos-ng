@@ -50,26 +50,36 @@ Commands have wall-clock timeouts; browser/server ports are dynamically allocate
 | `pnpm install` | 0; shared store required sandbox escalation |
 | `pnpm --filter @talos/virtual test` | 0; 3 files, 37 default tests |
 | `VIRTUAL_BLOCKS=100 pnpm --filter @talos/virtual test` | 0; 5,000 seeds, 129 test cases, 93.35 s |
-| `pnpm --filter @talos/client test` | 0; 73 files, 649 tests before the final two regressions |
+| `pnpm --filter @talos/client test` | 0; 73 files, 649 tests before the later regression additions |
 | targeted AI controller tests | 0; 25 tests, including earlier-page anchoring |
 | `node tools/e2e/run.mjs virtual` | 0; current Chromium |
 | `node tools/e2e/run.mjs virtual --legacy` | 0; real Chromium 70, including fallback |
 | targeted `chat`, `library`, `ai`, `admin`, `hardening` | 0 on current Chromium after fixes |
 | targeted `library --legacy` | 0, including exact offline resume |
-| `pnpm check` | pending final gate |
-| `pnpm e2e` | pending final gate |
-| `pnpm e2e:legacy` | pending final gate |
-| `pnpm package` | pending final gate |
+| `pnpm check` | 0; 174 files, 1,747 passed + 1 skipped; typecheck, lint, tests, builds and compatibility scans |
+| `pnpm e2e` | 0; all 11 features plus packaged Linux A → B → broken-C rollback, restore and HTTPS/WSS |
+| `pnpm e2e:legacy` | 0; all 11 features on real Chromium 70 |
+| `pnpm package` | 0; win32-x64, linux-debian-x64, linux-redhat-x64 |
 
 Initial gate failures were an assignment to a readonly test fixture, the stale boundary
 package count, and the defects above; all were fixed. Repeated current-browser hardening runs
 measured 202–215 ms conversation scroll tasks against the unchanged 200 ms budget.
-Reusing chat date/time formatters and per-day labels reduced the targeted rerun to 66 ms. The character reflow assertion retains its 2 px tolerance
+Reusing chat date/time formatters and per-day labels reduced the targeted rerun to 66 ms
+and the final full current-browser gate to 68 ms. The character reflow assertion retains
+its 2 px tolerance
 and now compares before/after DOM coordinates, rather than assuming the character began
 at zero (which would force a partial-line jump). No existing numerical tolerance was widened.
 
+The first full browser run passed every feature but its packaged-ops after-hook exited 1
+because `tools/migrate/dist/migrate.js` was absent (the preceding failed check had skipped
+builds). After the complete root build, the full command passed including that after-hook.
+Final logs are ignored artifacts `.tmp/153-{check,e2e,e2e-legacy,package}-final.log`.
+The final code commit tested by all gates is `bed92ce`; subsequent edits are documentation only.
+The worktree was clean after the gates, with no generated artifacts tracked.
+
 Quota meter: initial sandboxed invocation timed out; the approved read-only invocation
-succeeded and reported 5% of the weekly window used, with no reset credit consumed.
+reported 5% of the weekly window used before the final gate batch, and the final reading
+reported 8%, with no reset credit consumed.
 
 ## Shared files and integration notes
 
@@ -97,7 +107,8 @@ character and its screen inset so reopening does not snap partially read lines.
 
 ## Limits
 
-Native Windows, physical tablet touch hardware and external live AI providers were not
-run. Browser gestures use CDP, including real Chromium 70. The no-ResizeObserver fallback
+Native Windows/Debian deployment, physical tablet touch hardware and external live AI
+providers were not run. Browser gestures use CDP, including real Chromium 70. The
+no-ResizeObserver fallback
 measures every animation frame while mounted; its idle cost is explicit. Performance
 measurements are host/throttled-browser results, not device qualification.

@@ -10,7 +10,7 @@ Directories, not files: each directory exists to express one isolation rule, and
 - `base` imports nothing. `link`, `sync`, `docpack`, `objectstore`, `launcher`, `virtual`: `base` only.
 - `contract`: `base`, `docpack` (types). `docpipe`: `base`, `docpack`, `objectstore` (types).
 - `store`: `base` (browser, IndexedDB only, never Blob values). `shell`: nothing.
-- `server`: all of the above except `store`/`shell`/`client`. `client`: `base`, `link`, `sync`,
+- `server`: all of the above except `store`/`shell`/`virtual`/`client`. `client`: `base`, `link`, `sync`,
   `docpack`, `contract`, `store`, `shell`, `virtual`.
 - Policy lives only in `server` and `client`; they alone may depend on `contract`.
 - Environments are checked too: browser/isomorphic packages may not import Node built-ins.
