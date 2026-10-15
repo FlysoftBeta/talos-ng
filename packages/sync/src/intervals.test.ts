@@ -138,8 +138,13 @@ describe("IntervalSet", () => {
       const query = rng(81) - 40;
       expect(set.contains(query)).toBe(model.has(query));
       const gaps = new IntervalSet(set.gapsWithin(lo, hi));
-      for (let n = lo; n <= hi; n++)
-        expect(gaps.contains(n)).toBe(!model.has(n));
+      const actualGaps: boolean[] = [];
+      const expectedGaps: boolean[] = [];
+      for (let n = lo; n <= hi; n++) {
+        actualGaps.push(gaps.contains(n));
+        expectedGaps.push(!model.has(n));
+      }
+      expect(actualGaps).toEqual(expectedGaps);
       const intervals = set.toJSON();
       for (let i = 1; i < intervals.length; i++)
         expect(intervals[i]![0]).toBeGreaterThan(intervals[i - 1]![1] + 1);
