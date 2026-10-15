@@ -5,6 +5,7 @@ import { createRealServer } from "./harness/real-server.mjs";
 import { launchBrowser } from "./harness/browser.mjs";
 
 const ORDER = [
+  "overlays",
   "identity",
   "library",
   "netbooks",

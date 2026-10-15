@@ -9,4 +9,5 @@
   retaining every operation, membership probe and invariant check.
 - Focused IntervalSet run: 16 passed. Full pnpm check in the isolated worktree:
   174 files passed, 1,747 tests passed, one skipped; build compatibility: zero violations.
-- Main integration and final browser/package gates remain pending task 154 completion.
+- Task 154 independently fixed the same test library using ES2022. Retain that
+  minimal library on integration; final main browser/package gates remain pending.

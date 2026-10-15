@@ -1,3 +1,26 @@
+# Source containers and floating controls — 2026-10-15
+
+- Fixed clipped selects, menus and tooltips with themed portal layers and modal-owned
+  floating hosts, including viewport placement, scrolling and keyboard focus (D-113).
+- Added protected private 我的书架 / 我的收藏, pinned atop recent reading; favorites
+  use booklist membership. Source-side transfer requires source redistribution permission;
+  destination-side add controls are removed. Imports default to the shelf. Zero-container
+  books and dependent state/jobs/unreferenced objects are reclaimed immediately (D-114).
+- Music saving uses search or accessible playlists, without a transfer flag or global
+  catalog. Zero-reference songs are reclaimed after a durable grace period; audio cache
+  eviction is separate. Both periods are independent fixed 30-day constants in
+  `packages/server/src/modules/media/retention-policy.ts`; administrator configuration
+  was removed (D-115).
+- Fresh development database required; no migration supplied. Existing `.data/talos.db`
+  is open in a pre-existing development server and was not modified/reset while in use.
+  Stop that server and reset its dev data before starting the updated code.
+- Integrated `pnpm check`: exit 0, 175 files / 1,774 tests passed, 1 optional live-provider
+  test skipped; build/static compatibility scan passed. Full browser/package gates pending.
+- Node test typechecking uses ES2022 declarations; browser production remains ES2018.
+  Contract compatibility covers source transfer, and importer verification excludes
+  built-in booklists from imported-source counts.
+- Completed task material is archived locally. Codex shared quota was 45% after helpers.
+
 # Source TypeScript entrypoints — 2026-10-15
 
 - Removed experimental transform flag from scripts, subprocesses and instructions.

@@ -49,7 +49,6 @@ export interface SystemState {
   error: string;
   confirm: { label: string } | undefined;
   maxVolume: number;
-  evictionDays: number;
 }
 
 /** Device and media policy switches; each change is confirmed and reloads the settings. */
@@ -66,7 +65,6 @@ export class SystemController extends StateStore<SystemState> {
       error: "",
       confirm: undefined,
       maxVolume: 1,
-      evictionDays: 30,
     });
   }
   attach(): void {
@@ -88,8 +86,6 @@ export class SystemController extends StateStore<SystemState> {
   }
   reload = (): void => this.data.reload();
   setMaxVolume = (maxVolume: number): void => this.patch({ maxVolume });
-  setEvictionDays = (evictionDays: number): void =>
-    this.patch({ evictionDays });
   toggle = (field: SystemSwitch): void => {
     const settings = this.state.data.data;
     if (settings)
@@ -100,11 +96,10 @@ export class SystemController extends StateStore<SystemState> {
       );
   };
   saveMedia = (): void => {
-    const { maxVolume, evictionDays } = this.state;
+    const { maxVolume } = this.state;
     this.ask("媒体服务设置", () =>
       adminCall(this.port, contract.admin.settings.set, {
         maxVolume,
-        evictionDays,
       }),
     );
   };

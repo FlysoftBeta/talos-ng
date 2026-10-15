@@ -44,6 +44,13 @@ export class NetbooksService {
       run: (ctx) => this.run(ctx),
     });
   }
+  /** Called inside library deletion's transaction by the application composition. */
+  removeDocument(id: string): { job: string; user_id: string }[] {
+    return this.repo.removeForDocument(id);
+  }
+  removeCollection(id: string): { job: string; user_id: string }[] {
+    return this.repo.removeForCollection(id);
+  }
   require(user: string, collection?: string): void {
     if (
       !this.options.access.authority.can(user, "feature.use", {

@@ -274,6 +274,24 @@ describe("reading session edge cases", () => {
     session.dispose();
   });
 
+  it("toggles a synced favourite even when the membership stamp is ahead of the device clock", async () => {
+    const h = harness();
+    const state = {
+      ...emptyLibraryState("doc"),
+      favourite: { v: true, t: { ms: 50_000, counter: 8 }, op: "remote" },
+    };
+    const session = new ReadingSession(
+      "doc",
+      h.port,
+      h.visibility,
+      input({ state }),
+    );
+    await session.toggleFavourite();
+    expect(h.commands[0]!.args).toMatchObject({
+      value: { v: false, t: { ms: 50_000, counter: 9 } },
+    });
+    session.dispose();
+  });
   it("toggles favourite, saves retention and deletes with error reporting", async () => {
     const h = harness(),
       session = new ReadingSession("doc", h.port, h.visibility, input());

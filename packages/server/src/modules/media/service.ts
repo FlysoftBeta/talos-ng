@@ -16,6 +16,11 @@ import type { Uow } from "../../kernel/persistence/uow.ts";
 import type { JobCommands } from "../../kernel/jobs/ports.ts";
 import type { ObjectLedger } from "../../kernel/objects/objects.ts";
 import type { ObjectStore } from "@talos/objectstore";
+import {
+  AUDIO_CACHE_EXPIRY_MS,
+  UNREFERENCED_SONG_GRACE_MS,
+} from "./retention-policy.ts";
+import { reconcileTracks, reclaimTracks } from "./lifecycle.ts";
 import { MediaRepo } from "./repo.ts";
 import { mediaMigrations } from "./schema.ts";
 import type { MediaProvider, ProviderTrack } from "./provider.ts";
@@ -50,8 +55,17 @@ export class MediaService {
       onBoot: "requeue",
       retryable: true,
       run: async (ctx) => {
-        const { track: id } = ctx.payload as { track: string };
-        const track = this.track(id);
+        const { track: id, generation } = ctx.payload as {
+          track: string;
+          generation: number;
+        };
+        const currentTrack = (): MediaTrack => {
+          const value = this.track(id);
+          if (this.repo.track(id)?.generation !== generation)
+            throw new AppError("E_CANCELLED", "曲目已被回收，请重新播放");
+          return value;
+        };
+        const track = currentTrack();
         if (track.audio) return { track: id };
         const source = await options.provider.resolve(
           track.source,
@@ -64,7 +78,7 @@ export class MediaService {
         await options.objects.publish(
           () => options.store.put(value.bytes),
           (info) => {
-            const current = this.track(id);
+            const current = currentTrack();
             if (current.audio) return;
             options.objects.addRef(info.id, "media.audio", id);
             const updated: MediaTrack = {
@@ -95,11 +109,19 @@ export class MediaService {
   importTrack(
     value: MediaTrack,
     lastPlayed = this.repo.track(value.id)?.last_played ?? 0,
+    playlist?: string,
   ): void {
     if (!mediaTrackSchema.safeParse(value).success)
       throw new AppError("E_INVALID", "Invalid imported track");
     this.options.uow.write((ctx) => {
       this.repo.putTrack(value, ctx.rev, lastPlayed);
+      if (playlist) {
+        const target = this.playlist(playlist);
+        this.updatePlaylist(playlist, {
+          tracks: [...new Set([...target.tracks, value.id])],
+        });
+      }
+      reconcileTracks(this.repo, [value.id], ctx, this.now());
       if (value.audio)
         this.options.objects.addRef(value.audio.id, "media.audio", value.id);
       this.changedTrack(value.id);
@@ -109,7 +131,18 @@ export class MediaService {
     if (!mediaPlaylistSchema.safeParse(value).success)
       throw new AppError("E_INVALID", "Invalid imported playlist");
     this.options.uow.write((ctx) => {
+      value.tracks.forEach((id) => this.track(id));
+      const before = this.repo.playlist(value.id);
       this.repo.putPlaylist(value, ctx.rev);
+      reconcileTracks(
+        this.repo,
+        [
+          ...(before ? (JSON.parse(before.body) as MediaPlaylist).tracks : []),
+          ...value.tracks,
+        ],
+        ctx,
+        this.now(),
+      );
       ctx.changed(`me:${value.owner}`, "mediaPlaylist", value.id);
       ctx.changed(`coll:${value.id}`, "mediaPlaylist", value.id);
     });
@@ -152,17 +185,17 @@ export class MediaService {
   async search(
     query: string,
     limit: number,
-    user?: string,
+    user: string,
     signal?: CancellationSignal,
   ): Promise<MediaTrack[]> {
     const values = await this.options.provider.search(query, limit, signal);
-    if (user) this.options.assertOwnerWritable?.(user);
-    return values.map((value) => this.discover(this.ensure(value), user));
+    return this.ingest(values.slice(0, limit), user);
   }
+  /** Trusted provider ingestion; public resolve only reads a currently accessible track. */
   async resolve(
     source: string,
     providerId: string,
-    user?: string,
+    user: string,
     signal?: CancellationSignal,
   ): Promise<MediaTrack> {
     const value = await this.options.provider.resolve(
@@ -170,23 +203,25 @@ export class MediaService {
       providerId,
       signal,
     );
-    if (user) this.options.assertOwnerWritable?.(user);
-    return this.discover(this.ensure(value), user);
+    return this.ingest([value], user)[0]!;
   }
-  private discover(track: MediaTrack, user?: string): MediaTrack {
-    if (user) this.options.assertOwnerWritable?.(user);
-    if (user)
-      this.options.uow.write((ctx) => {
+  private ingest(values: readonly ProviderTrack[], user: string): MediaTrack[] {
+    this.options.assertOwnerWritable?.(user);
+    return this.options.uow.write((ctx) => {
+      if (!values.length) return [];
+      const tracks = values.map((value) => this.ensure(value));
+      for (const track of tracks) {
         this.repo.discover(user, track.id, ctx.rev);
         ctx.changed(`me:${user}`, "mediaTrack", track.id);
-      });
-    return track;
+      }
+      return tracks;
+    });
   }
   private ensure(value: ProviderTrack): MediaTrack {
     const found = this.repo.source(value.source, value.providerId);
-    if (found) return JSON.parse(found.body) as MediaTrack;
+    if (found && !found.deleted) return JSON.parse(found.body) as MediaTrack;
     const track: MediaTrack = {
-      id: this.id(),
+      id: found?.id ?? this.id(),
       source: value.source,
       providerId: value.providerId,
       title: value.title,
@@ -197,6 +232,7 @@ export class MediaService {
     };
     this.options.uow.write((ctx) => {
       this.repo.putTrack(track, ctx.rev);
+      reconcileTracks(this.repo, [track.id], ctx, this.now());
       this.changedTrack(track.id);
     });
     return track;
@@ -223,17 +259,24 @@ export class MediaService {
     const track = this.track(id);
     if (track.audio) return { track, job: null };
     return this.options.uow.write(() => {
+      const generation = this.repo.track(id)!.generation!;
       const existing = this.options.jobs
         .activeJobs("media.materialise")
-        .find(
-          (job) => (job.payload as { track?: string } | null)?.track === id,
-        );
+        .find((job) => {
+          const payload = job.payload as {
+            track?: string;
+            generation?: number;
+          } | null;
+          return payload?.track === id && payload.generation === generation;
+        });
       return {
         track,
         job:
           existing?.id ??
-          this.options.jobs.enqueue(user, "media.materialise", { track: id })
-            .id,
+          this.options.jobs.enqueue(user, "media.materialise", {
+            track: id,
+            generation,
+          }).id,
       };
     });
   }
@@ -297,6 +340,8 @@ export class MediaService {
   ): MediaPlaylist {
     const before = this.playlist(id);
     if (patch.tracks) {
+      if (patch.tracks.length > 500)
+        throw new AppError("E_TOO_LARGE", "歌单最多 500 首");
       if (new Set(patch.tracks).size !== patch.tracks.length)
         throw new AppError("E_INVALID", "歌单不能包含重复曲目");
       patch.tracks.forEach((track) => this.track(track));
@@ -304,6 +349,12 @@ export class MediaService {
     const value = { ...before, ...patch };
     this.options.uow.write((ctx) => {
       this.repo.putPlaylist(value, ctx.rev);
+      reconcileTracks(
+        this.repo,
+        [...before.tracks, ...value.tracks],
+        ctx,
+        this.now(),
+      );
       ctx.changed(`me:${value.owner}`, "mediaPlaylist", id);
       ctx.changed(`coll:${id}`, "mediaPlaylist", id);
       for (const track of new Set([...before.tracks, ...value.tracks]))
@@ -315,17 +366,30 @@ export class MediaService {
     const value = this.playlist(id);
     this.options.uow.write((ctx) => {
       this.repo.putPlaylist(value, ctx.rev, true);
+      reconcileTracks(this.repo, value.tracks, ctx, this.now());
+      for (const track of value.tracks)
+        ctx.changed(`coll:${id}`, "mediaTrack", track);
       ctx.changed(`me:${value.owner}`, "mediaPlaylist", id);
       ctx.changed(`coll:${id}`, "mediaPlaylist", id);
     });
   }
-  evict(days: number): number {
-    const cutoff = this.now() - days * 86400000;
+  evict(): number {
+    const now = this.now();
+    const songCutoff = now - UNREFERENCED_SONG_GRACE_MS;
+    const audioCutoff = now - AUDIO_CACHE_EXPIRY_MS;
     let count = 0;
+    // Bound each reclamation revision so a large backlog remains synchronisable.
+    for (;;) {
+      const reclaimed = this.options.uow.write((ctx) =>
+        reclaimTracks(this.repo, this.options.objects, songCutoff, ctx),
+      );
+      count += reclaimed;
+      if (reclaimed < 100) break;
+    }
     this.options.uow.write(() => {
       for (const row of this.repo.tracks()) {
         const track = JSON.parse(row.body) as MediaTrack;
-        if (!track.audio || (row.last_played ?? 0) >= cutoff) continue;
+        if (!track.audio || (row.last_played ?? 0) > audioCutoff) continue;
         this.options.objects.removeRef(track.audio.id, "media.audio", track.id);
         this.repo.putTrack(
           { ...track, audio: null },

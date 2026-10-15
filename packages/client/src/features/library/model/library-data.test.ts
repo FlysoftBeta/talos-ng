@@ -9,6 +9,7 @@ import type { StoredRow } from "../../../core/data/db.ts";
 import { libraryModule } from "../module.ts";
 import {
   collectionLevel,
+  builtinRows,
   collectionOfPage,
   collectionRows,
   decodeLibrary,
@@ -195,17 +196,43 @@ describe("library list selectors", () => {
       ],
     };
   };
-  it("narrows documents to favourites and marks the open document", () => {
+  it("marks the open recent document and pins empty built-ins in fixed order", () => {
     const data = withDocs();
-    expect(documentRows(data, "recent", undefined).map((r) => r.id)).toEqual([
-      "b",
-      "a",
+    expect(
+      documentRows(data, { kind: "document", id: "a" }).map((r) => [
+        r.id,
+        r.selected,
+      ]),
+    ).toEqual([
+      ["b", false],
+      ["a", true],
     ]);
-    const favourites = documentRows(data, "favourite", {
-      kind: "document",
-      id: "a",
-    });
-    expect(favourites.map((r) => [r.id, r.selected])).toEqual([["a", true]]);
+    data.collections.push(
+      {
+        id: collection,
+        owner: user,
+        title: "我的收藏",
+        group: null,
+        builtin: "favourites",
+        docs: [],
+      },
+      {
+        id: doc,
+        owner: user,
+        title: "我的书架",
+        group: null,
+        builtin: "shelf",
+        docs: [],
+      },
+    );
+    expect(
+      builtinRows(data, { kind: "page", id: `collection:${collection}` }).map(
+        (r) => [r.title, r.selected],
+      ),
+    ).toEqual([
+      ["我的书架", false],
+      ["我的收藏", true],
+    ]);
   });
   it("filters booklists by group and offers only group conversations", () => {
     const data = withDocs();
@@ -223,9 +250,43 @@ describe("library list selectors", () => {
   it("identifies collection pages and empty-shelf placeholders", () => {
     expect(collectionOfPage({ kind: "page", id: "collection:c9" })).toBe("c9");
     expect(collectionOfPage({ kind: "page", id: "other" })).toBeUndefined();
-    expect(emptyShelf("favourite", "offline")).toEqual({
+    expect(emptyShelf("offline")).toEqual({
       state: "offline",
-      title: "还没有收藏",
+      title: "还没有文档",
     });
   });
+});
+
+it("offline favourite commands update both scoped copies of the built-in with the same LWW winner", () => {
+  const collectionData: LibraryCollection = {
+    id: collection,
+    owner: user,
+    title: "我的收藏",
+    group: null,
+    docs: [],
+    builtin: "favourites",
+  };
+  const personal = row("libraryCollection", collection, collectionData);
+  const shared = { ...personal, scope: `coll:${collection}` };
+  const reducer = libraryModule.reducers["library.favourite.set"]!;
+  const initial = [personal, shared];
+  const context = { user, op: user };
+  const added = reducer(
+    initial,
+    { doc: document.id, value: value(true, 20) },
+    context,
+  );
+  const stale = reducer(
+    added,
+    { doc: document.id, value: value(false, 10) },
+    context,
+  );
+  expect(decodeLibrary(stale).collections[0]!.docs).toEqual([document.id]);
+  const removed = reducer(
+    stale,
+    { doc: document.id, value: value(false, 30) },
+    context,
+  );
+  expect(decodeLibrary(removed).collections[0]!.docs).toEqual([]);
+  expect(collectionData.docs).toEqual([]);
 });

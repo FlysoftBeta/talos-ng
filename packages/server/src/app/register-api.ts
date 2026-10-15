@@ -90,6 +90,7 @@ export function registerApi(
   }));
   host.register(contract.sys.time, () => ({ now: now() }));
   host.register(contract.sync.pull, (ctx, args) => {
+    library.ensureBuiltins(ctx.user!);
     community.initializeUser(ctx.user!);
     chatService.ensureStates(ctx.user!);
     uow.write((write) => ai.billing.project(ctx.user!, write));

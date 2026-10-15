@@ -63,6 +63,39 @@ deduplicate across personal and shared scopes by latest revision on the client; 
 document rows are admitted only while their collection still lists them. Item removals use
 durable tombstones so removals reconcile after disconnection.
 
+Each user has private physical collections marked `builtin: shelf | favourites`; ordinary
+collections omit the marker. Provisioning is idempotent and runs before the sync snapshot and
+inside default import publication. Built-ins use ordinary collection/item sync and offline
+storage, and collection access explicitly excludes all other users regardless of generic grants.
+The library rejects built-in deletion and sharing; account purge uses the internal deletion
+path. There is no collection metadata-edit endpoint.
+
+`collection.items` only reorders/removes existing members. `collection.transfer` names source,
+destination and document; the source must contain the document and allow transfer (owner or
+an explicit delegable grant), and the destination must be writable. The client initiates this
+command on the source row. External imports retain their destination selector and default to
+the user's shelf; permissions are checked again at asynchronous text/file publication.
+Generated-text publication rechecks permissions in the source workflow's transactional callback.
+
+Favourite membership lives in the built-in favourites collection. The queueable favourite
+command and its LWW register remain the concurrency protocol, not a second access mechanism:
+accepted writes update membership and the register in the same UoW. Direct transfers/removals
+update that register too; the server generates a stamp later than its previous value. Offline
+replay updates every scoped copy of the built-in as well as the register, so the reader and
+booklist show the same pending state. The reader advances a new favourite operation beyond the
+observed membership stamp even when the device clock is behind. Reconnect rechecks source transfer permission before an
+addition. A legitimately transferred favourite is an independent container after source revocation.
+
+All service membership changes reclaim zero-container documents in the same transaction.
+Reclamation tombstones document/state/item projections, cancels and clears conversion jobs,
+releases object references, and calls application-composed hooks to remove network-source
+checkpoints/jobs and collection grants. The outer UoW owns rollback, including purge. Physical
+object reclamation runs immediately after commit through the object ledger's publication/GC
+sequencer, bypassing orphan grace only for the explicitly released objects; deduplicated objects
+with any surviving reference stay intact. Filesystem failures are reported through the existing
+post-commit effect reporter and remain eligible for normal GC. Conversion checks document
+existence and cancellation before retaining a completed pack, preventing resurrection.
+
 ## Netbooks
 
 `NetbooksProvider` splits search, catalog and chapter fetch. The production provider uses
@@ -106,19 +139,49 @@ SHA-256 are in the package manifest and verified at package time; a config entry
 the binary path. YouTube player clients are selected by yt-dlp’s upstream defaults;
 Talos does not pass a `player_client` extractor override.
 
-- Search and resolve store only metadata with immutable track identities. Playback and
-  retention enqueue a bounded `media.materialise` job that publishes audio into the object
-  ledger before the track advertises its hash.
-- **Media references are not access grants.** Discovery is persisted per user and every
-  track operation and ticket redemption requires discovery or a currently owned/granted
-  playlist; root status alone is not a track path. Copying a track needs ownership,
-  discovery or a delegable grant. A playlist is an authority resource `coll:<id>`; shared
-  tracks sync only in collection scopes; personal queue, favourites, recents and play
-  preference live in `me:<user>`. Delegates cannot downgrade stronger grants, change
-  original-owner access, or revoke without own authority.
-- Maintenance drops old audio references (admin-set eviction days) even for playlist members;
-  playlist metadata stays and a later play re-materialises. The volume cap is returned with
-  every playback RPC.
+- Search commits bounded provider metadata, per-user discovery and the initial
+  `unreferenced_since` clock in one UoW. It creates no playlist and has no cumulative
+  500-track search limit. Explicit playlists retain their 500-item bound. Public resolve
+  only looks up a currently accessible source/provider identity; it cannot ingest arbitrary
+  provider IDs. Trusted ingestion can assign a target playlist in the same UoW, or stage
+  unreferenced metadata under the same grace clock while an offline import assembles lists.
+- **Discovery is authorisation, never retention.** Every track operation and ticket
+  redemption needs active per-user discovery or a current owned/granted playlist. Root
+  status, favourites, queues and recents do not independently grant track access. Library
+  snapshots contain accessible playlist tracks and personal references, not a global catalog
+  or every discovered result. The client picker selects current search results or one
+  accessible playlist; search rows that disappear from sync cannot remain actionable.
+- Music has no delegation flag/table. Read access suffices to copy songs into a writable
+  playlist; playlist grants may be shared at the holder's level or below. Only own authority
+  may revoke; stronger grants and original-owner access remain protected. Copying before
+  revocation establishes a separate playlist path. Shared tracks sync in `coll:<playlist>`;
+  discovered tracks and personal state sync in `me:<user>`.
+- **Song reclamation is delayed.** `media_tracks.unreferenced_since` is nullable and durable.
+  New unreferenced tracks get the injected current time. Membership writes clear it while
+  any live playlist reference exists; the last removal sets it only if not already set.
+  Search, playback, favourites, queue writes and unrelated playlist edits do not restart it.
+  Reattachment cancels reclamation, including at the deadline if its transaction wins first.
+- Server media defines two independent hardcoded durations in `retention-policy.ts`:
+  `AUDIO_CACHE_EXPIRY_MS` and `UNREFERENCED_SONG_GRACE_MS`, each 30 days. Neither is
+  administrator-configurable. The scheduled `media.evict()` pass uses the song grace to
+  reclaim live tracks with `unreferenced_since <= now - UNREFERENCED_SONG_GRACE_MS` in
+  batches of 100 (bounded sync revisions), rechecking that no live membership exists in
+  the same synchronous writer transaction. Owner purge uses the same membership
+  transitions; another owner's saved copy survives.
+- Reclamation releases audio/cover ledger references, tombstones the track and each
+  discovery, prunes favourites/queue/recents, and publishes scoped sync tombstones atomically.
+  Identity/tombstone rows remain for sync and provider deduplication. Rediscovery
+  revives only the searching user's discovery. A durable track generation changes on revival;
+  materialisation jobs check that generation both before work and during object publication,
+  preventing late jobs from resurrecting reclaimed audio. Objects with other owners remain
+  protected by the ledger; physical deletion follows its normal sweep.
+- Independent audio-cache eviction drops audio references with
+  `last_played <= now - AUDIO_CACHE_EXPIRY_MS`, even for playlist members;
+  referenced metadata stays and a later play re-materialises. Playback/retention use the
+  bounded `media.materialise` job and publish audio into the ledger before advertising its
+  hash. The volume cap is returned with every playback RPC.
+- The schema assumes a fresh database/dev reset; an upgrade migration for previous media
+  discovery/delegation schemas is intentionally outside this implementation.
 
 ## AI
 
@@ -167,7 +230,7 @@ invitations belong to identity, effective access to authority, group paging to c
 mute projections and acknowledgement counts to chat. Bulk user changes evaluate each target
 independently, return a per-user result and audit both the batch and each successful field
 change. Reserved system group types cannot be created or promoted in the editor. Settings
-include the media volume cap and eviction days consumed by media. Diagnostics consume kernel
+include the media volume cap consumed by media. Diagnostics consume kernel
 query ports and own authorisation of generated downloads (incident ZIP).
 
 ## Ops

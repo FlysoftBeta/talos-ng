@@ -58,7 +58,7 @@ export function importSharing(
           const { level, delegable, lossy } = grantPolicy(
             grants(row.grants_json),
           );
-          if (lossy)
+          if (lossy && !media)
             issue(
               target,
               "access_bindings",
@@ -72,8 +72,8 @@ export function importSharing(
             principal,
             level,
           });
-          if (media) kernel.media.repo.delegate(id, type, principal, delegable);
-          else kernel.library.repo.delegate(id, type, principal, delegable);
+          if (!media)
+            kernel.library.repo.delegate(id, type, principal, delegable);
         } catch (error) {
           issue(
             target,

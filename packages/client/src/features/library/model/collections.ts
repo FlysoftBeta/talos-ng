@@ -1,5 +1,4 @@
 import { contract } from "@talos/contract";
-import type { LibraryCollection } from "@talos/contract";
 import type {
   RuntimeCommandPort,
   RuntimeNavigationPort,
@@ -83,15 +82,6 @@ export const withoutDocument = (
   docs: readonly string[],
   id: string,
 ): string[] => docs.filter((value) => value !== id);
-export const withDocument = (docs: readonly string[], id: string): string[] => [
-  ...docs,
-  id,
-];
-export const addableDocuments = <T extends { id: string }>(
-  all: readonly T[],
-  collection: Pick<LibraryCollection, "docs">,
-): T[] => all.filter((doc) => !collection.docs.includes(doc.id));
-
 export interface CollectionEditorState {
   busy: boolean;
   error: string;
@@ -127,6 +117,24 @@ export class CollectionEditor {
       return true;
     } catch (e) {
       this.set({ busy: false, error: messageOf(e, "保存失败") });
+      return false;
+    }
+  }
+  /** Transfer is initiated at the source and authorized again by the server. */
+  async transfer(doc: string, target: string): Promise<boolean> {
+    if (this.state.busy) return false;
+    this.set({ busy: true, error: "" });
+    try {
+      await this.port.command(contract.library.collection.transfer, {
+        source: this.collection,
+        target,
+        doc,
+      });
+      await this.port.sync();
+      this.set({ busy: false });
+      return true;
+    } catch (error) {
+      this.set({ busy: false, error: messageOf(error, "转存失败") });
       return false;
     }
   }

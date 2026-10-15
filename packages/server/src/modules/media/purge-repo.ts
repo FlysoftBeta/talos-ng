@@ -14,14 +14,6 @@ export class MediaPurgeRepo {
     }
 
     db.run(
-      "DELETE FROM media_delegations WHERE playlist IN (SELECT id FROM media_playlists WHERE owner=?)",
-      user,
-    );
-    db.run(
-      "DELETE FROM media_delegations WHERE principal_type='user' AND principal=?",
-      user,
-    );
-    db.run(
       "DELETE FROM media_playlist_tracks WHERE playlist IN (SELECT id FROM media_playlists WHERE owner=?)",
       user,
     );

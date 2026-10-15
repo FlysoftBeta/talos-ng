@@ -11,8 +11,7 @@ Chromium 70 binary. Entry points: `tools/compat-check/cli.mjs`, `packages/client
   with ES2018 and no DOM or Node types. Newer built-ins are either avoided or polyfilled
   explicitly. Unsupported syntax includes optional chaining, nullish coalescing, BigInt
   literals, `import.meta`, top-level await and optional catch bindings.
-- Client unit tests run in Node and use ES2023 + DOM types, matching the Node test
-  configuration. Production sources are checked separately against ES2018 before the
+- Client unit tests run in Node and use ES2022 + DOM types for their test APIs. Production sources are checked separately against ES2018 before the
   test configuration, so test-only built-ins do not relax the browser API floor.
 - Build targets are `chrome70` and `es2018` together (Chrome 70 alone would allow optional
   catch bindings, which the checker rejects). The client emits standalone classic scripts

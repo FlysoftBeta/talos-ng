@@ -25,6 +25,8 @@ export interface CollectionViewProps {
   items: CollectionItem[];
   canWrite: boolean;
   canDelete: boolean;
+  canShare: boolean;
+  canTransfer: boolean;
   busy: boolean;
   error: string;
   unavailableReason?: string;
@@ -32,14 +34,13 @@ export interface CollectionViewProps {
   onOpenDocument: (id: string) => void;
   onMove: (index: number, direction: -1 | 1) => void;
   onRemove: (id: string) => void;
-  /** Add-document dialog state. */
-  adding: boolean;
-  onAdd: () => void;
-  onCloseAdd: () => void;
-  candidates: { id: string; title: string }[];
+  transferring: string;
+  onTransfer: (doc: string) => void;
+  onCloseTransfer: () => void;
+  destinations: { id: string; title: string }[];
   selected: string;
   onSelect: (id: string) => void;
-  onConfirmAdd: () => void;
+  onConfirmTransfer: () => void;
   /** Share sheet; supplied by the connection because it needs the sharing adapter. */
   shareSheet: ReactNode;
   onShare: () => void;
@@ -59,19 +60,12 @@ export function CollectionView(props: CollectionViewProps): ReactElement {
         subtitle={`${props.items.length} 份文档`}
         actions={
           <>
-            <IconButton
-              label="分享"
-              icon="share"
-              disabledReason={reason}
-              onClick={props.onShare}
-            />
-            {props.canWrite && (
+            {props.canShare && (
               <IconButton
-                label="添加文档"
-                icon="plus"
-                disabled={props.busy}
+                label="分享"
+                icon="share"
                 disabledReason={reason}
-                onClick={props.onAdd}
+                onClick={props.onShare}
               />
             )}
             {props.canDelete && (
@@ -117,27 +111,35 @@ export function CollectionView(props: CollectionViewProps): ReactElement {
                     : undefined
                 }
                 trailing={
-                  props.canWrite ? (
+                  props.canWrite || props.canTransfer ? (
                     <Menu
                       label={`更多操作 ${name}`}
                       size="small"
                       items={[
                         {
+                          label: "转存到书单",
+                          icon: "book",
+                          hidden: !props.canTransfer,
+                          disabledReason: rowReason,
+                          onSelect: () => props.onTransfer(item.id),
+                        },
+                        {
                           label: "上移",
                           icon: "arrow-up",
-                          hidden: index === 0,
+                          hidden: !props.canWrite || index === 0,
                           disabledReason: rowReason,
                           onSelect: () => props.onMove(index, -1),
                         },
                         {
                           label: "下移",
                           icon: "arrow-down",
-                          hidden: index === last,
+                          hidden: !props.canWrite || index === last,
                           disabledReason: rowReason,
                           onSelect: () => props.onMove(index, 1),
                         },
                         {
                           label: "移出书单",
+                          hidden: !props.canWrite,
                           icon: "minus",
                           danger: true,
                           disabledReason: rowReason,
@@ -154,53 +156,49 @@ export function CollectionView(props: CollectionViewProps): ReactElement {
           <StatePanel
             state="empty"
             title="书单还是空的"
-            hint={
-              props.canWrite
-                ? "添加文档后可调整阅读顺序"
-                : "拥有编辑权限的人可以添加文档"
-            }
+            hint="请从导入入口或允许转存的来源书单添加文档"
           />
         )}
       </PaneBody>
       {props.shareSheet}
-      {props.adding && (
+      {props.transferring && (
         <Dialog
           open
           size="sm"
-          title="添加文档"
+          title="转存到书单"
           subtitle={props.title}
-          onClose={props.onCloseAdd}
+          onClose={props.onCloseTransfer}
           footer={
             <>
-              <Button variant="secondary" onClick={props.onCloseAdd}>
+              <Button variant="secondary" onClick={props.onCloseTransfer}>
                 取消
               </Button>
               <Button
                 variant="primary"
                 busy={props.busy}
                 disabled={!props.selected}
-                onClick={props.onConfirmAdd}
+                onClick={props.onConfirmTransfer}
               >
-                添加到书单
+                确认转存
               </Button>
             </>
           }
         >
-          {props.candidates.length ? (
+          {props.destinations.length ? (
             <SelectField
-              label="文档"
+              label="目标书单"
               value={props.selected}
               onChange={(e) => props.onSelect(e.target.value)}
             >
-              <option value="">选择文档</option>
-              {props.candidates.map((doc) => (
+              <option value="">选择书单</option>
+              {props.destinations.map((doc) => (
                 <option key={doc.id} value={doc.id}>
                   {doc.title}
                 </option>
               ))}
             </SelectField>
           ) : (
-            <StatePanel compact state="empty" hint="没有可添加的文档" />
+            <StatePanel compact state="empty" hint="没有可写入的目标书单" />
           )}
         </Dialog>
       )}
@@ -209,7 +207,7 @@ export function CollectionView(props: CollectionViewProps): ReactElement {
           open
           destructive
           objectName={props.title}
-          message="书单将被删除，其中的文档仍保留在书架中。"
+          message="书单将被删除。没有其他书单收录的文档也将被永久删除。"
           onClose={props.onCloseDelete}
           onConfirm={props.onConfirmDelete}
         />

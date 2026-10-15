@@ -45,6 +45,7 @@ export interface LibraryListViewProps {
   onGroup: (group: string) => void;
   onCreate: () => void;
   collections: ListRowModel[];
+  builtins: ListRowModel[];
   documents: LibraryRow[];
   emptyShelf: { state: "offline" | "empty"; title: string };
   onOpenCollection: (id: string) => void;
@@ -89,13 +90,23 @@ export function LibraryListView(props: LibraryListViewProps): ReactElement {
           value={props.tab}
           options={[
             { value: "recent", label: "最近" },
-            { value: "favourite", label: "收藏" },
             { value: "collections", label: "书单" },
           ]}
           onChange={props.onTab}
         />
       </PaneTools>
       <PaneBody className="lib-list-body">
+        {props.tab === "recent" &&
+          props.builtins.map((c) => (
+            <ListRow
+              key={c.id}
+              title={c.title}
+              hint={c.hint}
+              selected={c.selected}
+              leading={<LibraryTile icon="book" />}
+              onClick={() => props.onOpenCollection(c.id)}
+            />
+          ))}
         {props.tab === "collections" ? (
           <>
             {props.groups.length > 0 && (
@@ -156,11 +167,7 @@ export function LibraryListView(props: LibraryListViewProps): ReactElement {
             compact
             state={props.emptyShelf.state}
             title={props.emptyShelf.title}
-            hint={
-              props.tab === "favourite"
-                ? "阅读时点亮书签即可收藏"
-                : "导入文本或 PDF，即可开始阅读"
-            }
+            hint="导入文本或 PDF，即可开始阅读"
           />
         )}
       </PaneBody>

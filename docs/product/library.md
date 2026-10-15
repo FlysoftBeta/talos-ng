@@ -4,18 +4,31 @@ Needs the articles gate (reader types and downloads add their own gates; see rol
 
 ## Library
 
-The reading area has three views: recent, favourites, and booklists (optionally filtered to
-one group's booklists). Each has its own empty state. A booklist is a shared collection:
-it lists documents, can be created by any user with the gate, and is shared by access grants
-(roles.md). Writers add and remove documents; the owner deletes the booklist after a
-confirmation naming it (documents are not deleted with it). Item removals reconcile after
-a disconnection.
+The reading area has recent and booklist views (booklists can be filtered by group).
+Every user has two private built-in booklists: 我的书架 and 我的收藏. Both are pinned at the
+top of recent view, including when empty. Built-ins cannot be deleted, renamed, have their
+information edited, or be shared. Their contents can be reordered or removed.
 
-Sharing sheet (booklists and playlists): grant read, write or own to users or groups
+Every book belongs to at least one booklist. Removing a book from its last booklist, or
+deleting its last booklist, permanently deletes the book, reading state, download checkpoints,
+conversion tasks and unreferenced source/rendition objects. Books in another booklist survive.
+The deletion confirmation explains this consequence. Removing a favourite removes its
+membership in 我的收藏; the reader's favourite control and this booklist are the same feature.
+
+New books enter from a source: the import entry, a network download, or a booklist which
+permits transfer. A destination booklist has no “add document” control. At an authorized
+source, choose a book's “转存到书单” action and a writable destination. Transfer adds a
+membership without removing the source membership. Read access alone does not permit transfer
+or favourites; an explicit delegable grant permits both. An authorized transfer preserves
+access through the new booklist even if the original grant is later revoked.
+
+Sharing sheet (ordinary booklists and playlists): grant read, write or own to users or groups
 (candidates are the user's groups and DM peers), optionally delegable; the owner can revoke
-all grants but their own. A favourite or bookmark never grants access.
+all grants but their own. Booklist writers reorder and remove items, and can receive imports.
+Owners can delete ordinary booklists after confirmation. Built-ins stay private even from
+community managers and cannot receive grants through the library API.
 
-Documents the user may open are recoverable through any collection that still lists them;
+Documents are accessible through their owner or a booklist which still lists them;
 there is no token or link that grants access to whoever holds it.
 
 ## Importing
@@ -24,7 +37,8 @@ there is no token or link that grants access to whoever holds it.
   attachment locks the body and supplies the default title.
 - PDF: needs the e-book gate; recognised by type or extension; up to 200 MiB. Password
   protected PDFs are rejected with 文档已加密，暂不支持; unreadable files with 文档无效.
-- Importing needs write access to the target booklist and a connection. The dialog closes
+- Importing needs write access to the target booklist and a connection. Without an explicit
+  target it goes into 我的书架. The book and its first membership are committed together. The dialog closes
   at once; upload progress shows in the status centre and conversion runs as a background
   task shown in the task list, restartable after a server restart. A failed conversion keeps
   its source and can be retried from the task list.

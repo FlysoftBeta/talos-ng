@@ -128,13 +128,6 @@
   border-color: var(--border);
 }
 .select-options {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 100%;
-  z-index: 300;
-  max-height: 320px;
-  margin-top: 4px;
   padding: var(--s-1);
   overflow: auto;
   border: 1px solid var(--border);

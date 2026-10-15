@@ -94,3 +94,43 @@ bounded tables inside sheets. Empty states occupy the same body and keep paging 
 Record editors use sheets with sticky action footers; bulk reports retain a result mark for
 every target. System policies use grouped switches. Operations panels own their header and
 scrolling grouped body, including when embedded in the administration frame or gallery.
+
+## Floating surfaces and modal layers
+
+`ui/floating` owns portals, viewport geometry and DOM interaction. Features continue to
+compose `SelectField`, `Menu`, `HelpTip`, `IconButton`, `Dialog` and `Sheet`; no feature
+model imports positioning code or measures the viewport. `TalosProvider` installs one
+portal host beside the application content, within the theme root, so palette, text size
+and keyboard focus styling also apply to portaled content. Do not transform or clip that
+host or the theme root.
+
+Dialogs and sheets portal into that host. Their non-transformed backdrop is the accessible
+dialog and focus boundary; its animated visual surface and local floating host are siblings.
+A picker in a scrollable modal body therefore escapes clipping and animation transforms
+while remaining inside the modal's focus trap. Modals share a root stacking context in DOM
+opening order; ordinary floating surfaces sit below modals, and modal floating surfaces
+sit above their own visual surface but below later modals. Only the last modal handles
+Escape and contains focus. Feature-specific portals for dialogs are unnecessary.
+
+`useFloating` measures viewport rectangles while a surface is open. An animation-frame
+loop handles nested scrolling, viewport resizing, animated ancestors and content changes
+without requiring ResizeObserver. It stops on close/unmount, and dismisses surfaces whose
+anchor is removed, hidden or fully scrolled out of its clipping ancestors. Width is bounded
+to the viewport (Select matches its trigger); placement aligns, flips to the roomier side,
+then clamps to an 8 px viewport margin. Tall menus and lists scroll within the available
+space, capped at 320 px. Presentation remains in component CSS; geometry is a pure function.
+
+Select and Menu move focus into their popup, support arrows/Home/End, skip disabled
+options, and activate with Enter/Space. Selection and Escape return focus to the trigger;
+Tab/Shift+Tab close the popup and continue from the trigger in form order. Outside mouse,
+touch and focus dismiss without stealing destination focus. Escape from a popup does not
+close its modal. Icon tooltips use the same placement on hover/focus and `aria-describedby`;
+HelpTip uses it for its explicit explanation toggle. Passive icon tooltip dismissal does
+not consume Escape intended for a dialog.
+
+The `overlays` e2e scenario drives production primitives in the gallery's adversarial layout
+(`gallery.html?overlays`): transformed overflow containers, dialogs, sheets, child dialogs,
+long lists, viewport edges, resizing, and keyboard/pointer focus. It runs in current
+Chromium and real Chromium 70 at 1280×800, 768×1024 and 320×480, including dark mode and
+with ResizeObserver disabled. Hit tests verify that popup content is actually on top;
+viewport rectangles and screenshots verify clipping and placement.

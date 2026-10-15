@@ -14,6 +14,7 @@ import {
   ready,
   captures,
 } from "./helpers.mjs";
+import { sharingPicker } from "./overlays.mjs";
 import { pagePlacement } from "./placement.mjs";
 import { libraryPdf } from "../../harness/library-pdf.mjs";
 
@@ -22,6 +23,18 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
   const { cdp } = browser;
   const name = legacy ? "chrome70" : "current";
   const errors = browser.errors.length;
+  const leaveReader = async () => {
+    const visible = `Array.from(document.querySelectorAll('button[aria-haspopup="menu"]')).some(function(b){return b.getAttribute('aria-label')==='添加'&&b.getClientRects().length>0;})`;
+    for (let i = 0; i < 10 && !(await cdp.evaluate(visible)); i++) {
+      await click(cdp, "返回");
+      await cdp.evaluate("new Promise(function(r){requestAnimationFrame(r);})");
+    }
+    assert.equal(
+      await cdp.evaluate(visible),
+      true,
+      "leave reader focus mode before using library menus",
+    );
+  };
   const contexts = new Set();
   cdp.on("Runtime.executionContextCreated", ({ context }) =>
     contexts.add(context.id),
@@ -42,6 +55,24 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     await unlock(cdp);
     await cdp.wait(`${text}.indexOf('已连接')>=0`);
     await click(cdp, "阅读");
+    await cdp.wait(
+      `${text}.indexOf('我的书架')>=0 && ${text}.indexOf('我的收藏')>=0`,
+    );
+    await click(cdp, "我的收藏");
+    assert.equal(
+      await cdp.evaluate(
+        "!!document.querySelector('.lib-collection [aria-label=分享]')",
+      ),
+      false,
+      "built-in cannot share",
+    );
+    assert.equal(
+      await cdp.evaluate(
+        "!!document.querySelector('.lib-collection [aria-label=更多操作]')",
+      ),
+      false,
+      "built-in cannot delete",
+    );
     await captures(cdp, name, "home");
     await click(cdp, "添加");
     await click(cdp, "导入文档");
@@ -77,6 +108,8 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     await close(cdp);
     const pdfPath = path.join(directory, "中文.pdf");
     await writeFile(pdfPath, libraryPdf(2));
+    // Leave reader focus mode before opening a menu in the library pane.
+    await leaveReader();
     await click(cdp, "添加");
     await click(cdp, "导入文档");
     await click(cdp, "PDF");
@@ -248,6 +281,7 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
       "500-page pack mounted window bounded",
     );
     await captures(cdp, name, "pdf-window");
+    await leaveReader();
     await click(cdp, "书单");
     await click(cdp, "添加");
     await click(cdp, "新建书单");
@@ -255,25 +289,35 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     await click(cdp, "创建书单");
     await cdp.wait("!document.querySelector('[role=dialog]')");
     await click(cdp, "共享书单");
-    for (const doc of [small.doc, large.doc]) {
-      await click(cdp, "添加文档");
-      await fill(cdp, "文档", doc);
-      await click(cdp, "添加到书单");
-      await cdp.wait("!document.querySelector('[role=dialog]')");
-    }
-    await click(cdp, "更多操作 五百页 PDF");
-    await click(cdp, "上移");
-    await captures(cdp, name, "collection");
-    await click(cdp, "分享");
-    await captures(cdp, name, "sharing");
-    await close(cdp);
+    assert.equal(
+      await cdp.evaluate("!!document.querySelector('[aria-label=添加文档]')"),
+      false,
+      "no destination-side add control",
+    );
     const collection = (
       await wire.call("sync.pull", { cursors: {} })
     ).data.scopes[`me:${wire.user.id}`].rows.find(
       (row) =>
         row.type === "libraryCollection" && row.data.title === "共享书单",
     ).id;
-    // Read/write authority is checked on the real wire for a second principal.
+    await click(cdp, "最近");
+    await click(cdp, "我的书架");
+    for (const title of ["中文 PDF", "五百页 PDF"]) {
+      await click(cdp, `更多操作 ${title}`);
+      await click(cdp, "转存到书单");
+      await fill(cdp, "目标书单", collection);
+      await click(cdp, "确认转存");
+      await cdp.wait("!document.querySelector('[role=dialog]')");
+    }
+    await click(cdp, "书单");
+    await click(cdp, "共享书单");
+    await click(cdp, "更多操作 五百页 PDF");
+    await click(cdp, "上移");
+    await captures(cdp, name, "collection");
+    await click(cdp, "分享");
+    await captures(cdp, name, "sharing");
+    await sharingPicker(cdp, name);
+    await close(cdp);
     await wire.call("library.sharing.set", {
       collection,
       principalType: "user",
@@ -378,13 +422,44 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     await click(cdp, "删除文档");
     await cdp.wait(`${text}.indexOf('中文 PDF')>=0`);
     await click(cdp, "确认删除");
+    await cdp.wait("!document.querySelector('[role=dialog]')");
+    const temporary = (
+      await wire.call("library.collection.create", { title: "最后容器" })
+    ).data.id;
+    const orphan = (
+      await wire.call("library.doc.importText", {
+        title: "移出即回收",
+        body: "仅在最后容器中的书",
+        collection: temporary,
+      })
+    ).data.doc;
+    await ready(wire, orphan);
+    await click(cdp, "书单");
+    await click(cdp, "最后容器");
+    await click(cdp, "更多操作 移出即回收");
+    await click(cdp, "移出书单");
+    await cdp.wait(
+      "document.querySelector('.lib-collection').textContent.indexOf('书单还是空的')>=0",
+    );
+    await assert.rejects(
+      wire.call("library.doc.open", { doc: orphan }),
+      (error) => error.code === "E_DENIED",
+    );
+    const reclaimed = (await wire.call("sync.pull", { cursors: {} })).data
+      .scopes[`me:${wire.user.id}`].rows;
+    assert.ok(
+      reclaimed.some(
+        (row) => row.type === "libraryDoc" && row.id === orphan && row.deleted,
+      ),
+      "last-container removal is a durable tombstone",
+    );
     assert.deepEqual(
       browser.errors.slice(errors),
       [],
       "library has no browser exceptions",
     );
     console.log(
-      `${name}: library real PDF/text import, 500-page window, grants, offline restart, queued favourite/progress and delete passed.`,
+      `${name}: library real PDF/text import, 500-page window, grants, offline restart, queued favourite/progress, source transfers and last-container reclamation passed.`,
     );
   } finally {
     wire?.close();

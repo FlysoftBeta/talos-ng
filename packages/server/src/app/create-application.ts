@@ -212,6 +212,14 @@ export function createKernel(options: KernelOptions): Kernel {
   });
   aiService = ai;
   ai.registerSync(syncHub);
+  const clearSourceJobs = (records: { job: string; user_id: string }[]) => {
+    for (const record of records) {
+      if (!jobs.get(record.job)?.deleted && jobs.get(record.job)) {
+        jobs.cancel(record.user_id, record.job);
+        jobs.clear(record.user_id, record.job);
+      }
+    }
+  };
   const library = new LibraryService({
     db,
     uow,
@@ -220,6 +228,11 @@ export function createKernel(options: KernelOptions): Kernel {
     uploads,
     jobs,
     now,
+    onDeleteDocument: (id) => clearSourceJobs(netbooks.removeDocument(id)),
+    onDeleteCollection: (id, tx) => {
+      authority.revokeResource(`coll:${id}`, tx);
+      clearSourceJobs(netbooks.removeCollection(id));
+    },
   });
   const libraryAccess = new LibraryAccess(library, authority, communityService);
   const netbooks = new NetbooksService({
@@ -401,6 +414,7 @@ export function createKernel(options: KernelOptions): Kernel {
   );
   seedIdentity(identity, uow, options.testSeed);
   for (const user of authority.repo.users()) {
+    library.ensureBuiltins(user);
     communityService.initializeUser(user);
     chatService.ensureStates(user);
   }
@@ -439,7 +453,6 @@ export function createKernel(options: KernelOptions): Kernel {
         db,
         uploads,
         media,
-        admin,
         objects,
         ai,
         syncHub,

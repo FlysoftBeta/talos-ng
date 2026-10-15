@@ -3,11 +3,14 @@ import type {
   MouseEvent,
   ReactElement,
   ReactNode,
+  Ref,
+  KeyboardEventHandler,
 } from "react";
 import { Icon } from "../icon/icon.tsx";
 import type { IconName } from "../icon/icon.tsx";
 import { useToast } from "../feedback/toast.tsx";
 import "./actions.css";
+import { useTooltip } from "../floating/tooltip.tsx";
 
 export type ButtonVariant =
   "primary" | "secondary" | "ghost" | "danger" | "danger-ghost";
@@ -102,6 +105,11 @@ export function Button({
   );
 }
 export function IconButton({
+  ref,
+  onKeyDown,
+  "aria-haspopup": hasPopup,
+  "aria-expanded": expanded,
+  "aria-controls": controls,
   label,
   icon,
   onClick,
@@ -114,6 +122,11 @@ export function IconButton({
   className = "",
   "data-testid": testId,
 }: {
+  ref?: Ref<HTMLButtonElement>;
+  onKeyDown?: KeyboardEventHandler<HTMLButtonElement>;
+  "aria-haspopup"?: "menu";
+  "aria-expanded"?: boolean;
+  "aria-controls"?: string;
   label: string;
   icon: IconName;
   onClick?: () => void;
@@ -128,22 +141,37 @@ export function IconButton({
   "data-testid"?: string;
 }): ReactElement {
   const toast = useToast();
+  const tip = useTooltip(
+    disabledReason ? `${label}（${disabledReason}）` : label,
+  );
   return (
-    <button
-      type="button"
-      className={`icon-btn${size === "small" ? " icon-btn-sm" : ""}${tone ? ` icon-btn-${tone}` : ""}${disabledReason ? " is-disabled" : ""} ${className}`}
-      aria-label={label}
-      title={disabledReason ? `${label}（${disabledReason}）` : label}
-      aria-pressed={pressed}
-      aria-disabled={disabledReason ? true : undefined}
-      disabled={disabled}
-      data-testid={testId}
-      onClick={() => (disabledReason ? toast(disabledReason) : onClick?.())}
-    >
-      <Icon name={icon} size={size === "small" ? 18 : 20} />
-      {!!badge && (
-        <span className="count-badge">{badge > 99 ? "99+" : badge}</span>
-      )}
-    </button>
+    <>
+      <button
+        {...tip.props}
+        ref={(node) => {
+          tip.ref.current = node;
+          if (typeof ref === "function") ref(node);
+          else if (ref) ref.current = node;
+        }}
+        onKeyDown={onKeyDown}
+        aria-haspopup={hasPopup}
+        aria-expanded={expanded}
+        aria-controls={controls}
+        type="button"
+        className={`icon-btn${size === "small" ? " icon-btn-sm" : ""}${tone ? ` icon-btn-${tone}` : ""}${disabledReason ? " is-disabled" : ""} ${className}`}
+        aria-label={label}
+        aria-pressed={pressed}
+        aria-disabled={disabledReason ? true : undefined}
+        disabled={disabled}
+        data-testid={testId}
+        onClick={() => (disabledReason ? toast(disabledReason) : onClick?.())}
+      >
+        <Icon name={icon} size={size === "small" ? 18 : 20} />
+        {!!badge && (
+          <span className="count-badge">{badge > 99 ? "99+" : badge}</span>
+        )}
+      </button>
+      {tip.tooltip}
+    </>
   );
 }

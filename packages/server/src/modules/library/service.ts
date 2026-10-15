@@ -1,5 +1,5 @@
 import type { CancellationSignal } from "@talos/base";
-import { AppError, createUlid, utf8Encode } from "@talos/base";
+import { AppError, HybridClock, createUlid, utf8Encode } from "@talos/base";
 import { emptyLibraryState, applyLibraryProgress } from "@talos/contract";
 import type {
   LibraryDoc,
@@ -13,7 +13,7 @@ import type { ObjectStore } from "@talos/objectstore";
 import { lwwMerge } from "@talos/sync";
 import type { Db } from "../../kernel/persistence/db.ts";
 import { migrate } from "../../kernel/persistence/db.ts";
-import type { Uow } from "../../kernel/persistence/uow.ts";
+import type { Uow, WriteContext } from "../../kernel/persistence/uow.ts";
 import type { Jobs } from "../../kernel/jobs/jobs.ts";
 import type { ObjectLedger } from "../../kernel/objects/objects.ts";
 import type { UploadService } from "../../kernel/objects/uploads.ts";
@@ -30,6 +30,8 @@ export interface LibraryOptions {
   now?: () => number;
   id?: () => string;
   converters?: ConverterRegistry;
+  onDeleteDocument?: (id: string, tx: WriteContext) => void;
+  onDeleteCollection?: (id: string, tx: WriteContext) => void;
 }
 export class LibraryService {
   readonly repo: LibraryRepo;
@@ -113,6 +115,33 @@ export class LibraryService {
     if (!row || row.deleted) throw new AppError("E_NOT_FOUND", "书单不存在");
     return JSON.parse(row.body) as LibraryCollection;
   }
+  /** Idempotent provisioning, before a sync snapshot or an import transaction. */
+  ensureBuiltins(user: string): { shelf: string; favourites: string } {
+    const find = (kind: "shelf" | "favourites") =>
+      this.repo
+        .collections()
+        .filter((row) => !row.deleted && row.owner === user)
+        .map((row) => JSON.parse(row.body) as LibraryCollection)
+        .find((collection) => collection.builtin === kind)?.id;
+    const shelf = find("shelf"),
+      favourites = find("favourites");
+    if (shelf && favourites) return { shelf, favourites };
+    return this.options.uow.write((ctx) => {
+      const create = (builtin: "shelf" | "favourites", title: string) => {
+        const id = this.id();
+        this.repo.putCollection(
+          { id, owner: user, title, group: null, docs: [], builtin },
+          ctx.rev,
+        );
+        ctx.changed(`me:${user}`, "libraryCollection", id);
+        return id;
+      };
+      return {
+        shelf: shelf ?? create("shelf", "我的书架"),
+        favourites: favourites ?? create("favourites", "我的收藏"),
+      };
+    });
+  }
   createCollection(user: string, title: string, group?: string): string {
     return this.options.uow.write((ctx) => {
       const id = this.id();
@@ -129,6 +158,8 @@ export class LibraryService {
     const collection = this.collection(id);
     if (new Set(docs).size !== docs.length)
       throw new AppError("E_INVALID", "书单不能包含重复文档");
+    if (docs.length > 1000)
+      throw new AppError("E_TOO_LARGE", "书单最多包含 1000 份文档");
     docs.forEach((doc) => this.document(doc));
     this.options.uow.write((ctx) => {
       this.repo.putCollection({ ...collection, docs }, ctx.rev);
@@ -138,12 +169,43 @@ export class LibraryService {
       for (const doc of new Set([...collection.docs, ...docs])) {
         ctx.changed(`coll:${id}`, "libraryDoc", doc);
       }
+      if (collection.builtin === "favourites") {
+        for (const doc of new Set([...collection.docs, ...docs])) {
+          if (this.repo.doc(doc)?.deleted) continue;
+          const state = this.state(collection.owner, doc);
+          const included = docs.includes(doc);
+          if (!!state.favourite?.v !== included) {
+            const clock = new HybridClock(this.now);
+            state.favourite = {
+              v: included,
+              t: state.favourite
+                ? clock.observe(state.favourite.t)
+                : clock.now(),
+              op: this.id(),
+            };
+            this.writeState(collection.owner, state);
+          }
+        }
+      }
+      for (const doc of collection.docs) {
+        if (
+          !docs.includes(doc) &&
+          !this.repo.hasContainer(doc) &&
+          !this.repo.doc(doc)?.deleted
+        )
+          this.deleteDoc(doc);
+      }
     });
   }
-  deleteCollection(id: string): void {
+  deleteCollection(id: string, purging = false): void {
     const collection = this.collection(id);
+    if (collection.builtin && !purging)
+      throw new AppError("E_DENIED", "内置书单不能删除");
     this.options.uow.write((ctx) => {
-      this.repo.putCollection(collection, ctx.rev, true);
+      this.setItems(id, []);
+      this.repo.putCollection({ ...collection, docs: [] }, ctx.rev, true);
+      this.repo.clearDelegations(id);
+      this.options.onDeleteCollection?.(id, ctx);
       ctx.changed(`coll:${id}`, "libraryCollection", id);
       ctx.changed(`me:${collection.owner}`, "libraryCollection", id);
     });
@@ -151,6 +213,7 @@ export class LibraryService {
   async importText(
     user: string,
     args: { title: string; body: string; collection?: string },
+    authorize: () => void = () => {},
   ): Promise<{ doc: string; job: string }> {
     const bytes = utf8Encode(args.body);
     if (!args.body.trim() || bytes.length > 512 * 1024)
@@ -159,6 +222,7 @@ export class LibraryService {
     await this.options.objects.publish(
       () => this.options.store.put(bytes),
       (info) => {
+        authorize();
         result = this.insert(
           user,
           args.title,
@@ -243,8 +307,8 @@ export class LibraryService {
       };
       this.repo.putDoc(doc, source, filename, ctx.rev);
       this.options.objects.addRef(source, "library.source", id);
-      if (collection)
-        this.setItems(collection, [...this.collection(collection).docs, id]);
+      const target = collection ?? this.ensureBuiltins(user).shelf;
+      this.setItems(target, [...this.collection(target).docs, id]);
       ctx.changed(`me:${user}`, "libraryDoc", id);
       const job = this.options.jobs.enqueue(user, "library.convert", {
         doc: id,
@@ -312,6 +376,19 @@ export class LibraryService {
     const doc = this.document(id);
     this.options.uow.write((ctx) => {
       this.repo.putDoc(doc, row!.source!, row!.filename!, ctx.rev, true);
+      this.options.onDeleteDocument?.(id, ctx);
+      for (const user of this.repo.deleteStates(id, ctx.rev))
+        ctx.changed(`me:${user}`, "libraryState", id);
+      for (const job of this.options.jobs.list(doc.owner)) {
+        if (
+          !job.deleted &&
+          job.kind === "library.convert" &&
+          (job.payload as { doc?: string }).doc === id
+        ) {
+          this.options.jobs.cancel(doc.owner, job.id);
+          this.options.jobs.clear(doc.owner, job.id);
+        }
+      }
       this.options.objects.removeRef(row!.source!, "library.source", id);
       if (doc.pack)
         this.options.objects.removeRef(doc.pack.id, "library.pack", id);
@@ -324,15 +401,22 @@ export class LibraryService {
           );
       }
       this.changedDoc(id, doc.owner, ctx.changed);
+      ctx.afterCommit(async () => {
+        await this.options.objects.reclaim([
+          row!.source!,
+          ...(doc.pack ? [doc.pack.id] : []),
+        ]);
+      });
     });
   }
   state(user: string, doc: string): LibraryState {
     const row = this.repo.state(user, doc);
-    return row
+    return row && !row.deleted
       ? (JSON.parse(row.body) as LibraryState)
       : emptyLibraryState(doc);
   }
   progress(user: string, input: LibraryProgressInput): void {
+    this.document(input.doc);
     this.writeState(
       user,
       applyLibraryProgress(this.state(user, input.doc), input),
@@ -358,6 +442,7 @@ export class LibraryService {
       | NonNullable<LibraryState["favourite"]>
       | NonNullable<LibraryState["retention"]>,
   ): void {
+    this.document(id);
     const state = this.state(user, id);
     if (key === "favourite") {
       const v = value as NonNullable<LibraryState["favourite"]>;
@@ -366,7 +451,22 @@ export class LibraryService {
       const v = value as NonNullable<LibraryState["retention"]>;
       state.retention = state.retention ? lwwMerge(state.retention, v) : v;
     }
-    this.writeState(user, state);
+    this.options.uow.write(() => {
+      this.writeState(user, state);
+      if (key === "favourite") {
+        const collection = this.collection(
+          this.ensureBuiltins(user).favourites,
+        );
+        const included = !!state.favourite?.v;
+        if (collection.docs.includes(id) !== included)
+          this.setItems(
+            collection.id,
+            included
+              ? [...collection.docs, id]
+              : collection.docs.filter((doc) => doc !== id),
+          );
+      }
+    });
   }
   private writeState(user: string, state: LibraryState): void {
     this.options.uow.write((ctx) => {

@@ -25,7 +25,11 @@ export function ImportDialog({
   const runtime = useRuntime(),
     user = useClientSnapshot().user,
     data = useLibrary(),
-    [target, setTarget] = useState(collection ?? ""),
+    [target, setTarget] = useState(
+      collection ??
+        data.collections.find((c) => c.builtin === "shelf")?.id ??
+        "",
+    ),
     [title, setTitle] = useState(""),
     [body, setBody] = useState(""),
     [file, setFile] = useState<File>(),

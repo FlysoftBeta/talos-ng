@@ -47,6 +47,7 @@ export const libraryCollectionSchema = z
     owner: idSchema,
     group: idSchema.nullable(),
     docs: z.array(idSchema).max(1000),
+    builtin: z.enum(["shelf", "favourites"]).optional(),
   })
   .strict();
 export type LibraryCollection = z.infer<typeof libraryCollectionSchema>;
@@ -187,6 +188,15 @@ export const library = Object.freeze({
     }),
   }),
   collection: Object.freeze({
+    transfer: defineMethod({
+      name: "library.collection.transfer",
+      args: z
+        .object({ source: idSchema, target: idSchema, doc: idSchema })
+        .strict(),
+      result: okSchema,
+      auth: "user",
+      offline: "online",
+    }),
     create: defineMethod({
       name: "library.collection.create",
       args: z

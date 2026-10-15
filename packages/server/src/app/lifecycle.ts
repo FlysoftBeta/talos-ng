@@ -11,7 +11,6 @@ export function applicationLifecycle(
     db,
     uploads,
     media,
-    admin,
     objects,
     ai,
     syncHub,
@@ -24,7 +23,6 @@ export function applicationLifecycle(
     | "db"
     | "uploads"
     | "media"
-    | "admin"
     | "objects"
     | "ai"
     | "syncHub"
@@ -58,7 +56,7 @@ export function applicationLifecycle(
           sweepStaging(now());
           await ops.maintain();
           await uploads.sweep();
-          media.evict(admin.settings().evictionDays);
+          media.evict();
           await objects.sweep();
         })().finally(() => {
           maintenance = undefined;
