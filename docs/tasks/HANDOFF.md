@@ -15,7 +15,12 @@
   is open in a pre-existing development server and was not modified/reset while in use.
   Stop that server and reset its dev data before starting the updated code.
 - Integrated `pnpm check`: exit 0, 175 files / 1,774 tests passed, 1 optional live-provider
-  test skipped; build/static compatibility scan passed. Full browser/package gates pending.
+  test skipped; build/static compatibility scan passed. `pnpm e2e` and `pnpm e2e:legacy`
+  both exit 0 on final code `73b7c61`; current e2e includes packaged Linux A → B → broken-C
+  rollback, database/object restore and HTTPS/WSS. `pnpm package` exits 0 for win32-x64,
+  linux-debian-x64 and linux-redhat-x64. Native Windows execution remains unverified.
+- Global playback overlays are inside the themed portal provider; the redundant player
+  portal was removed. Browser helpers reveal scrolled controls before opening menus.
 - Node test typechecking uses ES2022 declarations; browser production remains ES2018.
   Contract compatibility covers source transfer, and importer verification excludes
   built-in booklists from imported-source counts.
