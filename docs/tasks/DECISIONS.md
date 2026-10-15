@@ -485,3 +485,13 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   `tools/package/native-manifest.json` pins SHA-256 of every native binary (re-pin with
   `node --experimental-transform-types tools/package/native.ts --pin` after a bump). Debian
   and Red Hat share the glibc linux-x64 binaries (sharp's libvips needs glibc 2.26+).
+
+- **D-112 — Dependency refresh and upstream yt-dlp client selection.** Update stable
+  workspace dependencies, CI action tags and packaged Node (26.12.0 Current);
+  yt-dlp 2026.08.19 uses its own client defaults instead of forced web_music.
+  Preserve Zod 3 pending a contract/Chrome 70 migration and Node 22 declarations
+  to avoid exposing APIs outside the supported baseline. Preserve compiler roles,
+  the intentional Chrome 70 fixture and pdfrender's vendored provenance.
+  Per owner instruction, this update requires a successful build rather than full
+  test gates. The unmodified main `pnpm build` passed; package/runtime behavior
+  under the newer bundled Node is not established by that build.

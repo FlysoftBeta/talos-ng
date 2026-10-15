@@ -1,3 +1,17 @@
+# Dependency refresh — 2026-10-15
+
+- Updated workspace dependencies/lockfile, CI actions, bundled Node to 26.12.0,
+  and yt-dlp to 2026.08.19 with official Linux/Windows SHA-256 values.
+- Removed forced `youtube:player_client=web_music`; upstream defaults now apply.
+- Retained Zod 3 for contract/Chrome 70 compatibility, Node 22 declarations for the
+  supported runtime baseline, dual TypeScript compiler roles, fixed Chrome 70
+  fixture and vendored pdfrender provenance (D-112).
+- Verified on main at 9fc3b6b: `pnpm install --frozen-lockfile` and unmodified
+  `pnpm build` exit 0. Build includes its existing typechecks and static compatibility
+  checks (0 violations). No separate test/e2e/package gates per user instruction.
+- Node 26 packaged native loading, real Chrome 70 and live yt-dlp behavior were not
+  exercised in this update. Prior verification below predates these dependency changes.
+
 # Handoff
 
 ## LIVE LOG — session 9 (UI/UX redesign, Claude-led)
