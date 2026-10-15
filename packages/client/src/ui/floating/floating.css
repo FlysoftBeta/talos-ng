@@ -1,0 +1,35 @@
+/* Outside pane clipping/transform contexts, but inside the theme root. */
+.portal-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 0;
+  z-index: 200;
+  pointer-events: none;
+}
+.portal-root > *,
+.modal-floating > * {
+  pointer-events: auto;
+}
+.floating-surface {
+  position: fixed;
+  z-index: 100;
+  min-width: 0;
+  margin: 0;
+  overflow: auto;
+  visibility: hidden;
+  overflow-wrap: break-word;
+}
+.floating-tooltip {
+  width: max-content;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--radius);
+  background: var(--inverse);
+  color: var(--inverse-ink);
+  box-shadow: var(--shadow);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+  font-weight: 400;
+  pointer-events: none;
+}

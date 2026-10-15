@@ -417,10 +417,6 @@
   background: var(--hover);
 }
 .help-tip-content {
-  position: absolute;
-  top: 26px;
-  left: -8px;
-  z-index: 50;
   width: 260px;
   padding: var(--s-2) var(--s-3);
   border-radius: var(--radius);

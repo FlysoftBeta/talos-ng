@@ -1,3 +1,4 @@
+import { OverlayBench } from "./overlay-bench.tsx";
 import { OpsGallery } from "../features/ops/gallery.tsx";
 import { DataGridGallery } from "./data-grid-gallery.tsx";
 import { VirtualBench } from "./virtual-bench.tsx";
@@ -36,7 +37,9 @@ const model: StatusViewModel = {
   update: { state: "none" },
 };
 createRoot(document.getElementById("root")!).render(
-  query.has("virtual") ? (
+  query.has("overlays") ? (
+    <OverlayBench dark={query.get("theme") === "dark"} />
+  ) : query.has("virtual") ? (
     <VirtualBench end={query.has("end")} />
   ) : query.has("grid") ? (
     <DataGridGallery mode={query.get("theme") === "dark" ? "dark" : "light"} />
