@@ -13,6 +13,8 @@ A release is a folder with no host prerequisites. The official Node runtime is b
 against that version's `SHASUMS256.txt`, cached and re-verified on every assembly;
 `TALOS_RUNTIME_CACHE` moves the cache).
 
+**Legacy importer.** `tools/migrate/build.mjs` bundles the importer (`@talos/migrate`) with esbuild into `migrate.js`, the same way as `server.js` (same external native addons, resolved from the release's `node_modules`). It ships inside every release, so it is part of the `-update.zip` too. `migrate.cmd`/`migrate.sh` at the install root read `current` and run it with `runtime/node`; usage in `docs/impl/ops-migrate.md`.
+
 **Native addons.** `better-sqlite3` and `sharp` are N-API (independent of the Node ABI) and
 cannot be bundled, so `server.js` imports them externally from the release's own
 `node_modules/`. `tools/package/native.ts` assembles that directory per target from the
@@ -69,7 +71,8 @@ runtime/node[.exe]     bundled Node runtime        launcher.js     bundled super
 current                UTF-8 pointer FILE (never a symlink)
 launcher-state.json    atomic durable commit record (pending deadline, rollback path)
 launcher.lock          exclusive launcher PID lock
-releases/<build>/      immutable server.js, client/, shell/, vendor/, release.json
+releases/<build>/      immutable server.js, migrate.js, client/, shell/, vendor/, release.json
+migrate.cmd, migrate.sh   run releases/<current>/migrate.js with the bundled runtime
 talos.config.json, target   data/ talos.db, objects/, backups/, updates/, logs/
 ```
 
@@ -116,7 +119,7 @@ Builds every workspace artifact and writes to ignored `dist/release/`: full inst
 sha256}`) to publish beside the ZIP over HTTPS. `--target <id>` or `TALOS_PACKAGE_TARGET`
 builds one. Only Node scripts do downloads and archive work (no tar/unzip/curl). yt-dlp is a
 pinned version with per-platform SHA-256 verified at package time. Installs include default
-config, `start.cmd`/`start.sh`, opt-in Task Scheduler / systemd user-service helpers, licences
+config, `start.cmd`/`start.sh`, `migrate.cmd`/`migrate.sh`, opt-in Task Scheduler / systemd user-service helpers, licences
 and the operator README. `TALOS_BUILD_ID` selects the build id (safe ASCII).
 
 Verification: `tools/package/e2e.mjs` (part of `pnpm e2e`) packages A and B for the host

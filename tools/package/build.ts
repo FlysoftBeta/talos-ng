@@ -175,6 +175,11 @@ for (const platform of packageTargets) {
     "server.js",
     await readFile(join(root, "packages/server/dist/server.js")),
   );
+  // Legacy data importer (docs/impl/ops-migrate.md), run by migrate.cmd / migrate.sh.
+  payload.set(
+    "migrate.js",
+    await readFile(join(root, "tools/migrate/dist/migrate.js")),
+  );
   payload.set("package.json", Buffer.from('{"type":"module"}'));
   // Only this target's better-sqlite3/sharp binaries (never another platform's).
   for (const [name, data] of await nativeFiles(
@@ -284,6 +289,18 @@ for (const platform of packageTargets) {
     ),
   );
   install.set(
+    "migrate.cmd",
+    Buffer.from(
+      '@echo off\r\nsetlocal\r\nset /p TALOS_CURRENT=<"%~dp0current"\r\n"%~dp0runtime\\node.exe" --disable-warning=ExperimentalWarning "%~dp0releases\\%TALOS_CURRENT%\\migrate.js" %*\r\nexit /b %ERRORLEVEL%\r\n',
+    ),
+  );
+  install.set(
+    "migrate.sh",
+    Buffer.from(
+      '#!/bin/sh\ndir=$(cd -- "$(dirname -- "$0")" && pwd) || exit 1\nread -r current < "$dir/current" || exit 1\nexec "$dir/runtime/node" --disable-warning=ExperimentalWarning "$dir/releases/$current/migrate.js" "$@"\n',
+    ),
+  );
+  install.set(
     "install-task.ps1",
     Buffer.from(String.raw`$ErrorActionPreference = "Stop"
 $action = New-ScheduledTaskAction -Execute "$PSScriptRoot\runtime\node.exe" -Argument ('"{0}" "{1}"' -f "$PSScriptRoot\launcher.js", $PSScriptRoot) -WorkingDirectory $PSScriptRoot
@@ -300,7 +317,7 @@ Register-ScheduledTask -TaskName "TalosII" -Action $action -Trigger $trigger -De
   install.set(
     "README.md",
     Buffer.from(
-      `# Talos II ${build} (${platform})\n\n解压到独立目录。Windows 双击 start.cmd；Linux 执行 sh start.sh。可选自启动：Windows 在当前用户 PowerShell 中运行 install-task.ps1 注册登录任务；Linux 将 talos.service 中路径改为实际安装目录，作为用户 systemd 单元安装并启用。Office 捕获要求服务器运行在打开 Office 的同一交互用户会话。浏览器访问 http://localhost:8080，根管理员 PIN 首次启动时输出，请妥善保存。数据保存在 data/，切勿删除。\n\n修改 talos.config.json 配置端口及 HTTPS cert/key/ca/domain。证书路径相对安装目录，证书变更自动重载。HTTP→HTTPS 可设 redirect:true，308 响应不缓存。首次离线安装需要 HTTPS 或 localhost。\n\n在运维面板上传完全匹配目标 ${platform} 的 -update.zip，准备后应用，并在三分钟内确认。未确认会回滚应用及完整备份；期间暂停业务写入以避免回滚丢失新写入。更新清单 SHA-256 校验防损坏；仅安装可信来源的软件包。\n\n恢复：停止启动器，使用 runtime/node（Windows runtime\\node.exe）运行 releases/<current>/server.js restore <备份.talos-backup 或 .backup 目录>。备份以流式保存 SQLite 与所有账本对象，无配置大小上限；下载为 .talos-backup 流式归档，恢复也可直接使用 data/backups/<编号>.backup 目录；恢复前保留 data/。data/backups/ 默认保留五份，可调整。\n\nLinux 系统库及 pdfrender GPL 许可见 releases/${build}/vendor/pdfrender/README.md 和各平台目录。两个 Linux 构建需要匹配发行版 ABI、字体、glibc、libstdc++、Cairo、fontconfig、FreeType、JPEG、OpenJPEG、WebP、zstd、zlib、PNG 等。Windows 已包含非系统 DLL，无需安装 Node。\n\n启动器拒绝重复实例。异常断电留下 launcher.lock 时，先确认其中 PID 已退出再删除锁。日志 data/logs/launcher.log 自动轮转。系统服务停止应发送 SIGTERM，Windows 控制台关闭通过 SIGHUP 尽力退出；强制结束无法保证清理。\n`,
+      `# Talos II ${build} (${platform})\n\n解压到独立目录。Windows 双击 start.cmd；Linux 执行 sh start.sh。可选自启动：Windows 在当前用户 PowerShell 中运行 install-task.ps1 注册登录任务；Linux 将 talos.service 中路径改为实际安装目录，作为用户 systemd 单元安装并启用。Office 捕获要求服务器运行在打开 Office 的同一交互用户会话。浏览器访问 http://localhost:8080，根管理员 PIN 首次启动时输出，请妥善保存。数据保存在 data/，切勿删除。\n\n修改 talos.config.json 配置端口及 HTTPS cert/key/ca/domain。证书路径相对安装目录，证书变更自动重载。HTTP→HTTPS 可设 redirect:true，308 响应不缓存。首次离线安装需要 HTTPS 或 localhost。\n\n在运维面板上传完全匹配目标 ${platform} 的 -update.zip，准备后应用，并在三分钟内确认。未确认会回滚应用及完整备份；期间暂停业务写入以避免回滚丢失新写入。更新清单 SHA-256 校验防损坏；仅安装可信来源的软件包。\n\n迁移旧版数据：停止旧版应用，复制其 data.db 和 storage/objects；在安装目录依次运行 migrate inspect → run → verify（Windows 用 migrate.cmd，Linux 用 sh migrate.sh），例如 \`sh migrate.sh run --source 旧/data.db --blobs 旧/storage/objects --target 空目录\`，inspect 和 verify 参数相同（run 之外可加 --resume）。--target 必须是空目录；verify 无误后停止启动器，将 talos.config.json 的 dataDir 指向该目录（相对安装目录或绝对路径），再启动。详见 docs/impl/ops-migrate.md。\n\n恢复：停止启动器，使用 runtime/node（Windows runtime\\node.exe）运行 releases/<current>/server.js restore <备份.talos-backup 或 .backup 目录>。备份以流式保存 SQLite 与所有账本对象，无配置大小上限；下载为 .talos-backup 流式归档，恢复也可直接使用 data/backups/<编号>.backup 目录；恢复前保留 data/。data/backups/ 默认保留五份，可调整。\n\nLinux 系统库及 pdfrender GPL 许可见 releases/${build}/vendor/pdfrender/README.md 和各平台目录。两个 Linux 构建需要匹配发行版 ABI、字体、glibc、libstdc++、Cairo、fontconfig、FreeType、JPEG、OpenJPEG、WebP、zstd、zlib、PNG 等。Windows 已包含非系统 DLL，无需安装 Node。\n\n启动器拒绝重复实例。异常断电留下 launcher.lock 时，先确认其中 PID 已退出再删除锁。日志 data/logs/launcher.log 自动轮转。系统服务停止应发送 SIGTERM，Windows 控制台关闭通过 SIGHUP 尽力退出；强制结束无法保证清理。\n`,
     ),
   );
   const name = `talos-${build}-${platform}.${platform === "win32-x64" ? "zip" : "tar.gz"}`;

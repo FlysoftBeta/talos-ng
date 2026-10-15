@@ -21,6 +21,7 @@ export function tarGz(files: ReadonlyMap<string, Uint8Array>): Buffer {
     h.write(
       oct(
         name === "start.sh" ||
+          name === "migrate.sh" ||
           name === "runtime/node" ||
           name.endsWith("/pdfrender") ||
           name.endsWith("/yt-dlp")

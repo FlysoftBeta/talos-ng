@@ -10,7 +10,7 @@
     "typecheck": "node ../../tools/typecheck.mjs -p tsconfig.json && node ../../tools/typecheck.mjs -p tsconfig.test.json",
     "lint": "eslint .",
     "test": "vitest run --config ../../vitest.config.mjs --project @talos/migrate",
-    "build": "pnpm typecheck"
+    "build": "pnpm typecheck && node build.mjs"
   },
   "dependencies": {
     "@talos/base": "workspace:*",
@@ -20,6 +20,7 @@
     "fflate": "0.8.2"
   },
   "devDependencies": {
-    "@talos/link": "workspace:*"
+    "@talos/link": "workspace:*",
+    "esbuild": "0.25.12"
   }
 }

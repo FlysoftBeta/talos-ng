@@ -451,6 +451,9 @@ importers:
       '@talos/link':
         specifier: workspace:*
         version: link:../../packages/link
+      esbuild:
+        specifier: 0.25.12
+        version: 0.25.12
 
   tools/package:
     dependencies:
