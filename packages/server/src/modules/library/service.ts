@@ -13,7 +13,7 @@ import type { ObjectStore } from "@talos/objectstore";
 import { lwwMerge } from "@talos/sync";
 import type { Db } from "../../kernel/persistence/db.ts";
 import { migrate } from "../../kernel/persistence/db.ts";
-import type { Uow } from "../../kernel/persistence/uow.ts";
+import type { Uow, WriteContext } from "../../kernel/persistence/uow.ts";
 import type { Jobs } from "../../kernel/jobs/jobs.ts";
 import type { ObjectLedger } from "../../kernel/objects/objects.ts";
 import type { UploadService } from "../../kernel/objects/uploads.ts";
@@ -30,6 +30,8 @@ export interface LibraryOptions {
   now?: () => number;
   id?: () => string;
   converters?: ConverterRegistry;
+  onDeleteDocument?: (id: string, tx: WriteContext) => void;
+  onDeleteCollection?: (id: string, tx: WriteContext) => void;
 }
 export class LibraryService {
   readonly repo: LibraryRepo;
@@ -203,6 +205,7 @@ export class LibraryService {
       this.setItems(id, []);
       this.repo.putCollection({ ...collection, docs: [] }, ctx.rev, true);
       this.repo.clearDelegations(id);
+      this.options.onDeleteCollection?.(id, ctx);
       ctx.changed(`coll:${id}`, "libraryCollection", id);
       ctx.changed(`me:${collection.owner}`, "libraryCollection", id);
     });
@@ -373,6 +376,7 @@ export class LibraryService {
     const doc = this.document(id);
     this.options.uow.write((ctx) => {
       this.repo.putDoc(doc, row!.source!, row!.filename!, ctx.rev, true);
+      this.options.onDeleteDocument?.(id, ctx);
       for (const user of this.repo.deleteStates(id, ctx.rev))
         ctx.changed(`me:${user}`, "libraryState", id);
       for (const job of this.options.jobs.list(doc.owner)) {
@@ -397,6 +401,12 @@ export class LibraryService {
           );
       }
       this.changedDoc(id, doc.owner, ctx.changed);
+      ctx.afterCommit(async () => {
+        await this.options.objects.reclaim([
+          row!.source!,
+          ...(doc.pack ? [doc.pack.id] : []),
+        ]);
+      });
     });
   }
   state(user: string, doc: string): LibraryState {

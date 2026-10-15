@@ -54,6 +54,23 @@ export class NetbooksRepo {
       doc,
     );
   }
+  /** Library reclamation removes source checkpoints and their cascading chapters. */
+  removeForDocument(id: string): { job: string; user_id: string }[] {
+    const jobs = this.db.all<{ job: string; user_id: string }>(
+      "SELECT job,user_id FROM netbooks_downloads WHERE document=?",
+      id,
+    );
+    this.db.run("DELETE FROM netbooks_downloads WHERE document=?", id);
+    return jobs;
+  }
+  removeForCollection(id: string): { job: string; user_id: string }[] {
+    const jobs = this.db.all<{ job: string; user_id: string }>(
+      "SELECT job,user_id FROM netbooks_downloads WHERE collection=?",
+      id,
+    );
+    this.db.run("DELETE FROM netbooks_downloads WHERE collection=?", id);
+    return jobs;
+  }
   catalog(job: string, value: Catalog): void {
     this.db.run(
       "UPDATE netbooks_downloads SET catalog=? WHERE job=?",

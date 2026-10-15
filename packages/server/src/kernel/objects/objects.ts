@@ -148,20 +148,31 @@ export class ObjectLedger {
     return this.maintenance.run(read);
   }
   async sweep(): Promise<number> {
+    return this.collect(this.clock() - (this.options.graceMs ?? 86_400_000));
+  }
+  /** Explicit domain deletion bypasses orphan grace, but never live references or publication. */
+  async reclaim(ids: readonly string[]): Promise<number> {
+    return this.collect(this.clock(), new Set(ids));
+  }
+  private async collect(
+    cutoff: number,
+    ids?: ReadonlySet<string>,
+  ): Promise<number> {
     return this.maintenance.run(async () => {
       const { db, store, uow } = this.options;
       const candidates = db.all<{ id: string }>(
         "SELECT id FROM objects WHERE deleting=0 AND last_ref_change<=? AND NOT EXISTS(SELECT 1 FROM object_refs WHERE object_id=objects.id)",
-        this.clock() - (this.options.graceMs ?? 86_400_000),
+        cutoff,
       );
       let removed = 0;
       for (const { id } of candidates) {
+        if (ids && !ids.has(id)) continue;
         const reserved = uow.write(() => {
           if (
             !db.get(
               "SELECT 1 FROM objects WHERE id=? AND deleting=0 AND last_ref_change<=? AND NOT EXISTS(SELECT 1 FROM object_refs WHERE object_id=objects.id)",
               id,
-              this.clock() - (this.options.graceMs ?? 86_400_000),
+              cutoff,
             )
           )
             return false;

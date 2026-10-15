@@ -782,3 +782,147 @@ describe("library container invariants", () => {
     ).toHaveLength(2);
   });
 });
+
+describe("library reclamation edges", () => {
+  it("reclaims physical objects immediately after commit without deleting deduplicated bytes still in use", async () => {
+    const k = setup(),
+      a = await connect(k);
+    const first = await text(k, a.user.id),
+      second = await text(k, a.user.id);
+    const source = k.library.repo.doc(first)!.source!,
+      pack = k.library.document(first).pack!.id;
+    k.library.deleteDoc(first);
+    await k.objects.reclaim([source, pack]);
+    expect(await k.store.has(source)).toBe(true);
+    expect(await k.store.has(pack)).toBe(true);
+    k.library.deleteDoc(second);
+    await k.objects.reclaim([source, pack]);
+    expect(await k.store.has(source)).toBe(false);
+    expect(await k.store.has(pack)).toBe(false);
+  });
+  it("rechecks import authorization at publication after asynchronous storage", async () => {
+    const k = setup(),
+      a = await connect(k),
+      b = await connect(k, "123456");
+    const collection = k.library.createCollection(
+      a.user.id,
+      "revoked while importing",
+    );
+    const grant = {
+      collection,
+      principalType: "user" as const,
+      principal: b.user.id,
+      level: "write" as const,
+      delegate: false,
+    };
+    await a.api.library.sharing.set(grant);
+    const entered = deferred<void>(),
+      release = deferred<void>();
+    const put = k.store.put.bind(k.store);
+    vi.spyOn(k.store, "put").mockImplementationOnce(async (...args) => {
+      entered.resolve();
+      await release.promise;
+      return put(...args);
+    });
+    const pending = b.api.library.doc.importText({
+      title: "revoked",
+      body: "revoked",
+      collection,
+    });
+    const denied = expect(pending).rejects.toMatchObject({ code: "E_DENIED" });
+    await entered.promise;
+    await a.api.library.sharing.set({ ...grant, level: null });
+    release.resolve();
+    await denied;
+    expect(k.library.collection(collection).docs).toEqual([]);
+    expect(k.library.repo.docs()).toEqual([]);
+    expect(
+      k.jobs.list(b.user.id).filter((j) => j.kind === "library.convert"),
+    ).toEqual([]);
+  });
+  it("cleans source checkpoints, chapters, grants and jobs when their last container is deleted", async () => {
+    const k = setup(),
+      a = await connect(k),
+      b = await connect(k, "123456");
+    const collection = k.library.createCollection(a.user.id, "source workflow");
+    const doc = await k.library.importText(a.user.id, {
+      title: "source",
+      body: "source",
+      collection,
+    });
+    await converted(k, doc.job);
+    // A source download can retain a publication checkpoint even after conversion finishes.
+    const sourceJob = k.jobs.enqueue(a.user.id, "netbooks.download", {
+      book: "fixture",
+      collection,
+    });
+    k.db.run(
+      "INSERT INTO netbooks_downloads VALUES(?,?,?,?,NULL,?)",
+      sourceJob.id,
+      a.user.id,
+      "fixture",
+      collection,
+      doc.doc,
+    );
+    k.db.run(
+      "INSERT INTO netbooks_chapters VALUES(?,0,'chapter')",
+      sourceJob.id,
+    );
+    await a.api.library.sharing.set({
+      collection,
+      principalType: "user",
+      principal: b.user.id,
+      level: "read",
+      delegate: true,
+    });
+    await a.api.library.collection.delete({ collection });
+    expect(
+      k.db.all("SELECT * FROM netbooks_downloads WHERE job=?", sourceJob.id),
+    ).toEqual([]);
+    expect(
+      k.db.all("SELECT * FROM netbooks_chapters WHERE job=?", sourceJob.id),
+    ).toEqual([]);
+    expect(k.jobs.get(sourceJob.id)?.deleted).toBe(true);
+    expect(k.authority.repo.grants(`coll:${collection}`)).toEqual([]);
+    expect(k.library.repo.delegation(collection, "user", b.user.id)).toBe(
+      false,
+    );
+  });
+  it("preserves the container invariant through deterministic mixed detach/delete sequences", async () => {
+    const k = setup(),
+      a = await connect(k);
+    const collections = Array.from({ length: 5 }, (_, i) =>
+      k.library.createCollection(a.user.id, `list ${i}`),
+    );
+    const docs: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const imported = await k.library.importText(a.user.id, {
+        title: `book ${i}`,
+        body: `body ${i}`,
+        collection: collections[i % collections.length]!,
+      });
+      docs.push(imported.doc);
+    }
+    for (let i = 0; i < 30; i++) {
+      const collection = collections[(i * 7) % collections.length]!;
+      const current = k.library.collection(collection).docs;
+      const candidate = docs[(i * 5) % docs.length]!;
+      if (k.library.repo.doc(candidate)?.deleted || current.includes(candidate))
+        k.library.setItems(
+          collection,
+          current.filter((_, index) => index !== 0),
+        );
+      else k.library.setItems(collection, [...current, candidate]);
+      for (const row of k.library.repo.docs()) {
+        expect(k.library.repo.hasContainer(row.id)).toBe(!row.deleted);
+        if (row.deleted)
+          expect(
+            k.db.all("SELECT * FROM object_refs WHERE owner_id=?", row.id),
+          ).toEqual([]);
+      }
+    }
+    for (const collection of collections)
+      k.library.deleteCollection(collection);
+    expect(k.library.repo.docs().every((row) => row.deleted)).toBe(true);
+  });
+});
