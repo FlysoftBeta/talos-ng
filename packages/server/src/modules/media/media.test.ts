@@ -6,6 +6,10 @@ import { createMemoryObjectStore } from "@talos/objectstore";
 import { Db } from "../../kernel/persistence/db.ts";
 import { createKernel } from "../../app/create-application.ts";
 import type { Kernel } from "../../app/create-application.ts";
+import {
+  AUDIO_CACHE_EXPIRY_MS,
+  UNREFERENCED_SONG_GRACE_MS,
+} from "./retention-policy.ts";
 import { FakeMediaProvider } from "./provider.ts";
 const ids = createUlid()();
 const kernels: Kernel[] = [];
@@ -258,9 +262,11 @@ describe("media module", () => {
       playlist: playlist.id,
       tracks: [track.id],
     });
-    expect(kernel.media.evict(1)).toBe(0);
-    now += 2 * 86400000;
-    expect(kernel.media.evict(1)).toBe(1);
+    expect(kernel.media.evict()).toBe(0);
+    now += AUDIO_CACHE_EXPIRY_MS - 1;
+    expect(kernel.media.evict()).toBe(0);
+    now++;
+    expect(kernel.media.evict()).toBe(1);
     expect(kernel.media.track(track.id).audio).toBeNull();
     expect(kernel.media.playlist(playlist.id).tracks).toContain(track.id);
   });
@@ -499,8 +505,8 @@ it("commits discovery and its grace clock atomically without creating playlists 
   expect(kernel.media.repo.playlists()).toEqual([]);
   // A library snapshot is not a catalog of discoveries; only personal references and playlists.
   expect((await api.media.library.get({})).tracks).toEqual([]);
-  now += 86400000;
-  expect(kernel.media.evict(1)).toBe(502);
+  now += UNREFERENCED_SONG_GRACE_MS;
+  expect(kernel.media.evict()).toBe(502);
   const scope = `me:${user.id}`;
   let cursor = 0;
   const tombstones = new Set<string>();
@@ -539,10 +545,10 @@ it("delays final-reference reclamation to the exact boundary; playback, search a
     deleted: 0,
     unreferenced_since: removedAt,
   });
-  now = removedAt + 86400000 - 1;
+  now = removedAt + UNREFERENCED_SONG_GRACE_MS - 1;
   await api.auth.login({ pin: "654321" });
   const ready = await api.media.track.play({ track: track.id });
-  expect(kernel.media.evict(1)).toBe(0);
+  expect(kernel.media.evict()).toBe(0);
   const stamp = { op: createUlid()(), t: { ms: now, counter: 0 } };
   await api.media.queue.set({ tracks: [track.id], ...stamp });
   await api.media.favorite.set({
@@ -553,7 +559,7 @@ it("delays final-reference reclamation to the exact boundary; playback, search a
   await api.media.playlist.items({ playlist: list.id, tracks: [] });
   expect(kernel.media.repo.track(track.id)?.unreferenced_since).toBe(removedAt);
   now++;
-  expect(kernel.media.evict(1)).toBe(1);
+  expect(kernel.media.evict()).toBe(1);
   expect(kernel.media.repo.track(track.id)).toMatchObject({
     deleted: 1,
     object_id: null,
@@ -598,12 +604,12 @@ it("reattachment cancels reclamation, survives restart, and a later final remova
   const track = (await api.media.search({ query: "晨光" })).tracks[0]!;
   const a = (await api.media.playlist.create({ title: "A" })).playlist;
   const b = (await api.media.playlist.create({ title: "B" })).playlist;
-  now += 86400000 - 1;
+  now += UNREFERENCED_SONG_GRACE_MS - 1;
   await api.auth.login({ pin: "654321" });
   await api.media.playlist.items({ playlist: a.id, tracks: [track.id] });
   await api.media.playlist.items({ playlist: b.id, tracks: [track.id] });
   now++;
-  expect(kernel.media.evict(1)).toBe(0);
+  expect(kernel.media.evict()).toBe(0);
   await api.media.playlist.delete({ playlist: a.id });
   expect(kernel.media.repo.track(track.id)?.unreferenced_since).toBeNull();
   await api.media.playlist.delete({ playlist: b.id });
@@ -634,19 +640,19 @@ it("reattachment cancels reclamation, survives restart, and a later final remova
     );
     const c = (await returning.api.media.playlist.create({ title: "C" }))
       .playlist;
-    now = removedAt + 86400000;
+    now = removedAt + UNREFERENCED_SONG_GRACE_MS;
     await returning.api.auth.login({ pin: "654321" });
     // Reattachment and maintenance are synchronous writer transactions: a completed reattach wins.
     await returning.api.media.playlist.items({
       playlist: c.id,
       tracks: [track.id],
     });
-    expect(restarted.media.evict(1)).toBe(0);
+    expect(restarted.media.evict()).toBe(0);
     await returning.api.media.playlist.delete({ playlist: c.id });
-    now += 86400000 - 1;
-    expect(restarted.media.evict(1)).toBe(0);
+    now += UNREFERENCED_SONG_GRACE_MS - 1;
+    expect(restarted.media.evict()).toBe(0);
     now++;
-    expect(restarted.media.evict(1)).toBe(1);
+    expect(restarted.media.evict()).toBe(1);
     await returning.api.auth.login({ pin: "654321" });
     await expect(
       returning.api.media.playlist.items({
@@ -681,8 +687,8 @@ it.each([false, true])(
     const play = await api.media.track.play({ track: track.id });
     await entered.promise;
     try {
-      now += 86400000;
-      kernel.media.evict(1);
+      now += UNREFERENCED_SONG_GRACE_MS;
+      kernel.media.evict();
       await api.auth.login({ pin: "654321" });
       if (rediscovered) await api.media.search({ query: "晨光" });
     } finally {
@@ -711,7 +717,7 @@ it.each([false, true])(
   },
 );
 
-it("owner purge starts delayed reclamation while surviving copies remain live; scheduled maintenance uses evictionDays", async () => {
+it("owner purge starts delayed reclamation while surviving copies remain live; scheduled maintenance uses the fixed song grace", async () => {
   let now = 1_000_000;
   const { kernel } = setup(() => now);
   const owner = await connect(kernel);
@@ -728,8 +734,7 @@ it("owner purge starts delayed reclamation while surviving copies remain live; s
     deleted: 0,
     unreferenced_since: now,
   });
-  await survivor.api.admin.settings.set({ evictionDays: 2 });
-  now += 2 * 86400000 - 1;
+  now += UNREFERENCED_SONG_GRACE_MS - 1;
   await kernel.maintain();
   expect(kernel.media.repo.track(tracks[1]!.id)?.deleted).toBe(0);
   now++;

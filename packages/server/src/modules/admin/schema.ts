@@ -3,7 +3,7 @@ export const adminMigrations: readonly Migration[] = [
   {
     n: 1,
     up(db) {
-      db.exec(`CREATE TABLE admin_settings(id INTEGER PRIMARY KEY CHECK(id=1),max_volume REAL NOT NULL DEFAULT 1 CHECK(max_volume>=0 AND max_volume<=1),eviction_days INTEGER NOT NULL DEFAULT 30 CHECK(eviction_days>=1 AND eviction_days<=3650)) STRICT;
+      db.exec(`CREATE TABLE admin_settings(id INTEGER PRIMARY KEY CHECK(id=1),max_volume REAL NOT NULL DEFAULT 1 CHECK(max_volume>=0 AND max_volume<=1)) STRICT;
 INSERT INTO admin_settings(id) VALUES(1);`);
     },
   },

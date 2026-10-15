@@ -80,16 +80,6 @@ export function SystemView({
                           actions.setMaxVolume(Number(event.target.value))
                         }
                       />
-                      <Field
-                        label={`缓存清理天数（当前 ${settings.evictionDays}）`}
-                        type="number"
-                        min={1}
-                        max={3650}
-                        value={state.evictionDays}
-                        onChange={(event) =>
-                          actions.setEvictionDays(Number(event.target.value))
-                        }
-                      />
                       <Button variant="primary" onClick={actions.saveMedia}>
                         保存媒体策略
                       </Button>

@@ -74,7 +74,7 @@ try {
       var chunk = {size:6,offset:0,eof:true};
       var adminUser = {id:id,handle:'test',name:'测试',roles:['administrator'],features:['offline'],mutedUntil:0,banned:false,bannedUntil:null,deactivated:false,created:1000};
       var adminDevice = {id:id,label:'测试设备',lastSeen:1000,whitelisted:true,locked:false,boundUser:null,persistent:true};
-      var adminSettings = {whitelist:false,systemLock:false,idleLock:false,identitySignals:['clientId'],maxVolume:1,evictionDays:30};
+      var adminSettings = {whitelist:false,systemLock:false,idleLock:false,identitySignals:['clientId'],maxVolume:1};
       var adminGroup = {id:id,handle:'group',name:'测试群',type:'normal',memberCount:1,parent:null,owner:id,discoverable:true,membersHidden:false,adminOnly:false,noLeave:false,passwordRequired:false};
       var aiConversation = {id:id,title:'AI',tags:[],lastSeq:0,readSeq:0,running:null,updated:0};
       var aiCredit = {id:'account',configured:false,topup:0,reserved:0,daily:0,weekly:0,dayUsed:0,weekUsed:0,available:0,planEnds:0,required:1000000};
@@ -145,7 +145,7 @@ try {
         'admin.announcement.list': [{offset:0,limit:50},{items:[Object.assign({},announcement,{acknowledged:1,audience:2})],total:1}],
         'admin.announcement.publish': [{title:'公告',text:'测试公告'},{announcement:announcement}],
         'admin.settings.get': [{},adminSettings],
-        'admin.settings.set': [{maxVolume:0.5,evictionDays:10},adminSettings],
+        'admin.settings.set': [{maxVolume:0.5},adminSettings],
         'admin.audit.list': [{offset:0,limit:50},{items:[{id:id,actor:id,action:'admin.user.create',target:id,details:'{}',created:1000}],total:1}],
         'admin.incident.report': [{name:'Error',stack:' at widget',kind:'error',build:'test',environment:'Chrome/70 device/test'},{ok:true}],
         'admin.incident.list': [{offset:0,limit:50},{items:[{id:id,fingerprint:hash,source:'server',build:'test',environment:'linux node/test',count:1,first:1000,last:1000,summary:'Error: self-test'}],total:1}],

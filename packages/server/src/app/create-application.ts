@@ -453,7 +453,6 @@ export function createKernel(options: KernelOptions): Kernel {
         db,
         uploads,
         media,
-        admin,
         objects,
         ai,
         syncHub,
