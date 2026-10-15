@@ -260,7 +260,10 @@ export function ReaderViewer({
       anchored >= 0 ? anchored : Math.max(0, initial.unit),
     );
     const unitId = units[ordinal]!.id;
-    restore.current = { ...initial, unit: ordinal, unitId };
+    restore.current =
+      manifest.kind === "flow"
+        ? { ...initial, unit: ordinal, unitId }
+        : undefined;
     setCurrent(ordinal);
     void scroller.start({ id: unitId, offset: -initial.offset });
     return () => scroller.dispose();
@@ -284,10 +287,11 @@ export function ReaderViewer({
     () =>
       scroller.observe(() => {
         // Placements (opening, jumping, zooming) are ours; only reading moves the position.
-        if (scroller.placing()) return;
         const at = scroller.position();
         const page = at && pages.find((value) => value.unit.id === at.id);
         if (!at || !page) return;
+        setCurrent(page.ordinal);
+        if (scroller.placing()) return;
         const position: ReaderPosition = {
           unit: page.ordinal,
           offset: Math.round(-at.offset),
@@ -297,11 +301,19 @@ export function ReaderViewer({
         const flow = view?.querySelector<HTMLElement>(
           `[data-reader-unit="${page.ordinal}"] .reader-flow`,
         );
-        if (view && flow)
+        if (view && flow) {
           position.charOffset = characterAt(
             flow,
-            view.getBoundingClientRect().top - flow.getBoundingClientRect().top,
+            view.getBoundingClientRect().top +
+              view.clientTop -
+              flow.getBoundingClientRect().top,
           );
+          position.charInset =
+            characterTop(flow, position.charOffset) +
+            flow.getBoundingClientRect().top -
+            view.getBoundingClientRect().top -
+            view.clientTop;
+        }
         setCurrent(page.ordinal);
         callback.current(position);
       }),
@@ -309,8 +321,10 @@ export function ReaderViewer({
   );
   const go = (page: number) => {
     const value = Math.min(units.length - 1, Math.max(0, page - 1));
-    if (Number.isInteger(value) && units[value])
+    if (Number.isInteger(value) && units[value]) {
+      setCurrent(value);
       void scroller.jump({ id: units[value]!.id, align: "start" });
+    }
   };
   const paged = manifest.kind === "paged",
     fit = Math.max(100, width - 32) / (units[0]?.w ?? 750),
@@ -340,10 +354,21 @@ export function ReaderViewer({
               // Legacy pixel positions migrate once their text has been laid out.
               const charOffset =
                 pending.charOffset ?? characterAt(element, pending.offset);
-              const offset = Math.round(
+              const flowTop =
                 element.getBoundingClientRect().top -
-                  element.parentElement!.getBoundingClientRect().top +
-                  characterTop(element, charOffset),
+                element.parentElement!.getBoundingClientRect().top;
+              // Keep the same character at the same on-screen position. The inset
+              // also preserves partial lines when reopening at the same width.
+              const charInset =
+                pending.charInset ??
+                (pending.charOffset === undefined
+                  ? flowTop + characterTop(element, charOffset) - pending.offset
+                  : 0);
+              const offset = Math.max(
+                0,
+                Math.round(
+                  flowTop + characterTop(element, charOffset) - charInset,
+                ),
               );
               void scroller.jump({ id: page.unit.id, offset: -offset });
               callback.current({
@@ -351,6 +376,7 @@ export function ReaderViewer({
                 offset,
                 unitId: page.unit.id,
                 charOffset,
+                charInset,
               });
             }}
           />

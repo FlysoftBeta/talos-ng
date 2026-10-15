@@ -14,6 +14,8 @@ export interface ReaderPosition {
   offset: number;
   unitId?: string;
   charOffset?: number;
+  /** Character top relative to the viewport, preserving the within-line position. */
+  charInset?: number;
 }
 export type ReaderPort = DocumentSessionPort &
   Pick<RuntimeCommandPort, "operation"> &

@@ -114,14 +114,14 @@ export async function smokeSuite(browser, server, { legacy = false } = {}) {
       );
       await cdp.wait(`(${readNav}).areas.library.stack.length === 1`);
       const rows = await cdp.evaluate(
-        `(function(){var list=document.querySelector('[data-testid="ui.virtual-list"]'); if(!list) throw new Error('VirtualList missing'); list.scrollTop=1000000; list.dispatchEvent(new Event('scroll')); return list.querySelectorAll("[data-virtual-index]").length;})()`,
+        `(function(){var list=document.querySelector('[data-testid="ui.virtual-list"]'); if(!list) throw new Error('VirtualScroller missing'); list.scrollTop=1000000; list.dispatchEvent(new Event('scroll')); return list.querySelectorAll("[data-virtual-id]").length;})()`,
       );
       assert.ok(
         rows > 0 && rows < 200,
         "VirtualList must mount only the visible window",
       );
       await cdp.wait(
-        `(function(){var list=document.querySelector('[data-testid="ui.virtual-list"]'); var row=list && list.querySelector('[data-virtual-index]'); return row && list.scrollTop > 500000 && Number(row.getAttribute('data-virtual-index')) > 10000;})()`,
+        `(function(){var list=document.querySelector('[data-testid="ui.virtual-list"]'); var row=list && list.querySelector('[data-virtual-id]'); return row && list.scrollTop > 500000 && Number(row.getAttribute('data-virtual-id')) > 10000;})()`,
       );
       if (width !== 600) {
         for (const auth of [

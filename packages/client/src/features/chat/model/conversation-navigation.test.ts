@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { AppError, deferred } from "@talos/base";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatPost, CommunityConversation } from "@talos/contract";
 import type { StoredRow } from "../../../core/data/db.ts";
@@ -117,6 +118,19 @@ beforeEach(() => {
 });
 
 describe("opening a conversation", () => {
+  it("opens cached rows if connectivity disappears during the initial sync", async () => {
+    const t = fixture({ readSeq: 4, rows: [1, 2, 3, 4] });
+    const syncing = deferred<void>();
+    t.runtime.sync.mockReturnValueOnce(syncing.promise);
+    t.model.update(t.input);
+    expect(t.model.history.getSnapshot().status).toBe("seeking");
+    t.setOnline(false);
+    syncing.reject(new AppError("E_OFFLINE", "offline"));
+    await settle();
+    t.layout();
+    expect(t.model.history.getSnapshot().status).toBe("ready");
+    expect(t.model.history.visible().pop()?.id).toBe("post4");
+  });
   it("opens at the first unread post and marks what is fully visible read", async () => {
     const t = fixture({ rows: [1, 2, 3, 4, 5, 6], lastSeq: 6 });
     await t.open();
@@ -150,6 +164,18 @@ describe("opening a conversation", () => {
 });
 
 describe("loading at the ends", () => {
+  it("loads the first remote post when an already open conversation was empty", async () => {
+    const t = fixture({ readSeq: 0, lastSeq: 0, rows: [] });
+    await t.open();
+    expect(t.model.history.ids()).toEqual([]);
+    vi.mocked(page).mockResolvedValue(win([1], { hasBefore: false }));
+    t.model.update({ ...t.input, state: { ...t.input.state, lastSeq: 1 } });
+    await settle();
+    t.layout();
+    expect(page).toHaveBeenCalledWith(t.runtime, "group", "latest", undefined);
+    expect(t.model.history.ids()).toEqual(["post1"]);
+    expect(t.model.getState().awayFromBottom).toBe(false);
+  });
   it("pages older posts in at the top until the first post", async () => {
     const t = fixture({ readSeq: 4 });
     vi.mocked(page).mockResolvedValueOnce(win([1, 2], { hasBefore: false }));
@@ -238,6 +264,30 @@ describe("jumping to a quoted post", () => {
 });
 
 describe("read marker", () => {
+  it("never acknowledges optimistic sequence numbers before their post is sent", async () => {
+    const t = fixture({ readSeq: 1, lastSeq: 1, rows: [1] });
+    await t.open();
+    t.runtime.command.mockClear();
+    const pending = {
+      ...stored([2])[0]!,
+      data: { ...post(2), pending: "send-op" },
+    };
+    t.model.update({ ...t.input, rows: [...stored([1]), pending] });
+    await settle();
+    t.layout();
+    expect(t.runtime.command).not.toHaveBeenCalled();
+    t.model.update({
+      ...t.input,
+      state: { ...t.input.state, lastSeq: 2 },
+      rows: stored([1, 2]),
+    });
+    await settle();
+    t.layout();
+    expect(t.runtime.command).toHaveBeenLastCalledWith(
+      expect.objectContaining({ name: "chat.state.read" }),
+      { conversation: "group", seq: 2 },
+    );
+  });
   it("reports read failures", async () => {
     const t = fixture({ readSeq: 2, rows: [3, 4] });
     t.runtime.command.mockRejectedValueOnce(new Error("offline"));

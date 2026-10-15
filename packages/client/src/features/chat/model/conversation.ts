@@ -208,6 +208,15 @@ export class ConversationController extends StateStore<ConversationState> {
   /** Fetches what a seek lands on when it is not loaded yet. */
   private async prepare(seek: Seek<HistoryKey>): Promise<void> {
     if (!this.online()) return;
+    try {
+      await this.prepareOnline(seek);
+    } catch (error) {
+      // Connectivity can disappear while opening. Complete the seek from local rows;
+      // an uncached end supplies its offline reason when the scroller reaches it.
+      if (this.online()) throw error;
+    }
+  }
+  private async prepareOnline(seek: Seek<HistoryKey>): Promise<void> {
     const base = this.base();
     if ("edge" in seek) {
       if (seek.edge !== "end") return;
@@ -291,7 +300,10 @@ export class ConversationController extends StateStore<ConversationState> {
       .visible()
       .filter(
         (row) =>
-          !row.item.post.failed && row.top >= -1 && row.bottom <= height + 1,
+          !row.item.post.failed &&
+          !row.item.post.pending &&
+          row.top >= -1 &&
+          row.bottom <= height + 1,
       )
       .map((row) => row.item.post.seq);
     const highest = Math.max(this.state.read, ...visible);

@@ -14,6 +14,7 @@ import {
   ready,
   captures,
 } from "./helpers.mjs";
+import { pagePlacement } from "./placement.mjs";
 import { libraryPdf } from "../../harness/library-pdf.mjs";
 
 /** Same real-server scenarios run on current Chromium and the actual Chromium 70. */
@@ -116,6 +117,7 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     await click(cdp, "中文 PDF");
     await cdp.wait("!!document.querySelector('iframe[title=\"文档第 1 页\"]')");
     await cdp.wait("!!document.querySelector('iframe[data-page-ready=true]')");
+    await pagePlacement(cdp);
     await eventually(
       async () => {
         for (const contextId of contexts) {

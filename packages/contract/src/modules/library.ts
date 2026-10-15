@@ -17,6 +17,7 @@ export const libraryPositionSchema = z
     offset: revSchema,
     unitId: z.string().max(200).optional(),
     charOffset: revSchema.optional(),
+    charInset: z.number().finite().optional(),
   })
   .strict();
 export const libraryRetentionSchema = z.union([
