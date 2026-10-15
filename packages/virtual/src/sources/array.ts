@@ -1,3 +1,4 @@
+import { AppError } from "@talos/base";
 import type {
   Direction,
   Entry,
@@ -76,6 +77,17 @@ export class ArraySource<T, L = never> implements Source<T, L> {
     this.adopt(items, remote ?? previous.remote);
     const emit = this.emit;
     if (!emit) return;
+    // An empty window has no boundary id to extend from. A newly available remote
+    // end must run prepare/seek again (for example the first post in an open chat).
+    if (
+      !this.ids.length &&
+      (["before", "after"] as const).some(
+        (direction) => this.remote[direction] && !previous.remote[direction],
+      )
+    ) {
+      emit({ type: "invalidate" });
+      return;
+    }
     for (const direction of ["before", "after"] as const)
       // Only "more" is safe to announce: the scroller's window may end before the list does.
       if (this.remote[direction] && !previous.remote[direction])
@@ -137,7 +149,8 @@ export class ArraySource<T, L = never> implements Source<T, L> {
     const ids = items.map((item) => this.options.key(item));
     const positions = new Map<string, number>();
     ids.forEach((id, i) => {
-      if (positions.has(id)) throw new Error(`Duplicate list key ${id}`);
+      if (positions.has(id))
+        throw new AppError("E_INVALID", `Duplicate list key ${id}`);
       positions.set(id, i);
     });
     this.items = items;

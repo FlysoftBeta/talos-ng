@@ -1,3 +1,4 @@
+import { AppError } from "@talos/base";
 import type {
   Align,
   Direction,
@@ -517,7 +518,16 @@ export class Scroller<T, L = never> {
     // A reply that adds nothing yet claims more would ask again forever.
     this.setEdge(
       direction,
-      !progressed && more ? { ...edge(true), state: "failed" } : edge(more),
+      !progressed && more
+        ? {
+            ...edge(true),
+            state: "failed",
+            error: new AppError(
+              "E_PROTOCOL",
+              "Source returned no items while claiming more",
+            ),
+          }
+        : edge(more),
     );
     this.settle();
   }
@@ -687,7 +697,11 @@ export class Scroller<T, L = never> {
     pending.resolve("superseded");
   }
   private request(request: Request<L>): void {
-    this.source.request(request);
+    try {
+      this.source.request(request);
+    } catch (error) {
+      this.run(() => this.failed(request.token, error));
+    }
   }
   private local(target: Target<L>): Anchor | undefined {
     if ("edge" in target) {

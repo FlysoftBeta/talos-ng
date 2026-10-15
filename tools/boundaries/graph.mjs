@@ -17,7 +17,7 @@ export const boundaries = {
     imports: { base: "all", docpack: "all", objectstore: "type" },
   },
   store: { environment: "browser", imports: { base: "all" } },
-  virtual: { environment: "browser", imports: {} },
+  virtual: { environment: "browser", imports: { base: "all" } },
   server: {
     environment: "node",
     imports: {

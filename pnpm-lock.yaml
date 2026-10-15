@@ -413,7 +413,11 @@ importers:
         specifier: workspace:*
         version: link:../base
 
-  packages/virtual: {}
+  packages/virtual:
+    dependencies:
+      '@talos/base':
+        specifier: workspace:*
+        version: link:../base
 
   tools/boundaries: {}
 

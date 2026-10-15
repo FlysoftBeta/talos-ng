@@ -12,5 +12,8 @@
     "lint": "eslint .",
     "test": "vitest run --config ../../vitest.config.mjs --project @talos/virtual",
     "build": "pnpm typecheck"
+  },
+  "dependencies": {
+    "@talos/base": "workspace:*"
   }
 }

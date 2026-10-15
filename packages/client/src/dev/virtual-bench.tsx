@@ -41,12 +41,11 @@ export function VirtualBench({ end }: { end: boolean }): ReactElement {
       source: inner,
       scroller: new Scroller<Item>(new LateSource(inner), {
         estimate: 60,
-        overscan: 200,
+        overscan: 400,
         stickToEnd: end,
       }),
     };
   });
-  const [, render] = useState(0);
   useLayoutEffect(() => {
     void scroller.start(end ? { edge: "end" } : { id: "v1000" });
     const bench = {
@@ -62,7 +61,12 @@ export function VirtualBench({ end }: { end: boolean }): ReactElement {
           const step = () => {
             frame++;
             heights.set(id, from + ((to - from) * frame) / frames);
-            render((value) => value + 1);
+            // Change DOM layout without a React commit: only the viewport's observer
+            // (or its fallback) can preserve the anchor during this animation.
+            const current = document.querySelector<HTMLElement>(
+              `[data-bench-item="${id}"]`,
+            );
+            if (current) current.style.height = `${heights.get(id)}px`;
             if (frame < frames) requestAnimationFrame(step);
             else resolve();
           };
@@ -86,14 +90,16 @@ export function VirtualBench({ end }: { end: boolean }): ReactElement {
         scroller={scroller}
         label="测试列表"
         style={{ height: 480, width: 360, border: "1px solid #ccc" }}
-        renderEdge={(direction, edge) => (
-          <div
-            data-testid={`dev.virtual-bench.${direction}`}
-            style={{ padding: 8, minHeight: 4 }}
-          >
-            {edge.state === "loading" ? "加载中" : null}
-          </div>
-        )}
+        renderEdge={(direction, edge) =>
+          edge.more ? (
+            <div
+              data-testid={`dev.virtual-bench.${direction}`}
+              style={{ padding: 8, minHeight: 4 }}
+            >
+              {edge.state === "loading" ? "加载中" : null}
+            </div>
+          ) : null
+        }
         renderItem={(item) => (
           <div
             data-bench-item={item.id}

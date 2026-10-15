@@ -1,9 +1,11 @@
 import type { Geometry, Reading } from "../core/scroller.ts";
+import { observeFallback } from "./fallback.ts";
 
 /** The part of a `Scroller` the DOM side talks to. */
 export interface ScrollerSurface {
   sense(reading: Reading): void;
   release(): void;
+  placing(): boolean;
   geometry(): Geometry;
   offsetOf(id: string): number | undefined;
   observe(listener: () => void): () => void;
@@ -22,7 +24,11 @@ export interface ViewportParts {
 }
 
 const RELEASE = ["wheel", "touchstart", "pointerdown", "mousedown", "keydown"];
-const FALLBACK = ["load", "error", "transitionend", "animationend"];
+/** Browser timers can be replaced by a deterministic scheduler in a host binding. */
+export interface ViewportTimers {
+  setTimeout(callback: () => void, milliseconds: number): number;
+  clearTimeout(handle: number): void;
+}
 const px = (
   element: HTMLElement,
   property: "height" | "top",
@@ -52,12 +58,23 @@ export class DomViewport {
   private cleanups: Array<() => void> = [];
   private first: string | undefined;
   private known = 0;
+  private hidden = false;
   private observing = false;
   private writing = false;
   private frame = 0;
+  private active = false;
+  private touching = false;
+  private idle: number | undefined;
   private readonly deferred = new Set<() => void>();
 
-  constructor(private readonly scroller: ScrollerSurface) {}
+  constructor(
+    private readonly scroller: ScrollerSurface,
+    private readonly timers: ViewportTimers = {
+      setTimeout: (callback, milliseconds) =>
+        window.setTimeout(callback, milliseconds),
+      clearTimeout: (handle) => window.clearTimeout(handle),
+    },
+  ) {}
 
   /** Render subscription for the binding: like the scroller's, but never inside an observer callback. */
   subscribe = (listener: () => void): (() => void) => {
@@ -93,7 +110,33 @@ export class DomViewport {
     this.known = scroll.scrollTop;
     const scrolled = (): void => this.scrolled();
     const release = (): void => this.scroller.release();
-    const sync = (): void => this.sync();
+    const activity = (): void => this.activity();
+    const touchStart = (): void => {
+      this.touching = true;
+      this.activity();
+    };
+    const touchEnd = (): void => {
+      this.touching = false;
+      this.activity();
+    };
+    scroll.addEventListener("wheel", activity, { passive: true });
+    scroll.addEventListener("touchstart", touchStart, { passive: true });
+    scroll.addEventListener("touchend", touchEnd, { passive: true });
+    scroll.addEventListener("touchcancel", touchEnd, { passive: true });
+    this.cleanups.push(() => {
+      scroll.removeEventListener("wheel", activity);
+      scroll.removeEventListener("touchstart", touchStart);
+      scroll.removeEventListener("touchend", touchEnd);
+      scroll.removeEventListener("touchcancel", touchEnd);
+    });
+    const sync = (): void => {
+      this.observing = true;
+      try {
+        this.sync();
+      } finally {
+        this.observing = false;
+      }
+    };
     scroll.addEventListener("scroll", scrolled);
     RELEASE.forEach((type) =>
       scroll.addEventListener(type, release, { passive: true }),
@@ -103,34 +146,29 @@ export class DomViewport {
       RELEASE.forEach((type) => scroll.removeEventListener(type, release));
     });
     if (typeof ResizeObserver === "function") {
-      const observer = new ResizeObserver(() => {
-        this.observing = true;
-        try {
-          this.sync();
-        } finally {
-          this.observing = false;
-        }
-      });
+      const observer = new ResizeObserver(sync);
       this.observer = observer;
       [scroll, parts.before, parts.after, ...this.elements.values()].forEach(
         (element) => observer.observe(element),
       );
       this.cleanups.push(() => observer.disconnect());
     } else {
-      // Without ResizeObserver: re-measure when media settle, animations end or the window resizes.
-      FALLBACK.forEach((type) => scroll.addEventListener(type, sync, true));
-      window.addEventListener("resize", sync);
-      this.cleanups.push(() => {
-        FALLBACK.forEach((type) =>
-          scroll.removeEventListener(type, sync, true),
-        );
-        window.removeEventListener("resize", sync);
-      });
+      this.cleanups.push(
+        observeFallback(
+          scroll,
+          [parts.canvas, parts.items, parts.before, parts.after],
+          sync,
+        ),
+      );
     }
     this.cleanups.push(this.scroller.observe(() => this.write()));
     this.sync();
   }
   detach(): void {
+    if (this.idle !== undefined) this.timers.clearTimeout(this.idle);
+    this.idle = undefined;
+    this.active = false;
+    this.touching = false;
     this.cleanups.forEach((cleanup) => cleanup());
     this.cleanups = [];
     this.observer = undefined;
@@ -150,12 +188,16 @@ export class DomViewport {
     if (!parts) return;
     const { scroll } = parts;
     // A hidden viewport measures as zero everywhere; keep the last known layout.
-    if (!scroll.getClientRects().length) return;
+    if (!this.visible(scroll)) return;
     const sizes: Array<[string, number]> = [];
     this.elements.forEach((element, id) =>
       sizes.push([id, element.getBoundingClientRect().height]),
     );
     const top = scroll.scrollTop;
+    if (this.hidden || this.clamped(scroll)) {
+      this.hidden = false;
+      this.known = top;
+    }
     const delta = top - this.known;
     const moved = Math.abs(delta) >= 0.5;
     if (moved) this.known = top;
@@ -182,13 +224,37 @@ export class DomViewport {
       this.observer?.observe(element);
     } else this.refs.delete(id);
   }
+  /** Keep native wheel smoothing / touch momentum alive through size corrections. */
+  private activity(): void {
+    this.active = true;
+    if (this.idle !== undefined) this.timers.clearTimeout(this.idle);
+    this.idle = this.timers.setTimeout(() => {
+      this.idle = undefined;
+      if (this.touching) return;
+      this.active = false;
+      this.write();
+    }, 160);
+  }
+  private visible(scroll: HTMLElement): boolean {
+    if (scroll.getClientRects().length) return true;
+    this.hidden = true;
+    return false;
+  }
+  /** Layout can clamp the browser offset before its resize notification arrives. */
+  private clamped(scroll: HTMLElement): boolean {
+    return (
+      this.known > Math.max(0, scroll.scrollHeight - scroll.clientHeight) + 0.5
+    );
+  }
   private scrolled(): void {
     const scroll = this.parts?.scroll;
-    if (!scroll) return;
+    if (!scroll || !this.visible(scroll)) return;
+    if (this.hidden || this.clamped(scroll)) return this.sync();
     const top = scroll.scrollTop;
     const delta = top - this.known;
     if (Math.abs(delta) < 0.5) return;
     this.known = top;
+    if (this.active) this.activity();
     this.scroller.sense({ scrolledBy: delta });
   }
   private write(): void {
@@ -197,17 +263,31 @@ export class DomViewport {
     this.writing = true;
     try {
       const { scroll } = parts;
+      if (!this.visible(scroll)) return;
       // A user scroll not yet reported must reach the scroller before it is overwritten.
       if (Math.abs(scroll.scrollTop - this.known) >= 0.5) this.scrolled();
       const geometry = this.scroller.geometry();
-      px(parts.canvas, "height", geometry.height);
-      px(parts.after, "top", geometry.afterTop);
+      // Writing scrollTop during a native smooth scroll cancels the remaining input
+      // on Chromium 70. Until the gesture settles, translate the layers by the anchor
+      // correction instead. Rebase the native offset and layers together afterwards.
+      const bias =
+        this.active && !this.scroller.placing() ? geometry.top - this.known : 0;
+      px(
+        parts.canvas,
+        "height",
+        Math.max(
+          geometry.height - bias,
+          bias ? this.known + geometry.viewport : 0,
+        ),
+      );
+      px(parts.before, "top", -bias);
+      px(parts.after, "top", geometry.afterTop - bias);
       const first =
         this.first === undefined
           ? undefined
           : this.scroller.offsetOf(this.first);
-      if (first !== undefined) px(parts.items, "top", first);
-      if (Math.abs(this.known - geometry.top) >= 0.5) {
+      if (first !== undefined) px(parts.items, "top", first - bias);
+      if (!bias && Math.abs(this.known - geometry.top) >= 0.5) {
         scroll.scrollTop = geometry.top;
         this.known = scroll.scrollTop;
       }
