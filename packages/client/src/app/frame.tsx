@@ -95,19 +95,33 @@ function useSystemMode(): ColorMode {
   return mode;
 }
 export function App(): ReactElement {
+  const runtime = useRuntime();
+  useClientSnapshot();
+  const systemMode = useSystemMode();
+  const preferred = runtime.setting<string>("theme", "system");
+  const mode =
+    preferred === "dark" || preferred === "light" ? preferred : systemMode;
   return (
-    <LearningProvider>
-      <MediaPlayerProvider>
-        <AppContent />
-      </MediaPlayerProvider>
-    </LearningProvider>
+    <TalosProvider
+      mode={mode}
+      className={
+        runtime.setting<string>("textSize", "normal") === "large"
+          ? "text-large"
+          : ""
+      }
+    >
+      <LearningProvider>
+        <MediaPlayerProvider>
+          <AppContent />
+        </MediaPlayerProvider>
+      </LearningProvider>
+    </TalosProvider>
   );
 }
 function AppContent(): ReactElement {
   const runtime = useRuntime();
   const state = useClientSnapshot();
   useEffect(() => runtime.stableGate(), [runtime, state.gate]);
-  const systemMode = useSystemMode();
   const admin = useGate("admin");
   const offline = useGate("offline");
   const areaGates = {
@@ -119,9 +133,6 @@ function AppContent(): ReactElement {
   };
   const areaGate = areaGates[state.nav.area];
   const chatUnread = useChatUnread();
-  const preferred = runtime.setting<string>("theme", "system");
-  const mode =
-    preferred === "dark" || preferred === "light" ? preferred : systemMode;
   const [gateStatus, setGateStatus] = useState(false);
   const current = areas[state.nav.area];
   const stack = state.nav.areas[state.nav.area].stack;
@@ -134,180 +145,168 @@ function AppContent(): ReactElement {
     runtime.dispatch({ type: "openOverlay", overlay: { kind } });
   const isApp = state.gate === "app";
   return (
-    <TalosProvider
-      mode={mode}
-      className={
-        runtime.setting<string>("textSize", "normal") === "large"
-          ? "text-large"
-          : ""
-      }
-    >
-      <>
-        {state.gate === "boot" ? (
-          <main className="boot-page">
-            <StatePanel state="loading" title="正在打开" hint="" />
-          </main>
-        ) : state.concealed ||
-          (state.gate === "app" &&
-            (state.status.connection === "offline" ||
-              state.status.connection === "connecting") &&
-            !offline.ok) ? (
-          <ConcealedScreen onReveal={() => runtime.reveal()} />
-        ) : state.gate === "deviceLocked" ? (
-          <DeviceLockedScreen
-            admission={state.admission}
-            device={state.device}
-            onRetry={() => runtime.retryAdmission()}
-            logout={
-              state.logoutName
-                ? {
-                    name: state.logoutName,
-                    reason:
-                      state.status.connection === "offline"
-                        ? "此操作需要连接服务器"
-                        : undefined,
-                    run: () => runtime.logout(),
-                  }
-                : undefined
+    <>
+      {state.gate === "boot" ? (
+        <main className="boot-page">
+          <StatePanel state="loading" title="正在打开" hint="" />
+        </main>
+      ) : state.concealed ||
+        (state.gate === "app" &&
+          (state.status.connection === "offline" ||
+            state.status.connection === "connecting") &&
+          !offline.ok) ? (
+        <ConcealedScreen onReveal={() => runtime.reveal()} />
+      ) : state.gate === "deviceLocked" ? (
+        <DeviceLockedScreen
+          admission={state.admission}
+          device={state.device}
+          onRetry={() => runtime.retryAdmission()}
+          logout={
+            state.logoutName
+              ? {
+                  name: state.logoutName,
+                  reason:
+                    state.status.connection === "offline"
+                      ? "此操作需要连接服务器"
+                      : undefined,
+                  run: () => runtime.logout(),
+                }
+              : undefined
+          }
+        />
+      ) : state.gate === "onboarding" ? (
+        <OnboardingScreen />
+      ) : !isApp ? (
+        <AuthScreen
+          key={state.gate}
+          locked={state.gate === "appLocked"}
+          name={state.user?.name}
+          device={state.device}
+          lockReason={state.lockReason}
+          error={state.error}
+          busy={state.busy}
+          status={state.status}
+          onLogin={(pin) => {
+            void runtime.login(pin);
+          }}
+          onStatus={() => setGateStatus(true)}
+        />
+      ) : (
+        <div className="app-root" data-testid="app.ready">
+          <AppFrame
+            listKind={adminOpen ? "nav" : areas[state.nav.area].list}
+            focus={!adminOpen && isFocus(state.nav.area, top)}
+            detail={adminOpen || stack.length > 1}
+            onBack={() =>
+              adminOpen ? close() : runtime.dispatch({ type: "back" })
             }
-          />
-        ) : state.gate === "onboarding" ? (
-          <OnboardingScreen />
-        ) : !isApp ? (
-          <AuthScreen
-            key={state.gate}
-            locked={state.gate === "appLocked"}
-            name={state.user?.name}
-            device={state.device}
-            lockReason={state.lockReason}
-            error={state.error}
-            busy={state.busy}
-            status={state.status}
-            onLogin={(pin) => {
-              void runtime.login(pin);
-            }}
-            onStatus={() => setGateStatus(true)}
-          />
-        ) : (
-          <div className="app-root" data-testid="app.ready">
-            <AppFrame
-              listKind={adminOpen ? "nav" : areas[state.nav.area].list}
-              focus={!adminOpen && isFocus(state.nav.area, top)}
-              detail={adminOpen || stack.length > 1}
-              onBack={() =>
-                adminOpen ? close() : runtime.dispatch({ type: "back" })
-              }
-              rail={
-                <Rail>
-                  {AREA_IDS.filter((area) => areaGates[area].ok).map((area) => (
-                    <RailItem
-                      key={area}
-                      label={areas[area].title}
-                      icon={<Icon name={areas[area].icon} size={22} />}
-                      selected={!adminOpen && state.nav.area === area}
-                      badge={area === "chat" ? chatUnread : undefined}
-                      onClick={() => {
-                        if (adminOpen) close();
-                        runtime.dispatch({ type: "switchArea", area });
-                      }}
-                    />
-                  ))}
-                  <RailSpacer />
-                  <MediaMiniPlayer />
-                  <StatusPill
-                    rail
-                    model={state.status}
-                    onClick={() => open("status")}
-                  />
+            rail={
+              <Rail>
+                {AREA_IDS.filter((area) => areaGates[area].ok).map((area) => (
                   <RailItem
-                    label="任务"
-                    icon={<Icon name="tasks" size={22} />}
-                    onClick={() => open("tasks")}
+                    key={area}
+                    label={areas[area].title}
+                    icon={<Icon name={areas[area].icon} size={22} />}
+                    selected={!adminOpen && state.nav.area === area}
+                    badge={area === "chat" ? chatUnread : undefined}
+                    onClick={() => {
+                      if (adminOpen) close();
+                      runtime.dispatch({ type: "switchArea", area });
+                    }}
                   />
+                ))}
+                <RailSpacer />
+                <MediaMiniPlayer />
+                <StatusPill
+                  rail
+                  model={state.status}
+                  onClick={() => open("status")}
+                />
+                <RailItem
+                  label="任务"
+                  icon={<Icon name="tasks" size={22} />}
+                  onClick={() => open("tasks")}
+                />
+                <RailItem
+                  label="设置"
+                  icon={<Icon name="settings" size={22} />}
+                  onClick={() => open("settings")}
+                />
+                {admin.ok && (
                   <RailItem
-                    label="设置"
-                    icon={<Icon name="settings" size={22} />}
-                    onClick={() => open("settings")}
+                    label="管理"
+                    icon={<Icon name="admin" size={22} />}
+                    selected={adminOpen}
+                    onClick={() => (adminOpen ? close() : open("admin"))}
                   />
-                  {admin.ok && (
-                    <RailItem
-                      label="管理"
-                      icon={<Icon name="admin" size={22} />}
-                      selected={adminOpen}
-                      onClick={() => (adminOpen ? close() : open("admin"))}
-                    />
-                  )}
-                  <RailItem
-                    label="锁定"
-                    icon={<Icon name="lock" size={22} />}
-                    onClick={() => runtime.lock()}
-                  />
-                </Rail>
-              }
-              list={
-                adminOpen ? (
-                  workbench.list
-                ) : state.nav.area === "ai" ? (
-                  <AiList />
-                ) : state.nav.area === "chat" ? (
-                  <ChatList />
-                ) : state.nav.area === "library" && areaGate.ok ? (
-                  <LibraryAreaList />
-                ) : state.nav.area === "media" && areaGate.ok ? (
-                  <MediaList />
-                ) : state.nav.area === "learning" && areaGate.ok ? (
-                  <LearningSidebar />
-                ) : (
-                  <Pane>
-                    <PaneHeader title={current.title} />
-                    <StatePanel
-                      state="forbidden"
-                      hint={areaGate.ok ? undefined : areaGate.reason}
-                    />
-                  </Pane>
-                )
-              }
-            >
-              {adminOpen ? (
-                workbench.content
-              ) : !areaGate.ok ? (
-                <EmptyPane icon="lock" />
+                )}
+                <RailItem
+                  label="锁定"
+                  icon={<Icon name="lock" size={22} />}
+                  onClick={() => runtime.lock()}
+                />
+              </Rail>
+            }
+            list={
+              adminOpen ? (
+                workbench.list
               ) : state.nav.area === "ai" ? (
-                <AiContent />
+                <AiList />
               ) : state.nav.area === "chat" ? (
-                <ChatContent />
-              ) : state.nav.area === "learning" ? (
-                <LearningScreen />
-              ) : state.nav.area === "library" ? (
-                <LibraryAreaContent />
+                <ChatList />
+              ) : state.nav.area === "library" && areaGate.ok ? (
+                <LibraryAreaList />
+              ) : state.nav.area === "media" && areaGate.ok ? (
+                <MediaList />
+              ) : state.nav.area === "learning" && areaGate.ok ? (
+                <LearningSidebar />
               ) : (
-                <MediaContent />
-              )}
-            </AppFrame>
-            <ChatBackground />
-            <LibraryBackground />
-            <MediaBackground />
-            <SettingsSheet
-              open={overlay?.kind === "settings"}
-              onClose={close}
-            />
-            <StatusCenter
-              open={overlay?.kind === "status"}
-              model={state.status}
-              onClose={close}
-            />
-            <TasksSheet open={overlay?.kind === "tasks"} onClose={close} />
-          </div>
-        )}
-        <LearningOverlays />
-        {!isApp && !state.concealed && (
+                <Pane>
+                  <PaneHeader title={current.title} />
+                  <StatePanel
+                    state="forbidden"
+                    hint={areaGate.ok ? undefined : areaGate.reason}
+                  />
+                </Pane>
+              )
+            }
+          >
+            {adminOpen ? (
+              workbench.content
+            ) : !areaGate.ok ? (
+              <EmptyPane icon="lock" />
+            ) : state.nav.area === "ai" ? (
+              <AiContent />
+            ) : state.nav.area === "chat" ? (
+              <ChatContent />
+            ) : state.nav.area === "learning" ? (
+              <LearningScreen />
+            ) : state.nav.area === "library" ? (
+              <LibraryAreaContent />
+            ) : (
+              <MediaContent />
+            )}
+          </AppFrame>
+          <ChatBackground />
+          <LibraryBackground />
+          <MediaBackground />
+          <SettingsSheet open={overlay?.kind === "settings"} onClose={close} />
           <StatusCenter
-            open={gateStatus}
+            open={overlay?.kind === "status"}
             model={state.status}
-            onClose={() => setGateStatus(false)}
+            onClose={close}
           />
-        )}
-      </>
-    </TalosProvider>
+          <TasksSheet open={overlay?.kind === "tasks"} onClose={close} />
+        </div>
+      )}
+      <LearningOverlays />
+      {!isApp && !state.concealed && (
+        <StatusCenter
+          open={gateStatus}
+          model={state.status}
+          onClose={() => setGateStatus(false)}
+        />
+      )}
+    </>
   );
 }

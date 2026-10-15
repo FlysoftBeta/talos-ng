@@ -16,7 +16,7 @@ async function click(cdp, label) {
   )
     return;
   await cdp.evaluate(
-    `(function(){var buttons=Array.prototype.slice.call(document.querySelectorAll('button'));var button=buttons.find(function(b){return b.getAttribute('aria-label')===${JSON.stringify(label)} || b.textContent.trim()===${JSON.stringify(label)};});if(!button)throw new Error('Missing button '+${JSON.stringify(label)});button.click();})()`,
+    `(function(){var buttons=Array.prototype.slice.call(document.querySelectorAll('button'));var button=buttons.find(function(b){return b.getAttribute('aria-label')===${JSON.stringify(label)} || b.textContent.trim()===${JSON.stringify(label)};});if(!button)throw new Error('Missing button '+${JSON.stringify(label)});button.scrollIntoView({block:'nearest',inline:'nearest'});button.click();})()`,
   );
 }
 async function reveal(cdp, touch = false) {
@@ -76,7 +76,7 @@ async function select(cdp, label, value) {
     15: "15 分钟",
   };
   await cdp.evaluate(
-    `(function(){var group=Array.prototype.slice.call(document.querySelectorAll('[role=group]')).find(function(e){return e.getAttribute('aria-label')===${JSON.stringify(label)};});if(!group)throw new Error('Missing choice '+${JSON.stringify(label)});var button=Array.prototype.slice.call(group.querySelectorAll('button')).find(function(e){return e.textContent.trim()===${JSON.stringify(labels[value] || value)};});if(!button)throw new Error('Missing option '+${JSON.stringify(value)});button.click();})()`,
+    `(function(){var group=Array.prototype.slice.call(document.querySelectorAll('[role=group]')).find(function(e){return e.getAttribute('aria-label')===${JSON.stringify(label)};});if(!group)throw new Error('Missing choice '+${JSON.stringify(label)});var button=Array.prototype.slice.call(group.querySelectorAll('button')).find(function(e){return e.textContent.trim()===${JSON.stringify(labels[value] || value)};});if(!button)throw new Error('Missing option '+${JSON.stringify(value)});button.scrollIntoView({block:'nearest',inline:'nearest'});button.click();})()`,
   );
 }
 async function closeSheet(cdp) {
