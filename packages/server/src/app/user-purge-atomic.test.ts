@@ -95,7 +95,6 @@ async function populate(k: Kernel, uid: string) {
     collection,
     uid,
   );
-  k.db.run("INSERT INTO media_delegations VALUES(?,'user',?,1)", playlist, uid);
   k.db.run(
     "INSERT INTO media_user_states VALUES(?, ?,0,0)",
     uid,

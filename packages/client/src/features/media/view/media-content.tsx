@@ -121,6 +121,9 @@ export interface PlaylistPanelProps {
   adding:
     | {
         title: string;
+        source: string;
+        sources: readonly { id: string; title: string }[];
+        onSource(id: string): void;
         choice: string;
         onChoice(id: string): void;
         tracks: readonly { id: string; title: string }[];
@@ -252,6 +255,17 @@ export function PlaylistDialogsView(p: PlaylistPanelProps): ReactElement {
             </>
           }
         >
+          <SelectField
+            label="曲目来源"
+            value={p.adding.source}
+            onChange={(e) => p.adding!.onSource(e.target.value)}
+          >
+            {p.adding.sources.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.title}
+              </option>
+            ))}
+          </SelectField>
           {p.adding.tracks.length ? (
             <SelectField
               label="曲目"
@@ -270,7 +284,7 @@ export function PlaylistDialogsView(p: PlaylistPanelProps): ReactElement {
               compact
               state="empty"
               title="没有可添加的曲目"
-              hint="搜索或播放过的曲目可以加入歌单"
+              hint="先搜索音乐，或选择有权访问的歌单"
             />
           )}
         </Dialog>
@@ -281,7 +295,7 @@ export function PlaylistDialogsView(p: PlaylistPanelProps): ReactElement {
           objectName={p.removing.name}
           destructive
           confirmLabel="确认删除"
-          message="歌单中的曲目会保留，仍可在最近、收藏和搜索中找到。"
+          message="移除歌单后，没有其他歌单引用的曲目会在服务器设定的回收期限后删除。收藏和队列不会延长保留时间。"
           onConfirm={p.removing.onConfirm}
           onClose={p.removing.onClose}
         />

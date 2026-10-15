@@ -18,14 +18,31 @@ export function registerMediaSync(
     const state = repo.state(user);
     const enabled = authority.can(user, "feature.use", { feature: "media" });
     const accessRev = authority.repo.revision(user);
-    const discoveries = service.options.db.all<{ track: string; rev: number }>(
-      "SELECT track,rev FROM media_discoveries WHERE user_id=?",
-      user,
-    );
     return [
       ...service.options.db
         .all<MediaRow>("SELECT * FROM media_playlists WHERE owner=?", user)
-        .map((row) => repo.row("mediaPlaylist", row)),
+        .map((row) => ({
+          ...repo.row("mediaPlaylist", row),
+          rev: Math.max(row.rev, accessRev),
+          deleted: !!row.deleted || !enabled,
+          data:
+            row.deleted || !enabled ? null : (JSON.parse(row.body) as unknown),
+        })),
+      ...service.options.db
+        .all<{ track: string; rev: number; deleted: number }>(
+          "SELECT track,rev,deleted FROM media_discoveries WHERE user_id=?",
+          user,
+        )
+        .map((d) => {
+          const row = repo.track(d.track)!;
+          const deleted = !!d.deleted || !!row.deleted || !enabled;
+          return {
+            ...repo.row("mediaTrack", row),
+            rev: Math.max(d.rev, row.rev, accessRev),
+            deleted,
+            data: deleted ? null : (JSON.parse(row.body) as unknown),
+          };
+        }),
       ...(state
         ? [
             {
@@ -36,15 +53,6 @@ export function registerMediaSync(
             },
           ]
         : []),
-      ...discoveries.map((d) => {
-        const row = repo.track(d.track)!;
-        return {
-          ...repo.row("mediaTrack", row),
-          rev: Math.max(d.rev, row.rev, accessRev),
-          deleted: !enabled,
-          data: enabled ? (JSON.parse(row.body) as unknown) : null,
-        };
-      }),
     ];
   };
   const coll = (id: string): Row[] => {

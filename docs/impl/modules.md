@@ -106,19 +106,48 @@ SHA-256 are in the package manifest and verified at package time; a config entry
 the binary path. YouTube player clients are selected by yt-dlp’s upstream defaults;
 Talos does not pass a `player_client` extractor override.
 
-- Search and resolve store only metadata with immutable track identities. Playback and
-  retention enqueue a bounded `media.materialise` job that publishes audio into the object
-  ledger before the track advertises its hash.
-- **Media references are not access grants.** Discovery is persisted per user and every
-  track operation and ticket redemption requires discovery or a currently owned/granted
-  playlist; root status alone is not a track path. Copying a track needs ownership,
-  discovery or a delegable grant. A playlist is an authority resource `coll:<id>`; shared
-  tracks sync only in collection scopes; personal queue, favourites, recents and play
-  preference live in `me:<user>`. Delegates cannot downgrade stronger grants, change
-  original-owner access, or revoke without own authority.
-- Maintenance drops old audio references (admin-set eviction days) even for playlist members;
-  playlist metadata stays and a later play re-materialises. The volume cap is returned with
-  every playback RPC.
+- Search commits bounded provider metadata, per-user discovery and the initial
+  `unreferenced_since` clock in one UoW. It creates no playlist and has no cumulative
+  500-track search limit. Explicit playlists retain their 500-item bound. Public resolve
+  only looks up a currently accessible source/provider identity; it cannot ingest arbitrary
+  provider IDs. Trusted ingestion can assign a target playlist in the same UoW, or stage
+  unreferenced metadata under the same grace clock while an offline import assembles lists.
+- **Discovery is authorisation, never retention.** Every track operation and ticket
+  redemption needs active per-user discovery or a current owned/granted playlist. Root
+  status, favourites, queues and recents do not independently grant track access. Library
+  snapshots contain accessible playlist tracks and personal references, not a global catalog
+  or every discovered result. The client picker selects current search results or one
+  accessible playlist; search rows that disappear from sync cannot remain actionable.
+- Music has no delegation flag/table. Read access suffices to copy songs into a writable
+  playlist; playlist grants may be shared at the holder's level or below. Only own authority
+  may revoke; stronger grants and original-owner access remain protected. Copying before
+  revocation establishes a separate playlist path. Shared tracks sync in `coll:<playlist>`;
+  discovered tracks and personal state sync in `me:<user>`.
+- **Song reclamation is delayed.** `media_tracks.unreferenced_since` is nullable and durable.
+  New unreferenced tracks get the injected current time. Membership writes clear it while
+  any live playlist reference exists; the last removal sets it only if not already set.
+  Search, playback, favourites, queue writes and unrelated playlist edits do not restart it.
+  Reattachment cancels reclamation, including at the deadline if its transaction wins first.
+- The existing scheduled `media.evict(admin.settings().evictionDays)` pass reclaims live
+  tracks with `unreferenced_since <= now - days * 86400000` in batches of 100 (bounded
+  sync revisions), rechecking that no live
+  membership exists in the same synchronous writer transaction. The shared existing setting
+  defaults to 30 days; changing it applies to the stored timestamp at the next pass. No new
+  timer, global playlist or permanent discovery retention is introduced. Owner purge uses
+  the same membership transitions; another owner's saved copy survives.
+- Reclamation releases audio/cover ledger references, tombstones the track and each
+  discovery, prunes favourites/queue/recents, and publishes scoped sync tombstones atomically.
+  Identity/tombstone rows remain for sync and provider deduplication. Rediscovery
+  revives only the searching user's discovery. A durable track generation changes on revival;
+  materialisation jobs check that generation both before work and during object publication,
+  preventing late jobs from resurrecting reclaimed audio. Objects with other owners remain
+  protected by the ledger; physical deletion follows its normal sweep.
+- Independent audio-cache eviction still drops old audio references even for playlist members;
+  referenced metadata stays and a later play re-materialises. Playback/retention use the
+  bounded `media.materialise` job and publish audio into the ledger before advertising its
+  hash. The volume cap is returned with every playback RPC.
+- The schema assumes a fresh database/dev reset; an upgrade migration for previous media
+  discovery/delegation schemas is intentionally outside this implementation.
 
 ## AI
 

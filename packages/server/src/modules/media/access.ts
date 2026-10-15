@@ -24,42 +24,18 @@ export class MediaAccess {
           : groups.includes(g.principal),
       );
   }
-  track(user: string, id: string, distribute = false): boolean {
+  track(user: string, id: string): boolean {
     const row = this.service.repo.track(id);
-    if (
-      !row ||
-      row.deleted ||
-      !this.authority.can(user, "feature.use", { feature: "media" })
-    )
-      return false;
-    if (
-      this.service.options.db.get(
-        "SELECT 1 FROM media_discoveries WHERE user_id=? AND track=?",
-        user,
-        id,
-      )
-    )
-      return true;
-    const groups = this.community.groups(user);
-    return this.service.repo.playlists().some((row) => {
-      const p = JSON.parse(row.body) as MediaPlaylist;
-      if (!p.tracks.includes(id)) return false;
-      if (p.owner === user) return true;
-      return this.authority.repo
-        .grants(`coll:${p.id}`)
-        .some(
-          (g) =>
-            (g.principal_type === "user"
-              ? g.principal === user
-              : groups.includes(g.principal)) &&
-            (!distribute ||
-              this.service.repo.delegation(
-                p.id,
-                g.principal_type,
-                g.principal,
-              )),
-        );
-    });
+    return (
+      !!row &&
+      !row.deleted &&
+      this.authority.can(user, "feature.use", { feature: "media" }) &&
+      (this.service.repo.discovered(user, id) ||
+        this.service.repo.playlists().some((row) => {
+          const p = JSON.parse(row.body) as MediaPlaylist;
+          return p.tracks.includes(id) && this.playlist(user, p);
+        }))
+    );
   }
   state(user: string): MediaUserState {
     const state = this.service.state(user);
@@ -72,9 +48,9 @@ export class MediaAccess {
       ),
     };
   }
-  require(user: string, id: string, distribute = false): void {
-    if (!this.track(user, id, distribute))
-      throw new AppError("E_DENIED", "没有此曲目的访问或转授权限");
+  require(user: string, id: string): void {
+    if (!this.track(user, id))
+      throw new AppError("E_DENIED", "没有此曲目的访问权限");
   }
   downloadable(user: string, object: string): boolean {
     return this.service.repo

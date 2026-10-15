@@ -7,7 +7,7 @@ import {
   useClientSnapshot,
   useRuntime,
 } from "../../../platform/react/context.tsx";
-import { GrantSheet } from "../../sharing/index.ts";
+import { PlaylistSharing } from "./playlist-sharing.tsx";
 import {
   addToPlaylist,
   addableTracks,
@@ -59,6 +59,7 @@ export function MediaContent(): ReactElement {
     [retentionOpen, setRetentionOpen] = useState(false),
     [adding, setAdding] = useState(false),
     [choice, setChoice] = useState(""),
+    [addSource, setAddSource] = useState("search"),
     [days, setDays] = useState(7),
     [error, setError] = useState("");
   useEffect(() => {
@@ -111,7 +112,18 @@ export function MediaContent(): ReactElement {
             title: `添加到「${playlist.title}」`,
             choice,
             onChoice: setChoice,
-            tracks: addableTracks(data, playlist),
+            source: addSource,
+            sources: [
+              { id: "search", title: "当前搜索结果" },
+              ...data.playlists
+                .filter((p) => p.id !== playlist.id)
+                .map((p) => ({ id: p.id, title: p.title })),
+            ],
+            onSource: (id) => {
+              setAddSource(id);
+              setChoice("");
+            },
+            tracks: addableTracks(data, playlist, addSource, search.results),
             onSubmit: () =>
               run(
                 addToPlaylist(runtime, playlist, choice).then(() => {
@@ -134,7 +146,7 @@ export function MediaContent(): ReactElement {
         : undefined,
       share:
         sharing && adapter ? (
-          <GrantSheet
+          <PlaylistSharing
             title={`分享「${playlist.title}」`}
             adapter={adapter}
             onClose={() => setSharing(false)}

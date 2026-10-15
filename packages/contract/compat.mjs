@@ -99,7 +99,7 @@ try {
         'media.playlist.items': [{playlist:id,tracks:[id]},{playlist:mediaPlaylist}],
         'media.playlist.retention': [{playlist:id,days:30},{playlist:mediaPlaylist}],
         'media.playlist.recordPlay': [{playlist:id,t:{ms:1000,counter:0},op:id},{ok:true}],
-        'media.playlist.share': [{playlist:id,principalType:'user',principal:id,level:'read',delegate:false},{ok:true}],
+        'media.playlist.share': [{playlist:id,principalType:'user',principal:id,level:'read'},{ok:true}],
         'media.playlist.grants': [{playlist:id},{grants:[],canShare:true}],
         'media.playlist.principals': [{},{principals:[{id:id,type:'user',name:'测试'}]}],
         'ai.text.put': [{id:id,offset:0,total:1,text:'x'},{ok:true}],
