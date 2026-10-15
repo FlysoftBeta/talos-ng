@@ -84,7 +84,7 @@ export class LibraryRepo {
   }
   putState(user: string, state: LibraryState, rev: number): void {
     this.db.run(
-      "INSERT INTO library_states VALUES(?,?,?,?,0) ON CONFLICT(user_id,id) DO UPDATE SET body=excluded.body,rev=excluded.rev",
+      "INSERT INTO library_states VALUES(?,?,?,?,0) ON CONFLICT(user_id,id) DO UPDATE SET body=excluded.body,rev=excluded.rev,deleted=0",
       user,
       state.id,
       JSON.stringify(state),
@@ -110,6 +110,29 @@ export class LibraryRepo {
         id,
         rev,
       );
+  }
+  hasContainer(id: string): boolean {
+    return !!this.db.get(
+      "SELECT 1 FROM library_items i JOIN library_collections c ON c.id=i.collection WHERE i.id=? AND i.deleted=0 AND c.deleted=0 LIMIT 1",
+      id,
+    );
+  }
+  deleteStates(id: string, rev: number): string[] {
+    const users = this.db
+      .all<{ user_id: string }>(
+        "SELECT user_id FROM library_states WHERE id=? AND deleted=0",
+        id,
+      )
+      .map((row) => row.user_id);
+    this.db.run(
+      "UPDATE library_states SET body='{}',deleted=1,rev=? WHERE id=?",
+      rev,
+      id,
+    );
+    return users;
+  }
+  clearDelegations(id: string): void {
+    this.db.run("DELETE FROM library_delegations WHERE collection=?", id);
   }
   delegation(collection: string, type: string, principal: string): boolean {
     return !!this.db.get<{ delegable: number }>(

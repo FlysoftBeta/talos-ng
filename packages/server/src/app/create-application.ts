@@ -401,6 +401,7 @@ export function createKernel(options: KernelOptions): Kernel {
   );
   seedIdentity(identity, uow, options.testSeed);
   for (const user of authority.repo.users()) {
+    library.ensureBuiltins(user);
     communityService.initializeUser(user);
     chatService.ensureStates(user);
   }

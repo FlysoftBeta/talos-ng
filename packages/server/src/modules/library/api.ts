@@ -34,7 +34,9 @@ export function registerLibraryApi(
   };
   host.register(contract.library.doc.importText, (ctx, args) => {
     target(ctx.user!, args.collection);
-    return service.importText(ctx.user!, args);
+    return service.importText(ctx.user!, args, () =>
+      target(ctx.user!, args.collection),
+    );
   });
   host.register(contract.library.doc.importFile, async (ctx, args) => {
     target(ctx.user!, args.collection);
@@ -60,6 +62,7 @@ export function registerLibraryApi(
       })
     )
       throw new AppError("E_DENIED", "当前账号未获 PDF 阅读授权");
+    target(ctx.user!, args.collection);
     return service.importFile(ctx.user!, args);
   });
   host.register(contract.library.doc.open, async (ctx, args) => {
@@ -131,12 +134,21 @@ export function registerLibraryApi(
   host.register(contract.library.collection.items, (ctx, args) => {
     access.requireCollection(ctx.user!, args.collection, "write");
     const previous = service.collection(args.collection).docs;
-    args.docs.forEach((id) => {
-      access.requireDoc(ctx.user!, id);
-      if (!previous.includes(id) && !access.canDistribute(ctx.user!, id))
-        throw new AppError("E_DENIED", "此文档没有转授权限，不能加入其他书单");
-    });
+    if (args.docs.some((id) => !previous.includes(id)))
+      throw new AppError("E_DENIED", "请从来源书单转存文档");
     service.setItems(args.collection, args.docs);
+    return { ok: true as const };
+  });
+  host.register(contract.library.collection.transfer, (ctx, args) => {
+    access.requireCollection(ctx.user!, args.target, "write");
+    if (
+      !access.canTransfer(ctx.user!, args.source) ||
+      !service.collection(args.source).docs.includes(args.doc)
+    )
+      throw new AppError("E_DENIED", "来源书单未允许转存此文档");
+    const target = service.collection(args.target);
+    if (!target.docs.includes(args.doc))
+      service.setItems(target.id, [...target.docs, args.doc]);
     return { ok: true as const };
   });
   host.register(contract.library.collection.delete, (ctx, args) => {
@@ -200,6 +212,8 @@ export function registerLibraryApi(
   });
   host.register(contract.library.favourite.set, (ctx, args) => {
     access.requireDoc(ctx.user!, args.doc);
+    if (args.value.v && !access.canDistribute(ctx.user!, args.doc))
+      throw new AppError("E_DENIED", "来源书单未允许收藏此文档");
     service.preference(ctx.user!, args.doc, "favourite", args.value);
     return { ok: true as const };
   });

@@ -20,6 +20,8 @@ export class LibraryAccess {
     const row = this.service.repo.collection(id);
     if (!row || row.deleted) return false;
     const collection = JSON.parse(row.body) as LibraryCollection;
+    if (collection.builtin)
+      return this.enabled(user) && collection.owner === user;
     return (
       this.enabled(user) &&
       this.authority.can(user, `resource.${level}`, {
@@ -51,8 +53,13 @@ export class LibraryAccess {
           !row.deleted &&
           (JSON.parse(row.body) as LibraryCollection).docs.includes(id) &&
           this.collection(user, row.id) &&
-          this.grantLevel(user, row.id) > 0,
+          this.canTransfer(user, row.id),
       );
+  }
+  canTransfer(user: string, source: string): boolean {
+    if (!this.collection(user, source)) return false;
+    const collection = this.service.collection(source);
+    return collection.owner === user || this.grantLevel(user, source) > 0;
   }
   requireCollection(
     user: string,
@@ -80,6 +87,7 @@ export class LibraryAccess {
     });
   }
   grantLevel(user: string, id: string): number {
+    if (this.service.collection(id).builtin) return 0;
     if (this.collection(user, id, "own")) return 3;
     const groups = this.community.groups(user);
     return this.authority.repo
@@ -97,6 +105,8 @@ export class LibraryAccess {
   }
   setGrant(user: string, input: LibraryGrantInput): void {
     this.requireCollection(user, input.collection);
+    if (this.service.collection(input.collection).builtin)
+      throw new AppError("E_DENIED", "内置书单不能分享");
     const power = this.grantLevel(user, input.collection);
     const requested = input.level
       ? { read: 1, write: 2, own: 3 }[input.level]

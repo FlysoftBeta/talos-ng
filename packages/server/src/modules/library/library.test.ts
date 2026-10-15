@@ -239,7 +239,11 @@ describe("library server", () => {
     const collection = (
       await a.api.library.collection.create({ title: "共享书单" })
     ).id;
-    await a.api.library.collection.items({ collection, docs: [doc] });
+    await a.api.library.collection.transfer({
+      source: k.library.ensureBuiltins(a.user.id).shelf,
+      target: collection,
+      doc,
+    });
     const grant = {
       collection,
       principalType: "user" as const,
@@ -320,7 +324,11 @@ describe("library server", () => {
       })
     ).id;
     const doc = await text(k, a.user.id);
-    await a.api.library.collection.items({ collection, docs: [doc] });
+    await a.api.library.collection.transfer({
+      source: k.library.ensureBuiltins(a.user.id).shelf,
+      target: collection,
+      doc,
+    });
     const initial = await b.api.sync.pull({ cursors: {} });
     expect(initial.added).toContain(`coll:${collection}`);
     k.community.leave(b.user.id, group.id);
@@ -388,10 +396,12 @@ describe("library server", () => {
     const first = await text(k, a.user.id);
     const second = await text(k, a.user.id, "第二篇");
     const coll = (await a.api.library.collection.create({ title: "顺序" })).id;
-    await a.api.library.collection.items({
-      collection: coll,
-      docs: [second, first],
-    });
+    for (const doc of [second, first])
+      await a.api.library.collection.transfer({
+        source: k.library.ensureBuiltins(a.user.id).shelf,
+        target: coll,
+        doc,
+      });
     expect(k.library.collection(coll).docs).toEqual([second, first]);
     await expect(
       a.api.library.collection.items({
@@ -465,7 +475,7 @@ describe("library server", () => {
       level: "read",
       delegate: true,
     });
-    await b.api.library.collection.items({ collection: target, docs: [doc] });
+    await b.api.library.collection.transfer({ source: coll, target, doc });
   });
   it("requeues persisted interrupted conversion after a database reopen", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "library-restart-"));
@@ -543,7 +553,7 @@ describe("library server", () => {
     expect(forward).toEqual(reverse);
     expect(applyLibraryProgress(forward, writes[49]!)).toEqual(forward);
   });
-  it("favourite possession cannot recover access after collection removal", async () => {
+  it("nondelegable readers cannot create a favourite container", async () => {
     const k = setup();
     const a = await connect(k);
     const b = await connect(k, "123456");
@@ -556,10 +566,12 @@ describe("library server", () => {
       principal: b.user.id,
       level: "read",
     });
-    await b.api.library.favourite.set(
-      { doc, value: { v: true, t: { ms: 1, counter: 0 }, op: id() } },
-      { op: id() },
-    );
+    await expect(
+      b.api.library.favourite.set(
+        { doc, value: { v: true, t: { ms: 1, counter: 0 }, op: id() } },
+        { op: id() },
+      ),
+    ).rejects.toMatchObject({ code: "E_DENIED" });
     k.library.setItems(coll, []);
     expect(
       new LibraryAccess(k.library, k.authority, k.community).document(
@@ -567,6 +579,206 @@ describe("library server", () => {
         doc,
       ),
     ).toBe(false);
-    expect(k.library.state(b.user.id, doc).favourite?.v).toBe(true);
+    expect(k.library.state(b.user.id, doc).favourite).toBeNull();
+  });
+});
+
+describe("library container invariants", () => {
+  it("provisions exactly two private immutable built-ins, including empty-account sync", async () => {
+    const k = setup(),
+      a = await connect(k),
+      b = await connect(k, "123456");
+    const builtins = k.library.ensureBuiltins(a.user.id);
+    expect(k.library.ensureBuiltins(a.user.id)).toEqual(builtins);
+    const pull = await a.api.sync.pull({ cursors: {} });
+    expect(
+      pull.scopes[`me:${a.user.id}`]!.rows.filter(
+        (r) => r.type === "libraryCollection",
+      ).map((r) => (r.data as { title: string }).title),
+    ).toEqual(expect.arrayContaining(["我的书架", "我的收藏"]));
+    for (const collection of Object.values(builtins)) {
+      await expect(
+        a.api.library.collection.delete({ collection }),
+      ).rejects.toMatchObject({ code: "E_DENIED" });
+      await expect(
+        a.api.library.sharing.set({
+          collection,
+          principalType: "user",
+          principal: b.user.id,
+          level: "read",
+          delegate: true,
+        }),
+      ).rejects.toMatchObject({ code: "E_DENIED" });
+      // Even a forged generic grant cannot expose a private built-in to root.
+      k.authority.setGrant({
+        resource: `coll:${collection}`,
+        principalType: "user",
+        principal: b.user.id,
+        level: "own",
+      });
+      expect(
+        new LibraryAccess(k.library, k.authority, k.community).collection(
+          b.user.id,
+          collection,
+        ),
+      ).toBe(false);
+      expect((await a.api.library.sharing.list({ collection })).canShare).toBe(
+        false,
+      );
+    }
+  });
+  it("imports atomically to a selected container or the default shelf; failed targets leave no book or job", async () => {
+    const k = setup(),
+      a = await connect(k);
+    const before = k.library.repo.docs().length;
+    await expect(
+      k.library.importText(a.user.id, {
+        title: "missing",
+        body: "text",
+        collection: id(),
+      }),
+    ).rejects.toMatchObject({ code: "E_NOT_FOUND" });
+    expect(k.library.repo.docs()).toHaveLength(before);
+    const collection = k.library.createCollection(a.user.id, "only container");
+    const imported = await a.api.library.doc.importText({
+      title: "selected",
+      body: "selected",
+      collection,
+    });
+    expect(k.library.collection(collection).docs).toEqual([imported.doc]);
+    expect(
+      k.library.collection(k.library.ensureBuiltins(a.user.id).shelf).docs,
+    ).not.toContain(imported.doc);
+    const normal = await a.api.library.doc.importText({
+      title: "default",
+      body: "default",
+    });
+    expect(
+      k.library.collection(k.library.ensureBuiltins(a.user.id).shelf).docs,
+    ).toContain(normal.doc);
+  });
+  it("rejects destination additions and requires the named source to contain the book and allow transfer", async () => {
+    const k = setup(),
+      a = await connect(k),
+      b = await connect(k, "123456");
+    const doc = await text(k, a.user.id),
+      source = k.library.createCollection(a.user.id, "source"),
+      target = k.library.createCollection(b.user.id, "target");
+    k.library.setItems(source, [doc]);
+    const grant = {
+      collection: source,
+      principalType: "user" as const,
+      principal: b.user.id,
+      level: "read" as const,
+      delegate: false,
+    };
+    await a.api.library.sharing.set(grant);
+    await expect(
+      a.api.library.collection.items({
+        collection: source,
+        docs: [doc, await text(k, a.user.id, "other")],
+      }),
+    ).rejects.toMatchObject({ code: "E_DENIED" });
+    await expect(
+      b.api.library.collection.transfer({ source, target, doc }),
+    ).rejects.toMatchObject({ code: "E_DENIED" });
+    await a.api.library.sharing.set({ ...grant, delegate: true });
+    await expect(
+      b.api.library.collection.transfer({ source, target, doc: id() }),
+    ).rejects.toMatchObject({ code: "E_DENIED" });
+    await b.api.library.collection.transfer({ source, target, doc });
+    await b.api.library.collection.transfer({ source, target, doc });
+    expect(k.library.collection(target).docs).toEqual([doc]);
+    await a.api.library.sharing.set({ ...grant, level: null });
+    expect(
+      new LibraryAccess(k.library, k.authority, k.community).document(
+        b.user.id,
+        doc,
+      ),
+    ).toBe(true);
+    await expect(
+      b.api.library.collection.transfer({ source, target, doc }),
+    ).rejects.toMatchObject({ code: "E_DENIED" });
+  });
+  it("favourites are containers: LWW replay, transfer, removal, last-container deletion and state tombstones agree", async () => {
+    const k = setup(),
+      a = await connect(k);
+    const doc = await text(k, a.user.id),
+      builtins = k.library.ensureBuiltins(a.user.id);
+    const value = { v: true, t: { ms: 20, counter: 0 }, op: id() };
+    await a.api.library.favourite.set({ doc, value }, { op: id() });
+    await a.api.library.favourite.set(
+      { doc, value: { ...value, v: false, t: { ms: 10, counter: 0 } } },
+      { op: id() },
+    );
+    expect(k.library.collection(builtins.favourites).docs).toEqual([doc]);
+    await a.api.library.collection.items({
+      collection: builtins.shelf,
+      docs: [],
+    });
+    expect(k.library.document(doc).id).toBe(doc);
+    const cursor = (await a.api.sync.pull({ cursors: {} })).scopes[
+      `me:${a.user.id}`
+    ]!.cursor;
+    await a.api.library.collection.items({
+      collection: builtins.favourites,
+      docs: [],
+    });
+    expect(() => k.library.document(doc)).toThrow();
+    expect(k.library.state(a.user.id, doc).favourite).toBeNull();
+    expect(k.db.all("SELECT * FROM object_refs WHERE owner_id=?", doc)).toEqual(
+      [],
+    );
+    expect(
+      k.jobs
+        .list(a.user.id)
+        .filter((j) => j.kind === "library.convert" && !j.deleted),
+    ).toEqual([]);
+    const delta = await a.api.sync.pull({
+      cursors: { [`me:${a.user.id}`]: cursor },
+    });
+    for (const type of ["libraryDoc", "libraryState"])
+      expect(delta.scopes[`me:${a.user.id}`]!.rows).toContainEqual(
+        expect.objectContaining({ type, id: doc, deleted: true, data: null }),
+      );
+    await expect(
+      a.api.library.favourite.set({ doc, value }, { op: id() }),
+    ).rejects.toMatchObject({ code: "E_DENIED" });
+  });
+  it("deleting a booklist reclaims only its last-contained books, including books owned by another user", async () => {
+    const k = setup(),
+      a = await connect(k),
+      b = await connect(k, "123456");
+    const target = k.library.createCollection(b.user.id, "target");
+    const sole = await k.library.importText(a.user.id, {
+      title: "sole",
+      body: "sole",
+      collection: target,
+    });
+    const retained = await text(k, a.user.id);
+    k.library.setItems(target, [sole.doc, retained]);
+    await b.api.library.collection.delete({ collection: target });
+    expect(() => k.library.document(sole.doc)).toThrow();
+    expect(k.library.document(retained).id).toBe(retained);
+    expect(k.library.repo.items(target).every((item) => item.deleted)).toBe(
+      true,
+    );
+  });
+  it("rolls back reclamation, state, refs and memberships with the enclosing transaction", async () => {
+    const k = setup(),
+      a = await connect(k),
+      doc = await text(k, a.user.id),
+      shelf = k.library.ensureBuiltins(a.user.id).shelf;
+    expect(() =>
+      k.uow.write(() => {
+        k.library.setItems(shelf, []);
+        throw Error("rollback");
+      }),
+    ).toThrow("rollback");
+    expect(k.library.document(doc).id).toBe(doc);
+    expect(k.library.collection(shelf).docs).toContain(doc);
+    expect(
+      k.db.all("SELECT * FROM object_refs WHERE owner_id=?", doc),
+    ).toHaveLength(2);
   });
 });
