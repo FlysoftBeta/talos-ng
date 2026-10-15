@@ -6,6 +6,21 @@ import type {
   RuntimeCommandPort,
   RuntimeFilePort,
 } from "../../../core/runtime-port.ts";
+// Construct locale formatters once; virtual scrolling repeatedly mounts fresh rows.
+const createdTime = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Shanghai",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+const deletedTime = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Shanghai",
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "numeric",
+  minute: "numeric",
+  second: "numeric",
+});
 export class PostCardController extends StateStore<{
   localBody: string | undefined;
 }> {
@@ -67,16 +82,10 @@ export class PostCardController extends StateStore<{
         !post.pending &&
         !post.failed,
       createdLabel: post.created
-        ? new Date(post.created).toLocaleString("zh-CN", {
-            timeZone: "Asia/Shanghai",
-            hour: "2-digit",
-            minute: "2-digit",
-          })
+        ? createdTime.format(new Date(post.created))
         : "正在发送",
       deletedLabel: post.deletedAt
-        ? new Date(post.deletedAt).toLocaleString("zh-CN", {
-            timeZone: "Asia/Shanghai",
-          })
+        ? deletedTime.format(new Date(post.deletedAt))
         : "",
       onCopy: () => this.copy(preview),
     };

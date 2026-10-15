@@ -31,6 +31,8 @@
   rectangles during touch drag, wheel plus animation, end following and the no-RO path.
   Bench animations change DOM size without React commits, exercising the driver itself.
   Browser errors (including observer loops) fail the bench.
+- Reused chat timestamp formatters and computed history date labels once per day. Repeated
+  per-render formatter construction had pushed throttled scroll tasks over the budget.
 - Added source lifecycle/error tests, chat offline/opening/read-marker regressions, AI
   top paging with anchor preservation, and browser PDF zoom/page-placement assertions.
   The boundary gate's package count was stale at twelve after adding `virtual`; it is thirteen.
@@ -60,9 +62,9 @@ Commands have wall-clock timeouts; browser/server ports are dynamically allocate
 | `pnpm package` | pending final gate |
 
 Initial gate failures were an assignment to a readonly test fixture, the stale boundary
-package count, and the defects above; all were fixed. One current-browser hardening run
-measured a 202 ms conversation scroll long task against the unchanged 200 ms budget; an
-isolated rerun passed at 188 ms. The character reflow assertion retains its 2 px tolerance
+package count, and the defects above; all were fixed. Repeated current-browser hardening runs
+measured 202–215 ms conversation scroll tasks against the unchanged 200 ms budget.
+Reusing chat date/time formatters and per-day labels reduced the targeted rerun to 66 ms. The character reflow assertion retains its 2 px tolerance
 and now compares before/after DOM coordinates, rather than assuming the character began
 at zero (which would force a partial-line jump). No existing numerical tolerance was widened.
 

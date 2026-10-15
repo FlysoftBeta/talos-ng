@@ -19,14 +19,21 @@ export function dateLabel(value: number, now: number): string {
       ? "昨天"
       : `${Number(parts[1])}月${Number(parts[2])}日`;
 }
+const listDate = new Intl.DateTimeFormat("en-US", {
+  timeZone: "Asia/Shanghai",
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+});
+const listTime = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Shanghai",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
 export function chatListTime(value: number, now: number): string {
   const parts = (stamp: number): string[] =>
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Shanghai",
-      year: "numeric",
-      month: "numeric",
-      day: "numeric",
-    })
+    listDate
       .formatToParts(new Date(stamp))
       .filter(
         (part) =>
@@ -34,13 +41,7 @@ export function chatListTime(value: number, now: number): string {
       )
       .map((part) => part.value);
   const date = parts(value).join("/");
-  if (date === parts(now).join("/"))
-    return new Date(value).toLocaleTimeString("zh-CN", {
-      timeZone: "Asia/Shanghai",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
+  if (date === parts(now).join("/")) return listTime.format(new Date(value));
   if (date === parts(now - 86_400_000).join("/")) return "昨天";
   const [month, day] = parts(value);
   return `${month}/${day}`;

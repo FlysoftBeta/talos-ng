@@ -28,15 +28,23 @@ export function historyRows(
   now: number,
 ): HistoryRow[] {
   const byId = new Map(items.map((post) => [post.id, post]));
+  const labels = new Map<string, string>();
+  let previousDay: string | undefined;
   return items.map((post, index) => {
     const previous = items[index - 1];
     const day = chatDay(post.created);
-    const sameDay = !!previous && chatDay(previous.created) === day;
+    let date = labels.get(day);
+    if (date === undefined) {
+      date = dateLabel(post.created, now);
+      labels.set(day, date);
+    }
+    const sameDay = !!previous && previousDay === day;
+    previousDay = day;
     return {
       id: post.id,
       post,
       reply: post.replyTo ? byId.get(post.replyTo) : undefined,
-      date: dateLabel(post.created, now),
+      date,
       separator: !sameDay,
       grouped:
         sameDay &&
