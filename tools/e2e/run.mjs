@@ -13,6 +13,7 @@ const ORDER = [
   "admin",
   "ai",
   "hardening",
+  "virtual",
   "ops",
   "offline",
 ];

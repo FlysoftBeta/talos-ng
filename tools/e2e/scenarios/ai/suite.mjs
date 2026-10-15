@@ -3,6 +3,16 @@ import path from "node:path";
 import { SCREENSHOTS } from "../../harness/artifacts.mjs";
 import { click, pin, reveal, select, closeSheet } from "../../harness/ui.mjs";
 import { connectChat } from "../../harness/chat-wire.mjs";
+// A transcript mounts only its viewport and overscan. Identify each new answer by id;
+// the number (or ordinal) of mounted message elements is not its history length.
+const lastAssistant = `(function(){var rows=document.querySelectorAll('[data-testid="ai.message"][data-role=assistant]');return rows[rows.length-1]})()`;
+const newAssistant = `${lastAssistant} && ${lastAssistant}.getAttribute('data-message-id')!==window.__previousAssistant`;
+async function send(cdp) {
+  await cdp.evaluate(
+    `window.__previousAssistant=${lastAssistant} && ${lastAssistant}.getAttribute('data-message-id')`,
+  );
+  await click(cdp, "发送");
+}
 async function field(cdp, label, value, textarea = false) {
   await cdp.evaluate(
     `(function(){var label=Array.prototype.slice.call(document.querySelectorAll('label')).find(function(l){return l.textContent.trim()===${JSON.stringify(label)}});var input=(label&&document.getElementById(label.htmlFor))||document.querySelector('[aria-label=${label}]');if(!input)throw new Error('Field missing: '+${JSON.stringify(label)});Object.getOwnPropertyDescriptor(${textarea ? "HTMLTextAreaElement" : "HTMLInputElement"}.prototype,'value').set.call(input,${JSON.stringify(value)});input.dispatchEvent(new Event('input',{bubbles:true}));})()`,
@@ -95,10 +105,8 @@ export async function aiSuite(browser, server, { legacy = false } = {}) {
     await cdp.wait(
       "Array.prototype.slice.call(document.querySelectorAll('button')).some(function(b){return b.textContent==='发送'&&!b.disabled})",
     );
-    await click(cdp, "发送");
-    await cdp.wait(
-      "document.querySelectorAll('[data-testid=\"ai.message\"][data-role=assistant]').length===1",
-    );
+    await send(cdp);
+    await cdp.wait(`${newAssistant}`);
     await cdp.wait(
       "!!document.querySelector('[data-testid=\"ai.message.rich\"] .katex') && !!document.querySelector('[data-testid=\"ai.message.rich\"] code')",
     );
@@ -136,9 +144,9 @@ export async function aiSuite(browser, server, { legacy = false } = {}) {
     await cdp.wait(
       "Array.prototype.slice.call(document.querySelectorAll('button')).some(function(b){return b.textContent==='发送'&&!b.disabled})",
     );
-    await click(cdp, "发送");
+    await send(cdp);
     await cdp.wait(
-      "document.querySelectorAll('[data-testid=\"ai.message\"][data-role=assistant]').length===2 && document.body.textContent.indexOf('当前对话正在生成')<0",
+      `${newAssistant} && document.body.textContent.indexOf('当前对话正在生成')<0`,
     );
     await click(cdp, "工作区");
     await cdp.wait("document.body.textContent.indexOf('笔记/学习.md')>=0");
@@ -192,9 +200,9 @@ export async function aiSuite(browser, server, { legacy = false } = {}) {
     await cdp.wait(
       "Array.prototype.slice.call(document.querySelectorAll('button')).some(function(b){return b.textContent==='发送'&&!b.disabled})",
     );
-    await click(cdp, "发送");
+    await send(cdp);
     await cdp.wait(
-      "document.querySelectorAll('[data-testid=\"ai.message\"][data-role=assistant]').length===3 && document.body.textContent.indexOf('当前对话正在生成')<0",
+      `${newAssistant} && document.body.textContent.indexOf('当前对话正在生成')<0`,
     );
     assert.equal(
       (
@@ -208,14 +216,12 @@ export async function aiSuite(browser, server, { legacy = false } = {}) {
     await cdp.wait(
       "Array.prototype.slice.call(document.querySelectorAll('button')).some(function(b){return b.textContent==='发送'&&!b.disabled})",
     );
-    await click(cdp, "发送");
+    await send(cdp);
     await cdp.wait("document.body.textContent.indexOf('当前对话正在生成')>=0");
-    await cdp.wait(
-      "document.querySelectorAll('[data-testid=\"ai.message\"][data-role=assistant]').length>=4 && document.querySelectorAll('[data-testid=\"ai.message\"][data-role=assistant]')[3].textContent.length>40",
-    );
+    await cdp.wait(`${newAssistant} && ${lastAssistant}.textContent.length>40`);
     await click(cdp, "停止生成");
     await cdp.wait(
-      "document.querySelectorAll('[data-testid=\"ai.message\"][data-role=assistant]')[3].textContent.indexOf('已停止')>=0",
+      `${lastAssistant} && ${lastAssistant}.textContent.indexOf('已停止')>=0`,
     );
     scenarios++;
     console.log(`AI scenario ${scenarios} passed`);
@@ -223,10 +229,8 @@ export async function aiSuite(browser, server, { legacy = false } = {}) {
     await cdp.wait(
       "Array.prototype.slice.call(document.querySelectorAll('button')).some(function(b){return b.textContent==='发送'&&!b.disabled})",
     );
-    await click(cdp, "发送");
-    await cdp.wait(
-      "document.querySelectorAll('[data-testid=\"ai.message\"][data-role=assistant]').length===5",
-    );
+    await send(cdp);
+    await cdp.wait(newAssistant);
     await cdp.offline(true);
     await cdp.wait(
       "document.body.textContent.indexOf('此操作需要连接服务器')>=0",
@@ -235,11 +239,11 @@ export async function aiSuite(browser, server, { legacy = false } = {}) {
     await cdp.offline(false);
     await cdp.wait("document.body.textContent.indexOf('当前对话正在生成')>=0");
     await cdp.wait(
-      "document.querySelectorAll('[data-testid=\"ai.message\"][data-role=assistant]')[4].textContent.length>200",
+      `${lastAssistant} && ${lastAssistant}.textContent.length>200`,
     );
     await click(cdp, "停止生成");
     await cdp.wait(
-      "document.querySelectorAll('[data-testid=\"ai.message\"][data-role=assistant]')[4].textContent.indexOf('已停止')>=0",
+      `${lastAssistant} && ${lastAssistant}.textContent.indexOf('已停止')>=0`,
     );
     scenarios++;
     console.log(`AI scenario ${scenarios} passed`);
@@ -261,6 +265,9 @@ export async function aiSuite(browser, server, { legacy = false } = {}) {
         "document.querySelector('[data-testid=\"ai.composer.input\"]').value",
       ),
       "离线草稿：下次继续学习",
+    );
+    await cdp.evaluate(
+      "document.querySelector('[aria-label=对话消息]').scrollTop=0",
     );
     await cdp.wait(
       "!!document.querySelector('[data-testid=\"ai.message.rich\"] .katex')",
@@ -290,9 +297,9 @@ export async function aiSuite(browser, server, { legacy = false } = {}) {
     await cdp.wait(
       "Array.prototype.slice.call(document.querySelectorAll('button')).some(function(b){return b.textContent==='发送'&&!b.disabled})",
     );
-    await click(cdp, "发送");
+    await send(cdp);
     await cdp.wait(
-      'document.querySelector(\'[data-testid="ai.message"][data-role=assistant] [data-testid="ai.message.rich"]\') && document.querySelector(\'[data-testid="ai.message"][data-role=assistant] [data-testid="ai.message.rich"]\').textContent.length>20000 && document.body.textContent.indexOf(\'当前对话正在生成\')<0',
+      `${newAssistant} && ${lastAssistant}.querySelector('[data-testid="ai.message.rich"]') && ${lastAssistant}.querySelector('[data-testid="ai.message.rich"]').textContent.length>20000 && document.body.textContent.indexOf('当前对话正在生成')<0`,
     );
     const frames = await cdp.evaluate(
       "window.__aiMeasure=false;window.__aiFrames",

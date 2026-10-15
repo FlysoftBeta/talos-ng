@@ -104,9 +104,9 @@ Distribution targets and library requirements: `packaging.md`.
 ## Client viewing
 
 The client stores resources by `rid` in the file store and decodes on use. The viewer
-(`features/reader`) is a virtualised vertical list on the shared `VirtualListCore` (a
-Fenwick-indexed height model; page dimensions are known before resources are fetched; only
-the visible window plus 600 px of overscan is mounted, and unmount aborts remaining work).
+(`features/reader`) uses the id-based `@talos/virtual` scroller (`virtual-scroller.md`):
+unit ids are stable anchors; page dimensions are known before resources are fetched; only
+the visible window plus 600 px of overscan is mounted, and unmount aborts remaining work.
 
 - `paged` units render in per-page sandboxed iframes (`sandbox="allow-scripts"`, opaque
   origin, strict CSP, HTML sanitised again on the client). Resources are passed as
@@ -114,9 +114,12 @@ the visible window plus 600 px of overscan is mounted, and unmount aborts remain
   rejects parent-created blob URLs at an opaque origin); they are never persisted. Wheel,
   drag and navigation keys are relayed only from that exact frame window.
 - `flow` text units render as plain typography; a different viewport width reflows text and
-  keeps unit plus offset, not a character anchor across arbitrary layouts.
+  keeps relative depth within the visible unit. Saved text positions restore through a
+  UTF-16 character anchor once the unit has loaded.
+- Page input seeks by unit id; PDF zoom preserves the relative within-page offset.
 - Reading position: resume is an LWW unit ordinal plus within-unit offset (text units also
-  carry a UTF-16 offset restored through DOM Range geometry); furthest is a Max unit
+  carry a UTF-16 offset and optional `charInset`, restored through DOM Range geometry to
+  preserve the character's exact on-screen position); furthest is a Max unit
   ordinal; reading seconds are per-device counters accrued only while the viewer is visible
   and the app unlocked. Navigation guards flush the position before concealment.
 - Offline opening requires a complete locally owned pack; units not downloaded show an

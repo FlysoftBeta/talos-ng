@@ -1,15 +1,18 @@
+import { AppError } from "@talos/base";
 import { contract } from "@talos/contract";
 import type {
   ChatState,
   CommunityConversation,
   ChatPost,
+  ResultOf,
 } from "@talos/contract";
+import { ArraySource, Scroller } from "@talos/virtual";
+import type { Seek } from "@talos/virtual";
 import type { StoredRow } from "../../../core/data/db.ts";
 import { StateStore } from "../../../core/controller-state.ts";
 import type { ConversationPort } from "./ports.ts";
 import {
   fullBody,
-  loadReply,
   message,
   onlineCall,
   page,
@@ -18,21 +21,12 @@ import {
 } from "./commands.ts";
 import { members, posts } from "./module.ts";
 import type { PostView } from "./module.ts";
-import { chatDay, dateLabel } from "./format.ts";
+import { historyRows, locateRow, sameRow } from "./history.ts";
+import type { HistoryKey, HistoryRow } from "./history.ts";
 export interface ConversationInput {
   group: CommunityConversation;
   state: ChatState;
   rows: readonly StoredRow[];
-}
-export interface ViewportFacts {
-  top: number;
-  bottom: number;
-  visibleSequences: number[];
-}
-export interface ConversationViewport {
-  scroll(id: string, align: "start" | "end" | "center"): void;
-  afterLayout(callback: () => void): void;
-  read(): ViewportFacts | undefined;
 }
 interface ConversationState {
   error: string;
@@ -48,19 +42,32 @@ interface ConversationState {
   textLoading: boolean;
   selectedPost: string | undefined;
   awayFromBottom: boolean;
+  /** The history is finding where to open (or a jump target). */
+  seeking: boolean;
   read: number;
 }
+type PageResult = ResultOf<typeof contract.chat.post.page>;
+/**
+ * One open conversation. `history` scrolls its posts: it opens at the first unread post
+ * (or the newest), pages older and newer posts from the server at its ends, finds reply
+ * targets by paging back, and follows new posts while the reader is at the end.
+ */
 export class ConversationController extends StateStore<ConversationState> {
   readonly initial: number;
-  private initialized = false;
+  readonly history: Scroller<HistoryRow, HistoryKey>;
+  private readonly rows: ArraySource<HistoryRow, HistoryKey>;
+  /** Posts fetched from the server that the repository projection may not show yet. */
+  private readonly fetched = new Map<string, ChatPost>();
+  /** No posts exist below this sequence number. */
+  private floor = 0;
+  private started = false;
   private generation = 0;
   private textGeneration = 0;
   private canRead: boolean | undefined;
-  private lastSeq = -1;
+  private readonly stops: Array<() => void>;
   constructor(
     private runtime: ConversationPort,
     private input: ConversationInput,
-    private viewport: ConversationViewport,
   ) {
     super({
       error: "",
@@ -76,15 +83,47 @@ export class ConversationController extends StateStore<ConversationState> {
       textLoading: false,
       selectedPost: undefined,
       awayFromBottom: false,
+      seeking: false,
       read: input.state.readSeq,
     });
     this.initial = input.state.readSeq;
+    this.rows = new ArraySource<HistoryRow, HistoryKey>({
+      key: (row) => row.id,
+      equals: sameRow,
+      locate: locateRow,
+      load: (direction) => this.extend(direction),
+      prepare: (seek) => this.prepare(seek),
+    });
+    this.history = new Scroller<HistoryRow, HistoryKey>(this.rows, {
+      estimate: 64,
+      overscan: 480,
+      stickToEnd: true,
+      endThreshold: 48,
+    });
+    this.stops = [
+      this.history.observe(this.visibleRead),
+      this.history.subscribe(() => {
+        const seeking = this.history.getSnapshot().status === "seeking";
+        if (seeking !== this.state.seeking) this.patch({ seeking });
+        this.visibleRead();
+      }),
+    ];
   }
   bind(input: ConversationInput): void {
     this.input = input;
   }
   private base(): PostView[] {
-    return posts(this.input.rows, this.input.group.id);
+    const local = posts(this.input.rows, this.input.group.id);
+    if (!this.fetched.size) return local;
+    const ids = new Set(local.map((post) => post.id));
+    const extra = Array.from(this.fetched.values()).filter(
+      (post) => !ids.has(post.id),
+    );
+    return extra.length
+      ? [...local, ...extra].sort(
+          (a, b) => a.seq - b.seq || a.id.localeCompare(b.id),
+        )
+      : local;
   }
   private items(): PostView[] {
     const { group, state } = this.input;
@@ -119,32 +158,119 @@ export class ConversationController extends StateStore<ConversationState> {
       })),
     ];
   }
+  /** Hands the current rows, and whether the server holds more beyond them, to the history. */
+  private sync(): void {
+    const base = this.base();
+    const first = base[0];
+    const last = base[base.length - 1];
+    this.rows.set(
+      historyRows(this.items(), this.initial, this.runtime.time()),
+      {
+        before: !!first && first.seq > 1 && first.seq > this.floor,
+        after: (last?.seq ?? 0) < this.input.state.lastSeq,
+      },
+    );
+  }
+  private online(): boolean {
+    return this.runtime.can(contract.chat.post.page).ok;
+  }
+  private async fetch(
+    direction: "before" | "after" | "around" | "latest",
+    anchor?: number,
+  ): Promise<PageResult> {
+    const result = await page(
+      this.runtime,
+      this.input.group.id,
+      direction,
+      anchor,
+    );
+    result.posts.forEach((post) => this.fetched.set(post.id, post));
+    // Re-render now: the repository projection of these posts may come later.
+    this.patch({});
+    if (direction !== "after" && !result.hasBefore)
+      this.floor = Math.max(
+        this.floor,
+        result.posts[0]?.seq ?? (direction === "before" ? (anchor ?? 0) : 0),
+      );
+    this.sync();
+    return result;
+  }
+  /** The history reached the end of the loaded posts while the server has more. */
+  private async extend(direction: "before" | "after"): Promise<void> {
+    if (!this.online())
+      throw new AppError("E_OFFLINE", "这段历史没有保存在本机，联网后可加载");
+    const base = this.base();
+    await this.fetch(
+      direction,
+      direction === "before" ? base[0]?.seq : base[base.length - 1]?.seq,
+    );
+  }
+  /** Fetches what a seek lands on when it is not loaded yet. */
+  private async prepare(seek: Seek<HistoryKey>): Promise<void> {
+    if (!this.online()) return;
+    try {
+      await this.prepareOnline(seek);
+    } catch (error) {
+      // Connectivity can disappear while opening. Complete the seek from local rows;
+      // an uncached end supplies its offline reason when the scroller reaches it.
+      if (this.online()) throw error;
+    }
+  }
+  private async prepareOnline(seek: Seek<HistoryKey>): Promise<void> {
+    const base = this.base();
+    if ("edge" in seek) {
+      if (seek.edge !== "end") return;
+      await this.runtime.sync();
+      if ((base[base.length - 1]?.seq ?? 0) < this.input.state.lastSeq)
+        await this.fetch("latest");
+      return;
+    }
+    if (!("key" in seek)) return;
+    const key = seek.key;
+    if ("unreadAfter" in key) {
+      await this.runtime.sync();
+      if (
+        key.unreadAfter < this.input.state.lastSeq &&
+        !base.some((post) => post.seq === key.unreadAfter + 1)
+      )
+        await this.fetch("around", key.unreadAfter + 1);
+      return;
+    }
+    // A reply target outside the loaded posts: page back from the reply across gaps.
+    let anchor = key.before;
+    while (anchor > 1 && !this.base().some((post) => post.id === key.post)) {
+      const result = await this.fetch("before", anchor);
+      if (!result.hasBefore || result.first >= anchor || result.first === 0)
+        return;
+      anchor = result.first;
+    }
+  }
   update(input: ConversationInput): void {
     this.input = input;
-    const can = this.runtime.can(contract.chat.post.page).ok;
+    const can = this.online();
     if (can !== this.canRead) {
+      const was = this.canRead;
       this.canRead = can;
-      ++this.generation;
-      if (can) void this.initialize();
+      // Ends that failed offline may load now.
+      if (can && was === false) {
+        if (!this.base().length && input.state.lastSeq > 0)
+          // An empty offline opening has no failed edge or boundary id to retry.
+          void this.history.jump(
+            this.initial < input.state.lastSeq
+              ? { key: { unreadAfter: this.initial } }
+              : { edge: "end" },
+          );
+        else this.history.retry();
+      }
     }
-    const items = this.items();
-    if (!can && !this.initialized && items.length) {
-      this.initialized = true;
-      const first = items.find((item) => item.seq > this.initial);
-      this.viewport.scroll(
-        (first ?? items[items.length - 1]!).id,
-        first ? "start" : "end",
+    this.sync();
+    if (!this.started) {
+      this.started = true;
+      void this.history.start(
+        this.initial < input.state.lastSeq
+          ? { key: { unreadAfter: this.initial }, align: "start" }
+          : { edge: "end" },
       );
-    }
-    if (input.state.lastSeq !== this.lastSeq) {
-      this.lastSeq = input.state.lastSeq;
-      if (
-        this.initialized &&
-        can &&
-        this.lastSeq > 0 &&
-        !this.base().some((post) => post.seq === this.lastSeq)
-      )
-        void this.load("latest");
     }
     this.visibleRead();
     this.patch({});
@@ -153,71 +279,43 @@ export class ConversationController extends StateStore<ConversationState> {
     ++this.generation;
     ++this.textGeneration;
     this.canRead = undefined;
+    this.stops.forEach((stop) => stop());
+    this.history.dispose();
   };
-  private async initialize(): Promise<void> {
-    const generation = this.generation;
-    this.initialized = false;
-    this.patch({ loading: true });
-    try {
-      await this.runtime.sync();
-      if (generation !== this.generation) return;
-      const unread = this.initial < this.input.state.lastSeq;
-      const result = await page(
-        this.runtime,
-        this.input.group.id,
-        unread ? "around" : "latest",
-        unread ? this.initial + 1 : undefined,
-      );
-      if (generation !== this.generation) return;
-      if (unread && result.hasAfter)
-        await page(this.runtime, this.input.group.id, "latest");
-      if (generation !== this.generation) return;
-      const target =
-        result.posts.find((post) => post.seq > this.initial) ??
-        result.posts[result.posts.length - 1];
-      this.viewport.afterLayout(() => {
-        if (generation !== this.generation) return;
-        if (target) this.viewport.scroll(target.id, unread ? "start" : "end");
-        this.initialized = true;
-        this.visibleRead();
-      });
-    } catch (cause) {
-      if (generation === this.generation) this.patch({ error: message(cause) });
-    } finally {
-      if (generation === this.generation) this.patch({ loading: false });
-    }
-  }
   load = async (
     direction: "before" | "after" | "around" | "latest",
     anchor?: number,
-  ): Promise<string | undefined> => {
+  ): Promise<void> => {
     const generation = this.generation;
     this.patch({ loading: true, error: "" });
     try {
-      const result = await page(
-        this.runtime,
-        this.input.group.id,
-        direction,
-        anchor,
-      );
-      return generation === this.generation
-        ? result.posts[result.posts.length - 1]?.id
-        : undefined;
+      await this.fetch(direction, anchor);
     } catch (cause) {
       if (generation === this.generation) this.patch({ error: message(cause) });
-      return undefined;
     } finally {
       if (generation === this.generation) this.patch({ loading: false });
     }
   };
+  /** Marks fully visible posts read and tracks whether the reader left the end. */
   visibleRead = (): void => {
-    if (!this.initialized) return;
-    const facts = this.viewport.read();
-    if (!facts) return;
-    const highest = Math.max(this.state.read, ...facts.visibleSequences);
-    const awayFromBottom = facts.bottom > 48;
+    const view = this.history.getSnapshot();
+    if (view.status !== "ready") return;
+    const awayFromBottom = !view.atEnd;
     if (awayFromBottom !== this.state.awayFromBottom)
       this.patch({ awayFromBottom });
+    const height = this.history.geometry().viewport;
+    if (!height) return;
+    const visible = this.history
+      .visible()
+      .filter(
+        (row) =>
+          !row.item.post.failed &&
+          !row.item.post.pending &&
+          row.top >= -1 &&
+          row.bottom <= height + 1,
+      )
+      .map((row) => row.item.post.seq);
+    const highest = Math.max(this.state.read, ...visible);
     if (highest > this.state.read) {
       this.patch({ read: highest });
       void this.runtime
@@ -227,20 +325,6 @@ export class ConversationController extends StateStore<ConversationState> {
         })
         .catch((cause) => this.patch({ error: message(cause) }));
     }
-  };
-  boundary = (): void => {
-    this.visibleRead();
-    if (this.state.loading || !this.runtime.can(contract.chat.post.page).ok)
-      return;
-    const facts = this.viewport.read();
-    if (!facts) return;
-    const base = this.base(),
-      first = base[0],
-      last = base[base.length - 1];
-    if (facts.top < 80 && first && first.seq > 1)
-      void this.load("before", first.seq);
-    else if (facts.bottom < 80 && last && last.seq < this.input.state.lastSeq)
-      void this.load("after", last.seq);
   };
   view = async (post: ChatPost, edit: boolean): Promise<void> => {
     const generation = ++this.textGeneration;
@@ -262,35 +346,29 @@ export class ConversationController extends StateStore<ConversationState> {
     }
   };
   jump = async (id: string, before: number): Promise<void> => {
-    if (this.items().some((post) => post.id === id)) {
-      this.viewport.scroll(id, "center");
+    if (this.history.has(id)) {
+      await this.history.jump({ id, align: "center" });
       return;
     }
-    if (!this.runtime.can(contract.chat.post.page).ok) {
+    if (!this.online()) {
       this.patch({ error: "引用的消息离线未缓存，联网后可跳转查看" });
       return;
     }
     const generation = this.generation;
     this.patch({ loading: true, error: "" });
-    try {
-      const target = await loadReply(
-        this.runtime,
-        this.input.group.id,
-        id,
-        before,
-      );
-      if (generation !== this.generation) return;
-      if (target)
-        this.viewport.afterLayout(() => {
-          if (generation === this.generation)
-            this.viewport.scroll(id, "center");
-        });
-      else this.patch({ error: "引用的消息已不可用" });
-    } catch (cause) {
-      if (generation === this.generation) this.patch({ error: message(cause) });
-    } finally {
-      if (generation === this.generation) this.patch({ loading: false });
-    }
+    const result = await this.history.jump({
+      key: { post: id, before },
+      align: "center",
+    });
+    if (generation !== this.generation) return;
+    this.patch({
+      loading: false,
+      ...(result === "missing"
+        ? { error: "引用的消息已不可用" }
+        : result === "failed"
+          ? { error: message(this.history.getSnapshot().error) }
+          : {}),
+    });
   };
   private async action(run: () => Promise<unknown>): Promise<void> {
     try {
@@ -301,12 +379,7 @@ export class ConversationController extends StateStore<ConversationState> {
     }
   }
   newest = async (): Promise<void> => {
-    const generation = this.generation;
-    const last = await this.load("latest");
-    this.viewport.afterLayout(() => {
-      if (last && generation === this.generation)
-        this.viewport.scroll(last, "end");
-    });
+    await this.history.jump({ edge: "end" });
   };
   retry = (post: PostView): Promise<void> =>
     this.action(() => this.runtime.retry(post.failed!));
@@ -386,16 +459,15 @@ export class ConversationController extends StateStore<ConversationState> {
   };
   presentation() {
     const base = this.base(),
-      items = this.items(),
       { group, state } = this.input;
     return {
       ...this.state,
       group,
       state,
-      items,
+      history: this.history,
+      empty: !base.length && !this.items().length,
       first: base[0],
       last: base[base.length - 1],
-      initial: this.initial,
       unreadRemaining: Math.max(0, state.lastSeq - this.state.read) || "",
       deleteLabel: `消息：${this.state.deleting?.preview.slice(0, 32) || "图片或贴纸"}`,
       discardLabel: `丢弃消息：${this.state.discard?.preview.slice(0, 32)}`,
@@ -403,17 +475,6 @@ export class ConversationController extends StateStore<ConversationState> {
       can: this.runtime.can(contract.chat.post.page),
       retain: this.runtime.gate("offline"),
       cachedMembers: members(this.input.rows, group.id),
-      labels: items.map((post, index) => ({
-        date: dateLabel(post.created, this.runtime.time()),
-        separator:
-          index === 0 ||
-          chatDay(post.created) !== chatDay(items[index - 1]!.created),
-        grouped:
-          index > 0 &&
-          post.author === items[index - 1]!.author &&
-          post.created - items[index - 1]!.created <= 300000 &&
-          chatDay(post.created) === chatDay(items[index - 1]!.created),
-      })),
       load: this.load,
       view: this.view,
       jump: this.jump,

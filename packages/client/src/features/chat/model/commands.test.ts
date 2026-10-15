@@ -7,7 +7,6 @@ import {
   draftBody,
   fileBytes,
   fullBody,
-  loadReply,
   onlineCall,
   sendText,
   setState,
@@ -224,54 +223,7 @@ describe("chat commands and cache boundaries", () => {
   });
 });
 
-describe("windowed replies and cache revisions", () => {
-  it("finds a reply in a gap newer than the oldest cached page", async () => {
-    const { runtime, mock } = fixture();
-    mock.command
-      .mockResolvedValueOnce({
-        posts: [post({ id: "00000000000000000000000009", seq: 160 })],
-        first: 160,
-        last: 199,
-        latest: 500,
-        hasBefore: true,
-        hasAfter: true,
-      } as never)
-      .mockResolvedValueOnce({
-        posts: [post({ seq: 140 })],
-        first: 120,
-        last: 159,
-        latest: 500,
-        hasBefore: true,
-        hasAfter: true,
-      } as never);
-    expect((await loadReply(runtime, conversation, id, 200))?.seq).toBe(140);
-    expect(mock.command).toHaveBeenNthCalledWith(1, contract.chat.post.page, {
-      conversation,
-      direction: "before",
-      limit: 40,
-      anchor: 200,
-    });
-    expect(mock.command).toHaveBeenNthCalledWith(2, contract.chat.post.page, {
-      conversation,
-      direction: "before",
-      limit: 40,
-      anchor: 160,
-    });
-    expect(mock.loadRows).toHaveBeenCalledTimes(2);
-  });
-  it("stops at malformed/nonadvancing page boundaries", async () => {
-    const { runtime, mock } = fixture();
-    mock.command.mockResolvedValue({
-      posts: [],
-      first: 200,
-      last: 200,
-      latest: 500,
-      hasBefore: true,
-      hasAfter: true,
-    } as never);
-    expect(await loadReply(runtime, conversation, id, 200)).toBeUndefined();
-    expect(mock.command).toHaveBeenCalledTimes(1);
-  });
+describe("cache revisions", () => {
   it("distinguishes two edits with the same clock timestamp using row revisions", async () => {
     const { runtime, mock, local } = fixture();
     mock.fetchBody

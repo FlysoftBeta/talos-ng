@@ -8,7 +8,7 @@ node tools/e2e/run.mjs <feature ...> [--legacy]   # one or more features (build 
 ```
 
 Features run in this order: `identity`, `library`, `netbooks`, `media`, `chat`, `admin`,
-`ai`, `hardening`, `ops`, `offline`. Aliases: `learning` -> `identity`, `reader` ->
+`ai`, `hardening`, `virtual`, `ops`, `offline`. Aliases: `learning` -> `identity`, `reader` ->
 `library`, `update` -> `offline`. Every feature gets its own server (the real server CLI on
 a free localhost port with a temporary database and a copy of the production client, or the
 static gallery server) and a fresh browser, so no storage, ServiceWorker, emulation or
@@ -46,3 +46,8 @@ Screenshots (`{current,chrome70}-...png`) and the hardening measurements are a d
 artifact only: written under the git-ignored `.tmp/e2e/` (`TALOS_E2E_OUTPUT_DIR` to move
 it). Nothing is compared or tracked. Captures still assert there is no horizontal page
 overflow. On shared hosts point `TMPDIR` at a disk directory.
+
+The `virtual` bench checks id anchoring, asynchronous paging, per-frame size changes,
+wheel/touch scrolling, end following and viewport coverage, including the no-ResizeObserver
+fallback. Its native input reference is independent of scroller geometry. See
+`docs/impl/virtual-scroller.md` for the state-machine/model testing counterpart.

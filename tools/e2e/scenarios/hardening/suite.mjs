@@ -96,6 +96,13 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
       (value) => value?.charOffset > 0,
       "character position persisted",
     );
+    // Preserve the character's actual on-screen inset, including a partially read
+    // line. Assuming zero would snap every same-layout reopen to the next line.
+    const characterPosition = () =>
+      cdp.evaluate(
+        `(function(){var viewport=document.querySelector('[data-testid="reader.scroll"]'), element=viewport.querySelector('[data-reader-unit="${anchor.unit}"] [data-testid="reader.flow"]'), range=document.createRange();range.setStart(element.firstChild,${anchor.charOffset});range.setEnd(element.firstChild,${anchor.charOffset + 1});return range.getBoundingClientRect().top-viewport.getBoundingClientRect().top-viewport.clientTop})()`,
+      );
+    const initialInset = await characterPosition();
     await cdp.send("Emulation.setDeviceMetricsOverride", {
       width: 768,
       height: 1024,
@@ -108,9 +115,7 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
     await cdp.wait("!!document.querySelector('[data-testid=\"reader.flow\"]')");
     await frame(cdp);
     const reflow = await savedPosition();
-    const displacement = await cdp.evaluate(
-      `(function(){var viewport=document.querySelector('[data-testid="reader.scroll"]'), element=viewport.querySelector('[data-reader-unit="${anchor.unit}"] [data-testid="reader.flow"]'), range=document.createRange();range.setStart(element.firstChild,${anchor.charOffset});range.setEnd(element.firstChild,${anchor.charOffset + 1});return range.getBoundingClientRect().top-viewport.getBoundingClientRect().top})()`,
-    );
+    const displacement = (await characterPosition()) - initialInset;
     assert.ok(
       Math.abs(displacement) < 2,
       `character restore displacement ${displacement}px`,

@@ -1,0 +1,5 @@
+{
+  "extends": "../../tools/tsconfig/node.json",
+  "compilerOptions": { "lib": ["ES2018", "DOM", "DOM.Iterable"] },
+  "include": ["src/**/*.ts"]
+}

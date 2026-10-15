@@ -252,6 +252,42 @@ describe("ConversationController", () => {
     controller.detach();
   });
 
+  it("loads earlier transcript messages at the top without moving the visible message", async () => {
+    const row = (seq: number) =>
+      message({ id: id.slice(0, -2) + String(seq).padStart(2, "0"), seq });
+    const recent = Array.from({ length: 30 }, (_, i) => row(i + 11));
+    const earlier = Array.from({ length: 10 }, (_, i) => row(i + 1));
+    const { port, controller } = setup([conversation(), credit(), ...recent]);
+    port.handlers.set("ai.message.page", (args) => {
+      if ((args as { before?: number }).before === undefined)
+        return { messages: [], more: true };
+      port.setRows([conversation(), credit(), ...earlier, ...recent]);
+      return { messages: [], more: false };
+    });
+    controller.attach();
+    await flush();
+    const scroller = controller.transcript;
+    const layout = () =>
+      scroller.sense({
+        viewport: 200,
+        sizes: scroller.ids().map((key) => [key, 100] as const),
+      });
+    layout();
+    expect(scroller.getSnapshot().atEnd).toBe(true);
+    scroller.scrollBy(-10000);
+    const before = scroller.position();
+    await flush();
+    layout();
+    expect(port.calls).toContainEqual({
+      method: "ai.message.page",
+      args: { conversation: id, before: 11, limit: 10 },
+    });
+    expect(scroller.ids()).toHaveLength(40);
+    expect(scroller.position()).toEqual(before);
+    expect(scroller.getSnapshot().before.more).toBe(false);
+    controller.detach();
+  });
+
   it("advances the read cursor once per change and not while a run is active", async () => {
     const { port, controller } = setup([
       conversation({ lastSeq: 4, readSeq: 1 }),

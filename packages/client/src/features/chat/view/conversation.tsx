@@ -1,4 +1,4 @@
-import type { ReactElement, RefObject, ComponentType } from "react";
+import type { ReactElement, ComponentType } from "react";
 import { DateSeparator } from "./date-separator.tsx";
 import { Button, IconButton } from "../../../ui/actions/index.ts";
 import { ConfirmDialog, Dialog, Sheet } from "../../../ui/overlays/index.ts";
@@ -15,8 +15,7 @@ import {
   GroupRow,
   PaneHeader,
 } from "../../../ui/layout/index.ts";
-import { VirtualList } from "../../../ui/virtual/index.ts";
-import type { VirtualListHandle } from "../../../ui/virtual/index.ts";
+import { VirtualScroller } from "../../../ui/virtual/index.ts";
 import type { ConversationController } from "../model/conversation.ts";
 import type { ComposerInput } from "../model/composer.ts";
 import type { BrowserInput, MembersInput } from "../model/community.ts";
@@ -29,29 +28,23 @@ type Slots = {
   OriginalViewer: ComponentType<OriginalViewerProps>;
   PostCard: ComponentType<PostCardProps>;
 };
-type Props = ReturnType<ConversationController["presentation"]> &
-  Slots & {
-    height: number;
-    list: RefObject<VirtualListHandle | null>;
-    viewport: RefObject<HTMLDivElement | null>;
-    boundary(): void;
-  };
+type Props = ReturnType<ConversationController["presentation"]> & Slots;
 export function ConversationView({
   group,
   state,
-  items,
+  history,
+  empty,
   first,
   last,
-  initial,
   unreadRemaining,
   deleteLabel,
   discardLabel,
   can,
   retain,
   cachedMembers,
-  labels,
   error,
   loading,
+  seeking,
   reply,
   settings,
   showMembers,
@@ -83,10 +76,6 @@ export function ConversationView({
   setOriginal,
   setTextView,
   setSelectedPost,
-  height,
-  list,
-  viewport,
-  boundary,
   Composer,
   GroupBrowser,
   MembersSheet,
@@ -153,36 +142,49 @@ export function ConversationView({
           </InlineNotice>
         </div>
       )}
-      <div
-        className="chat-history"
-        data-testid="chat.history"
-        ref={viewport}
-        onScrollCapture={boundary}
-        onLoadCapture={() => list.current?.measure()}
-      >
-        {loading && items.length > 0 && (
+      <div className="chat-history" data-testid="chat.history">
+        {(loading || seeking) && !empty && (
           <div className="chat-loader" data-testid="chat.loader" role="status">
             <Icon name="loading" size={16} spin />
             <span>加载中</span>
           </div>
         )}
-        {items.length ? (
-          <VirtualList
-            ref={list}
-            items={items}
-            getKey={(post) => post.id}
-            height={height}
-            estimatedItemHeight={44}
-            stickToBottom
-            ariaLabel="对话消息"
+        {!empty ? (
+          <VirtualScroller
+            scroller={history}
+            label="对话消息"
             className="chat-stream"
-            renderItem={(post, index) => (
+            renderEdge={(direction, edge) => (
+              <div className="chat-edge" data-testid="chat.history.edge">
+                {edge.state === "loading" ? (
+                  <span className="chat-edge-status" role="status">
+                    <Icon name="loading" size={16} spin />
+                    {direction === "before"
+                      ? "加载更早的消息"
+                      : "加载更新的消息"}
+                  </span>
+                ) : edge.state === "failed" ? (
+                  <InlineNotice
+                    tone={can.ok ? "failed" : "pending"}
+                    action={
+                      can.ok ? (
+                        <Button size="small" onClick={() => history.retry()}>
+                          重试
+                        </Button>
+                      ) : undefined
+                    }
+                  >
+                    {edge.error instanceof Error
+                      ? edge.error.message
+                      : "这段历史暂时无法加载"}
+                  </InlineNotice>
+                ) : null}
+              </div>
+            )}
+            renderItem={(row) => (
               <>
-                {index === 0 && <div className="chat-stream-top" />}
-                {labels[index]!.separator && (
-                  <DateSeparator label={labels[index]!.date} />
-                )}
-                {index > 0 && post.seq > items[index - 1]!.seq + 1 && (
+                {row.separator && <DateSeparator label={row.date} />}
+                {row.gap && (
                   <div className="chat-gap">
                     <InlineNotice
                       tone={can.ok ? "info" : "pending"}
@@ -191,7 +193,7 @@ export function ConversationView({
                           <Button
                             size="small"
                             onClick={() =>
-                              void load("after", items[index - 1]!.seq)
+                              void load("after", row.gap!.from - 1)
                             }
                           >
                             加载这段消息
@@ -199,34 +201,34 @@ export function ConversationView({
                         ) : undefined
                       }
                     >
-                      缺少第 {items[index - 1]!.seq + 1}–{post.seq - 1} 条消息
+                      缺少第 {row.gap.from}–{row.gap.to} 条消息
                       {can.ok ? "" : "，这段历史没有保存在本机"}
                     </InlineNotice>
                   </div>
                 )}
-                {post.seq === initial + 1 && initial > 0 && (
+                {row.unread && (
                   <div className="chat-unread-divider">
                     <span>以下为未读消息</span>
                   </div>
                 )}
                 <PostCard
-                  post={post}
-                  grouped={labels[index]!.grouped}
-                  selected={selectedPost === post.id}
+                  post={row.post}
+                  grouped={row.grouped}
+                  selected={selectedPost === row.post.id}
                   onSelect={() =>
                     setSelectedPost(
-                      selectedPost === post.id ? undefined : post.id,
+                      selectedPost === row.post.id ? undefined : row.post.id,
                     )
                   }
-                  reply={items.find((item) => item.id === post.replyTo)}
-                  onReply={() => setReply(post)}
-                  onJump={() => void jump(post.replyTo!, post.seq)}
-                  onFull={() => void view(post, false)}
-                  onEdit={() => void view(post, true)}
-                  onDelete={() => setDeleting(post)}
-                  onImage={() => setOriginal(post)}
-                  onRetry={() => void retry(post)}
-                  onDiscard={() => setDiscard(post)}
+                  reply={row.reply}
+                  onReply={() => setReply(row.post)}
+                  onJump={() => void jump(row.post.replyTo!, row.post.seq)}
+                  onFull={() => void view(row.post, false)}
+                  onEdit={() => void view(row.post, true)}
+                  onDelete={() => setDeleting(row.post)}
+                  onImage={() => setOriginal(row.post)}
+                  onRetry={() => void retry(row.post)}
+                  onDiscard={() => setDiscard(row.post)}
                 />
               </>
             )}
@@ -234,7 +236,7 @@ export function ConversationView({
         ) : (
           <StatePanel
             state={
-              loading
+              loading || seeking
                 ? "loading"
                 : !can.ok && state.lastSeq > 0
                   ? "offline"

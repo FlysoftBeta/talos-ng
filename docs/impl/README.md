@@ -9,6 +9,7 @@ How Talos II is built. Product behaviour is in `docs/product/README.md`, process
 | [structure.md](structure.md) | repository layout, import rules, SQL ownership, model/connect/view contract |
 | [link.md](link.md) | link transport, API contract, error codes, HTTP gateway, operation replay |
 | [sync.md](sync.md) | scopes and revisions, windows, conflict rules, outbox, client sync engine |
+| [virtual-scroller.md](virtual-scroller.md) | id-based sources, anchoring, windows, DOM measurement and browser verification |
 | [client-store.md](client-store.md) | IndexedDB engine, FileStore, client database, retention and eviction |
 | [objects.md](objects.md) | object store, ledger and GC, uploads, bulk ingestion |
 | [documents.md](documents.md) | pack format, converters, pdfrender, delivery, viewer |

@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 import type { AiMessage } from "@talos/contract";
+import type { Scroller } from "@talos/virtual";
+import { VirtualScroller } from "../../../ui/virtual/index.ts";
 import { Button, IconButton } from "../../../ui/actions/index.ts";
 import { Field, FileButton, SharedComposer } from "../../../ui/inputs/index.ts";
 import { PaneHeader, Stack } from "../../../ui/layout/index.ts";
@@ -8,7 +10,6 @@ import { InlineNotice, Mark, useToast } from "../../../ui/feedback/index.ts";
 import { Sheet, Menu } from "../../../ui/overlays/index.ts";
 import {
   imageName,
-  isFollowingEnd,
   messageInFlight,
   messageStatusLabel,
   tagsText,
@@ -21,7 +22,6 @@ export interface ConversationActions {
   onText: (value: string) => void;
   onSend: () => void;
   onStop: () => void;
-  onLoadEarlier: () => void;
   onFork: (message: string) => void;
   onAddImage: (file: File | undefined) => void;
   onRemoveImage: (index: number) => void;
@@ -29,11 +29,14 @@ export interface ConversationActions {
 }
 export function ConversationView({
   state,
+  transcript,
   actions,
   messageBody,
   workspace,
 }: {
   state: ConversationState;
+  /** Scrolls the messages; follows the end while the reader is there. */
+  transcript: Scroller<AiMessage>;
   actions: ConversationActions;
   /** Connected renderer for one message body (loads truncated text). */
   messageBody: (message: AiMessage) => ReactNode;
@@ -45,13 +48,7 @@ export function ConversationView({
   const [showWorkspace, setShowWorkspace] = useState(false),
     [editing, setEditing] = useState(false),
     [title, setTitle] = useState(c?.title ?? ""),
-    [tags, setTags] = useState(tagsText(c?.tags ?? [])),
-    scroll = useRef<HTMLDivElement>(null),
-    pinned = useRef(true);
-  useEffect(() => {
-    if (pinned.current && scroll.current)
-      scroll.current.scrollTop = scroll.current.scrollHeight;
-  }, [state.messages]);
+    [tags, setTags] = useState(tagsText(c?.tags ?? []));
   return (
     <div className="ai-conversation" data-testid="ai.conversation">
       <PaneHeader
@@ -82,97 +79,120 @@ export function ConversationView({
           </>
         }
       />
-      <div
-        ref={scroll}
-        className="ai-messages"
-        onScroll={() => {
-          const el = scroll.current;
-          if (el) pinned.current = isFollowingEnd(el);
-        }}
-      >
-        {state.more && (
-          <Button disabled={!state.send.ok} onClick={actions.onLoadEarlier}>
-            加载更早消息
-          </Button>
-        )}
-        {!state.messages.length && (
+      {state.messages.length ? (
+        <VirtualScroller
+          scroller={transcript}
+          className="ai-messages ai-transcript"
+          label="对话消息"
+          renderEdge={(direction, edge) =>
+            direction === "before" ? (
+              <div className="ai-transcript-edge">
+                {edge.state === "loading" ? (
+                  <span className="ai-transcript-status" role="status">
+                    <Icon name="loading" size={16} spin />
+                    加载更早消息
+                  </span>
+                ) : edge.state === "failed" ? (
+                  <InlineNotice
+                    tone="failed"
+                    action={
+                      <Button
+                        size="small"
+                        disabled={!state.send.ok}
+                        onClick={() => transcript.retry()}
+                      >
+                        重试
+                      </Button>
+                    }
+                  >
+                    {state.send.ok
+                      ? "更早的消息暂时无法加载"
+                      : state.send.reason}
+                  </InlineNotice>
+                ) : null}
+              </div>
+            ) : (
+              <div className="ai-transcript-edge" />
+            )
+          }
+          renderItem={(m) => (
+            <div className="ai-column">
+              <article
+                className={`ai-message ai-${m.role}`}
+                data-testid="ai.message"
+                data-role={m.role}
+                data-message-id={m.id}
+                tabIndex={0}
+              >
+                {m.role === "assistant" && (
+                  <span className="ai-answer-mark">
+                    <Icon name="ai" size={18} />
+                  </span>
+                )}
+                <div className="ai-message-body">{messageBody(m)}</div>
+                {messageInFlight(m.status) && (
+                  <span className="ai-caret" aria-label="正在生成" />
+                )}
+                {m.status === "failed" ? (
+                  <Mark state="failed" label="生成失败" />
+                ) : !messageInFlight(m.status) && m.status !== "done" ? (
+                  <small className="ai-message-status">
+                    {messageStatusLabel(m.status)}
+                  </small>
+                ) : null}
+                {m.images.map((i) => (
+                  <small key={i.path}>图片：{imageName(i.path)}</small>
+                ))}
+                {m.error && <p role="alert">{m.error}</p>}
+                {!messageInFlight(m.status) && (
+                  <div className="ai-message-actions">
+                    <IconButton
+                      label="从此创建分支"
+                      icon="fork"
+                      disabledReason={
+                        !state.send.ok ? state.send.reason : undefined
+                      }
+                      onClick={() => actions.onFork(m.id)}
+                    />
+                    <IconButton
+                      label="复制消息"
+                      icon="copy"
+                      onClick={() => {
+                        const article = document.querySelector<HTMLElement>(
+                          `[data-message-id="${m.id}"] .ai-message-body`,
+                        );
+                        if (!article) return;
+                        const selection = window.getSelection();
+                        const range = document.createRange();
+                        range.selectNodeContents(article);
+                        selection?.removeAllRanges();
+                        selection?.addRange(range);
+                        try {
+                          toast(
+                            document.execCommand("copy")
+                              ? "已复制"
+                              : "请长按选择文字复制",
+                          );
+                        } catch {
+                          toast("请长按选择文字复制");
+                        }
+                        selection?.removeAllRanges();
+                      }}
+                    />
+                  </div>
+                )}
+              </article>
+            </div>
+          )}
+        />
+      ) : (
+        <div className="ai-messages">
           <div className="ai-greeting">
             <Icon name="ai" size={32} />
             <h2>有什么可以帮你？</h2>
           </div>
-        )}
-        <div className="ai-column">
-          {state.messages.map((m) => (
-            <article
-              className={`ai-message ai-${m.role}`}
-              key={m.id}
-              data-testid="ai.message"
-              data-role={m.role}
-              data-message-id={m.id}
-              tabIndex={0}
-            >
-              {m.role === "assistant" && (
-                <span className="ai-answer-mark">
-                  <Icon name="ai" size={18} />
-                </span>
-              )}
-              <div className="ai-message-body">{messageBody(m)}</div>
-              {messageInFlight(m.status) && (
-                <span className="ai-caret" aria-label="正在生成" />
-              )}
-              {m.status === "failed" ? (
-                <Mark state="failed" label="生成失败" />
-              ) : !messageInFlight(m.status) && m.status !== "done" ? (
-                <small className="ai-message-status">
-                  {messageStatusLabel(m.status)}
-                </small>
-              ) : null}
-              {m.images.map((i) => (
-                <small key={i.path}>图片：{imageName(i.path)}</small>
-              ))}
-              {m.error && <p role="alert">{m.error}</p>}
-              {!messageInFlight(m.status) && (
-                <div className="ai-message-actions">
-                  <IconButton
-                    label="从此创建分支"
-                    icon="fork"
-                    disabledReason={
-                      !state.send.ok ? state.send.reason : undefined
-                    }
-                    onClick={() => actions.onFork(m.id)}
-                  />
-                  <IconButton
-                    label="复制消息"
-                    icon="copy"
-                    onClick={() => {
-                      const article =
-                        scroll.current?.querySelector<HTMLElement>(
-                          `[data-message-id="${m.id}"] .ai-message-body`,
-                        );
-                      if (!article) return;
-                      const selection = window.getSelection();
-                      const range = document.createRange();
-                      range.selectNodeContents(article);
-                      selection?.removeAllRanges();
-                      selection?.addRange(range);
-                      try {
-                        toast(
-                          document.execCommand("copy")
-                            ? "已复制"
-                            : "请长按选择文字复制",
-                        );
-                      } catch {
-                        toast("请长按选择文字复制");
-                      }
-                      selection?.removeAllRanges();
-                    }}
-                  />
-                </div>
-              )}
-            </article>
-          ))}
         </div>
-      </div>
+      )}
       <div className="ai-compose" data-testid="ai.composer">
         {state.error && (
           <InlineNotice tone="failed">{state.error}</InlineNotice>

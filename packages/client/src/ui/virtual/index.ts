@@ -1,9 +1,4 @@
-export { VirtualListCore } from "./core";
-export type {
-  Alignment,
-  VirtualKey,
-  VirtualRange,
-  VirtualListOptions,
-} from "./core";
-export { VirtualList } from "./VirtualList";
-export type { VirtualListHandle, VirtualListProps } from "./VirtualList";
+export { VirtualScroller } from "./virtual-scroller.tsx";
+export type { VirtualScrollerProps } from "./virtual-scroller.tsx";
+export { useArrayScroller } from "./use-array-scroller.ts";
+export type { ArrayScrollerOptions } from "./use-array-scroller.ts";

@@ -34,7 +34,7 @@ redesign (section 11); those are part of the contract as well.
 
 | hook | element | used by |
 |---|---|---|
-| `ui.virtual-list` | scroll container of a virtualised list (chat history, data-grid body, gallery list) | chat, admin, hardening, offline |
+| `ui.virtual-list` | scroll container of a virtualised list (chat history, data-grid body, gallery list) | chat, admin, hardening, offline, virtual |
 | `ui.row` | one list row | chat, library, netbooks, media |
 | `ui.row.action` | the row's primary action button | chat |
 | `ui.row.title` | row title text | chat, library, netbooks, media |
@@ -167,4 +167,9 @@ Scenarios locate these by role and name; the names are product text.
 - Landmarks used for readiness: `aria-label=管理栏目` (admin sections), `迷你播放器`.
 
 Other data attributes read by scenarios: `data-theme` on the app root (`light` / `dark`),
-`data-virtual-index` on virtual-list items, `data-build` (test fixture only).
+`data-virtual-id` on virtual-scroller items (the source id; gallery ids are row numbers), `data-build` (test fixture only).
+
+The `dev.virtual-bench` gallery uses `data-bench-item` for its stable item id and
+`data-virtual-edge` for leading/trailing slots. The `virtual` scenario reads DOM coordinates
+relative to the inner border edge. AI scenarios identify replies with `data-message-id`;
+mounted `ai.message` counts do not represent transcript history length.
