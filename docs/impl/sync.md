@@ -52,7 +52,12 @@ Scope providers (`match, access, list, select`) and entity serialisers register 
 Posts (and AI messages) are too large to mirror. The client keeps contiguous **intervals** by
 sequence number (`IntervalSet`: closed, canonical, merged on overlap and adjacency). Deltas
 cover the whole scope; the client applies rows inside held windows and consecutive
-extensions of the greatest window, and ignores rows in gaps. If more than a threshold of
+extensions of any held window, and ignores rows in gaps. Extending every window (not only
+the newest) matters when a history page creates a newer window while a pull is buffered:
+the pulled run between the two windows bridges them, because the advanced cursor never
+delivers it again. A conversation fetches a gap between two loaded posts as soon as it is
+visible online (once per gap; the manual action remains after a failure), which repairs
+holes left by deltas that arrived before a page certified the window below them. If more than a threshold of
 changes accumulated, the server answers `reset` for that type and the client keeps only what
 it re-fetches through explicit page calls (`mergePage` certifies a fetched range; an empty
 complete page certifies absence). Windowed rows are never seeded by deltas into an empty

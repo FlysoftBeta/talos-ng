@@ -759,7 +759,7 @@ describe("window page admission", () => {
     deleted: false,
     data: { seq },
   });
-  it("persists disjoint pages, extends the newest window, and ignores uncached gap edits", async () => {
+  it("persists disjoint pages, extends every window, and ignores uncached gap edits", async () => {
     const s = await fixture(windowModules);
     await s.engine.delta(response([], 1));
     await s.engine.loadRows(scope, [post(1), post(2), post(10)]);
@@ -771,18 +771,18 @@ describe("window page admission", () => {
         .getSnapshot()
         .rows.map((r) => r.id)
         .sort(),
-    ).toEqual(["1", "10", "11", "2"]);
+    ).toEqual(["1", "10", "11", "2", "3"]);
     expect(
       (await s.db.table<StoredScope, string>("scopes").get(scope))?.windows,
     ).toEqual({
       post: [
-        [1, 2],
+        [1, 3],
         [10, 11],
       ],
     });
     const restarted = s.make();
     await restarted.hydrate();
-    expect(restarted.getSnapshot().rows).toHaveLength(4);
+    expect(restarted.getSnapshot().rows).toHaveLength(5);
   });
   it("resets window intervals and prevents fetched pages from restoring revoked scopes", async () => {
     const s = await fixture(windowModules);

@@ -127,7 +127,7 @@ export function planApply(
       resets.has(type) ? [] : (own(state.windows, type) ?? []),
     );
     // Rev order is unrelated to sequence order; sort once so a whole contiguous
-    // suffix is accepted even when its rows arrived on different pull pages.
+    // run is accepted even when its rows arrived on different pull pages.
     const sequenced = rows
       .map((row) => {
         const seq = config.seqOf(row);
@@ -136,8 +136,12 @@ export function planApply(
       })
       .sort((a, b) => a.seq - b.seq || a.row.rev - b.row.rev);
     for (const { row, seq } of sequenced) {
-      const head = windows.head();
-      if (head && seq === head[1] + 1) windows = windows.add(seq);
+      // Any held window grows by consecutive rows, not only the newest one. A
+      // history page fetched while a pull was buffered may have created a newer
+      // window; the pull's run that bridges the gap below it must not be dropped,
+      // because the advanced cursor never delivers those rows again.
+      if (!windows.contains(seq) && windows.contains(seq - 1))
+        windows = windows.add(seq);
       if (windows.contains(seq)) ops.push(rowOperation(row));
     }
     ops.push({ kind: "setWindow", type, intervals: windows.toJSON() });
