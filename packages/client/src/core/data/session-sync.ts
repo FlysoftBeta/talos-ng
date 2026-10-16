@@ -82,24 +82,42 @@ export class SessionSyncController {
       },
       now: this.ports.now,
       onGone: async (scopes) => {
+        const generation = this.ports.generation;
+        const db = this.ports.db!;
+        const files = this.ports.files!;
+        const current = (): void => {
+          if (
+            this.ports.engine !== engine ||
+            this.ports.closed ||
+            generation !== this.ports.generation
+          )
+            throw new AppError("E_CANCELLED", "旧会话清理已取消");
+        };
         for (const scope of scopes) {
+          current();
           const prefix = `feature:${session.user.id}:${scope}:`;
-          await this.ports.db!.table("kv").deleteRange({
-            lower: prefix,
-            upper: prefix + "\uffff",
-          });
-          const owners = await this.ports.files!.listByOwnerPrefix(
+          await db
+            .table("kv")
+            .deleteRange({ lower: prefix, upper: prefix + "\uffff" });
+          current();
+          const owners = await files.listByOwnerPrefix(
             `${session.user.id}:${scope}:`,
           );
+          current();
           // Retire owners written before media cache entries used collection scopes.
-          if (scope.startsWith("coll:"))
+          if (scope.startsWith("coll:")) {
             owners.push(
-              ...(await this.ports.files!.listByOwnerPrefix(
+              ...(await files.listByOwnerPrefix(
                 `${session.user.id}:media:${scope.slice(5)}:`,
               )),
             );
-          for (const owner of new Set(owners.map((row) => row.owner)))
-            await this.ports.files!.releaseOwner(owner);
+            current();
+          }
+          for (const owner of new Set(owners.map((row) => row.owner))) {
+            current();
+            await files.releaseOwner(owner);
+          }
+          current();
           await this.ports.collectFiles();
         }
       },

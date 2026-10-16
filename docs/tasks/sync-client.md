@@ -51,3 +51,17 @@ individual frames rather than total synchronized data. Other modules retain cons
 module-wide barriers until their own dependency-safe object keys are supplied. The parent
 owns combined contract/client integration, full application gates, and pushing. Native
 Chrome 70/browser e2e and full package gates were not run in this worktree.
+
+## Follow-up: durable revoked-scope cleanup
+
+Scope purge now atomically merges a per-account cleanup marker into existing IndexedDB kv
+storage. Every successful apply and hydration drains pending cleanup, removing each marker
+only after its idempotent callback succeeds in the current generation. A failed callback
+survives restart and a later pull that no longer reports gone. Another account never drains
+these markers. A regranted scope cancels its obsolete cleanup marker before admitting fresh
+rows; session callbacks check account-engine identity and generation between storage steps.
+
+A scope revoked then returned by a later page in the same chain is now purged and admitted
+atomically with fresh cursors/windows, rather than silently skipped. Four regression tests
+cover cleanup failure/retry, generation/account restart, regrant cancellation and paginated
+regrant. No database schema change or migration is needed.

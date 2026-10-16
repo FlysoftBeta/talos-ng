@@ -69,7 +69,10 @@ afterEach(() => {
   engines.splice(0).forEach((engine) => engine.close());
   connections.splice(0).forEach((db) => db.close());
 });
-async function fixture(registry = modules) {
+async function fixture(
+  registry = modules,
+  onGone?: (scopes: readonly string[]) => Promise<void>,
+) {
   const indexedDB = new IDBFactory();
   const db = await openAppDb({
     name: "engine",
@@ -100,6 +103,7 @@ async function fixture(registry = modules) {
       db,
       user,
       modules: registry,
+      onGone,
       call,
       now: () => now,
       timers: {
@@ -1031,4 +1035,96 @@ it("pauses persistent version rejections until a new connection rather than retr
   expect(f.engine.getSnapshot().outbox[0]?.state).toBe("pending");
   expect(f.timers.size).toBe(0);
   expect(f.calls.filter((call) => call.name !== "sync.pull")).toHaveLength(1);
+});
+
+it("durably retries failed scope cleanup on a later pull even when the server no longer reports gone", async () => {
+  let attempts = 0;
+  const f = await fixture(modules, async (scopes) => {
+    expect(scopes).toEqual([scope]);
+    if (++attempts === 1) throw new Error("cleanup unavailable");
+  });
+  await f.engine.delta(response([row("private", 1)], 1));
+  await expect(
+    f.engine.delta({ scopes: {}, gone: [scope], added: [] }),
+  ).rejects.toThrow("cleanup unavailable");
+  expect(await f.db.table("rows").range()).toEqual([]);
+  expect(await f.db.table("kv").get("cleanupScopes:alice")).toEqual([scope]);
+  f.handle(async () => empty());
+  await f.engine.pull();
+  expect(attempts).toBe(2);
+  expect(await f.db.table("kv").get("cleanupScopes:alice")).toEqual([]);
+});
+
+it("keeps an old generation's cleanup marker and resumes it only for the owning account after restart", async () => {
+  const started = deferred<void>();
+  const finish = deferred<void>();
+  let attempts = 0;
+  const f = await fixture(modules, async () => {
+    if (++attempts === 1) {
+      started.resolve();
+      await finish.promise;
+    }
+  });
+  await f.engine.delta(response([row("private", 1)], 1));
+  const removing = f.engine.delta({ scopes: {}, gone: [scope], added: [] });
+  await started.promise;
+  f.engine.disconnect();
+  finish.resolve();
+  await removing;
+  expect(await f.db.table("kv").get("cleanupScopes:alice")).toEqual([scope]);
+  await f.make("bob").hydrate();
+  expect(attempts).toBe(1);
+  await f.make("alice").hydrate();
+  expect(attempts).toBe(2);
+  expect(await f.db.table("kv").get("cleanupScopes:alice")).toEqual([]);
+});
+
+it("cancels stale cleanup when a later authoritative pull regrants the scope", async () => {
+  let attempts = 0;
+  const f = await fixture(modules, async () => {
+    attempts++;
+    throw new Error("cleanup unavailable");
+  });
+  await f.engine.delta(response([row("old", 1)], 1));
+  await expect(
+    f.engine.delta({ scopes: {}, gone: [scope], added: [] }),
+  ).rejects.toThrow("cleanup unavailable");
+  f.handle(async () => response([row("new", 2)], 2));
+  await f.engine.pull();
+  expect(attempts).toBe(1);
+  expect(f.engine.getSnapshot().rows.map((row) => row.id)).toEqual(["new"]);
+  expect(await f.db.table("kv").get("cleanupScopes:alice")).toEqual([]);
+});
+
+it("applies a fresh scope grant after an earlier page revoked it in the same chain", async () => {
+  let cleanups = 0;
+  const f = await fixture(modules, async () => {
+    cleanups++;
+  });
+  await f.engine.delta(response([row("obsolete", 9)], 9));
+  let page = 0;
+  f.handle(async () =>
+    ++page === 1
+      ? {
+          scopes: { sys: { rows: [], cursor: 1, more: true } },
+          gone: [scope],
+          added: [],
+        }
+      : {
+          scopes: {
+            [scope]: { rows: [row("fresh", 2)], cursor: 10, more: false },
+            sys: { rows: [], cursor: 10, more: false },
+          },
+          gone: [],
+          added: [scope],
+        },
+  );
+  await f.engine.pull();
+  expect(f.engine.getSnapshot().rows.map((row) => row.id)).toEqual(["fresh"]);
+  expect(f.engine.getSnapshot().scopes).toContain(scope);
+  expect(
+    (await f.db.table<StoredScope, string>("scopes").get(scope))?.cursor,
+  ).toBe(10);
+  expect(cleanups).toBe(0);
+  expect(await f.db.table("kv").get("cleanupScopes:alice")).toEqual([]);
 });

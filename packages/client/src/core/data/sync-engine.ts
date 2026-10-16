@@ -94,7 +94,11 @@ export class SyncEngine {
     this.publish({ phase });
   }
   async hydrate(): Promise<void> {
+    const generation = this.generation;
     await this.change({ type: "connectionLost" });
+    await this.writes
+      .run(() => this.drainGone(generation))
+      .catch((error: unknown) => this.options.onError?.(error));
   }
   async refreshLocal(): Promise<void> {
     await this.refresh();
@@ -397,10 +401,11 @@ export class SyncEngine {
           scopes.range().then((saved) =>
             tx
               .table<readonly string[], string>("kv")
-              .get(`scopes:${user}`)
-              .then((allowed) => {
+              .getMany([`scopes:${user}`, `cleanupScopes:${user}`])
+              .then(([allowed, pendingCleanup]) => {
                 if (generation !== this.generation) return;
                 const admitted = new Set(allowed ?? []);
+                const cleanup = new Set(pendingCleanup ?? []);
                 const key = (
                   row: Pick<StoredRow, "scope" | "type" | "id">,
                 ): string => JSON.stringify([row.scope, row.type, row.id]);
@@ -410,34 +415,41 @@ export class SyncEngine {
                 );
                 for (const scope of gone) {
                   admitted.delete(scope);
+                  cleanup.add(scope);
                   scopes.delete(scope);
+                  cursors.delete(scope);
                   for (const row of existing)
-                    if (row.scope === scope)
+                    if (row.scope === scope) {
                       rows.delete([scope, row.type, row.id]);
+                      current.delete(key(row));
+                    }
                 }
                 for (const [scope, chain] of pages) {
                   if (
-                    gone.includes(scope) ||
                     (this.revocations.get(scope) ?? 0) !==
-                      (revocations.get(scope) ?? 0)
+                    (revocations.get(scope) ?? 0)
                   )
                     continue;
                   admitted.add(scope);
+                  // A later page may legitimately regrant a scope removed earlier in this chain.
+                  // Its fresh data must not inherit the removed scope's windows or cleanup job.
+                  cleanup.delete(scope);
+                  const savedScope = gone.includes(scope)
+                    ? undefined
+                    : saved.find((item) => item.scope === scope);
                   const cursor = cursors.get(scope) ?? 0;
                   // Delayed pushes must not regress a completed pull or replay stale resets.
                   if (chain[chain.length - 1]!.cursor < cursor) continue;
                   const operations = planApply(
                     {
                       cursor,
-                      windows:
-                        saved.find((item) => item.scope === scope)?.windows ??
-                        {},
+                      windows: savedScope?.windows ?? {},
                     },
                     chain,
                     { windowed: this.options.modules.windowed },
                   );
                   const windows: Record<string, IntervalSetJSON> = {
-                    ...saved.find((item) => item.scope === scope)?.windows,
+                    ...savedScope?.windows,
                   };
                   for (const operation of operations) {
                     if (operation.kind === "dropType") {
@@ -501,6 +513,10 @@ export class SyncEngine {
                   }
                 }
                 tx.table<readonly string[], string>("kv").put(
+                  [...cleanup],
+                  `cleanupScopes:${user}`,
+                );
+                tx.table<readonly string[], string>("kv").put(
                   [...admitted],
                   `scopes:${user}`,
                 );
@@ -512,8 +528,33 @@ export class SyncEngine {
         );
       });
       await this.refresh();
-      if (gone.length) await this.options.onGone?.(gone);
+      await this.drainGone(generation);
     });
+  }
+  /** Called while holding the write gate; cleanup is idempotent and markers survive failure. */
+  private async drainGone(generation: number): Promise<void> {
+    if (generation !== this.generation) return;
+    const { db, user } = this.options;
+    const key = `cleanupScopes:${user}`;
+    const [pending, admitted] = await db
+      .table<readonly string[], string>("kv")
+      .getMany([key, `scopes:${user}`]);
+    for (const scope of pending ?? []) {
+      if (generation !== this.generation) return;
+      if (!(admitted ?? []).includes(scope))
+        await this.options.onGone?.([scope]);
+      if (generation !== this.generation) return;
+      await db.tx(["kv"], "readwrite", (tx) => {
+        const table = tx.table<readonly string[], string>("kv");
+        return table.get(key).then((latest) => {
+          if (generation !== this.generation) return;
+          return table.put(
+            (latest ?? []).filter((item) => item !== scope),
+            key,
+          );
+        });
+      });
+    }
   }
   /** Admit fetched window pages without advancing the scope revision cursor. */
   async loadRows(scope: string, incoming: readonly Row[]): Promise<void> {
