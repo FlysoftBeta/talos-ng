@@ -320,6 +320,13 @@ export class SessionController {
         if (!current()) return false;
         this.ports.environment.persist();
       } else {
+        if (
+          !(this.ports.options.crypto ?? this.ports.environment.crypto)?.subtle
+        )
+          throw new AppError(
+            "E_UNAVAILABLE",
+            "当前连接不支持离线解锁，请连接服务器登录，或使用 HTTPS / 本机地址",
+          );
         if (this.ports.saved && !this.gate("offline").ok)
           throw new AppError(
             "E_DENIED",

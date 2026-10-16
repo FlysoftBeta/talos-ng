@@ -569,6 +569,9 @@ it("online login remains available without WebCrypto; no weak offline verifier i
   link.stop();
   runtime.lock();
   expect(await runtime.login("654321")).toBe(false);
+  expect(runtime.getSnapshot().error).toBe(
+    "当前连接不支持离线解锁，请连接服务器登录，或使用 HTTPS / 本机地址",
+  );
 });
 it("a protected RPC admission denial conceals the app and removes its offline verifier", async () => {
   const { runtime, db, link } = await setup(true);

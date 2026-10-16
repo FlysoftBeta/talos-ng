@@ -24,6 +24,40 @@ export const imageUrls = {
     URL.revokeObjectURL(url);
   },
 };
-export function copyText(text: string): void {
-  void navigator.clipboard?.writeText(text);
+export async function copyText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Permissions can reject even when the secure-context API is present.
+    }
+  }
+  const focused = document.activeElement;
+  const selection = document.getSelection();
+  const ranges = selection
+    ? Array.from({ length: selection.rangeCount }, (_, i) =>
+        selection.getRangeAt(i).cloneRange(),
+      )
+    : [];
+  const field = document.createElement("textarea");
+  field.value = text;
+  field.readOnly = true;
+  field.style.position = "fixed";
+  field.style.opacity = "0";
+  document.body.appendChild(field);
+  try {
+    field.select();
+    if (!document.execCommand("copy"))
+      throw new Error("Clipboard copy was rejected");
+  } catch {
+    throw new AppError("E_UNAVAILABLE", "无法复制，请选中文字后手动复制");
+  } finally {
+    field.remove();
+    if (focused instanceof HTMLElement) focused.focus();
+    if (selection) {
+      selection.removeAllRanges();
+      for (const range of ranges) selection.addRange(range);
+    }
+  }
 }
