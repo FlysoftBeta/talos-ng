@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AppError } from "@talos/base";
 import type { FileWriter } from "@talos/store";
 import { fetchFileRanges } from "./ranged-download.ts";
@@ -52,6 +52,53 @@ function delivery(
   }) as unknown as typeof fetch;
 }
 describe("ranged file download", () => {
+  it.each(["headers", "body"] as const)(
+    "times out stalled %s and preserves the durable offset for retry",
+    async (phase) => {
+      vi.useFakeTimers();
+      try {
+        const output = writer(4);
+        let signal: AbortSignal | null | undefined;
+        let cancelled = false;
+        const fetch = (async (_url: unknown, init: RequestInit) => {
+          signal = init.signal;
+          if (phase === "headers") return new Promise(() => {});
+          return {
+            status: 206,
+            headers: { get: () => "bytes 4-11/12" },
+            body: {
+              getReader: () => ({
+                read: () => new Promise(() => {}),
+                cancel: async () => {
+                  cancelled = true;
+                },
+                releaseLock() {},
+              }),
+            },
+          };
+        }) as unknown as typeof globalThis.fetch;
+        const pending = fetchFileRanges({
+          url: "/dl/ticket",
+          size: 12,
+          writer: output,
+          fetch,
+          assertActive() {},
+        });
+        const rejected = expect(pending).rejects.toMatchObject({
+          code: "E_TIMEOUT",
+        });
+        await vi.advanceTimersByTimeAsync(30_000);
+        await rejected;
+        expect(signal?.aborted).toBe(true);
+        expect(output.written).toBe(4);
+        expect(output.committed).toBe(false);
+        expect(cancelled).toBe(phase === "body");
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
   it("resumes at the durable offset and bounds each request to one MiB", async () => {
     const output = writer(512);
     await fetchFileRanges({

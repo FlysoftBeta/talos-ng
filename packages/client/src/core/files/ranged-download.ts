@@ -18,11 +18,33 @@ export async function fetchFileRanges(options: {
     assertActive();
     const start = writer.written;
     const end = Math.min(size, start + 1024 * 1024);
-    const response = await options.fetch(options.url, {
-      headers: { Range: `bytes=${start}-${end - 1}` },
-      cache: "no-store",
-      credentials: "same-origin",
-    });
+    const controller = new AbortController();
+    // Bound time without network progress, rather than the complete file's
+    // duration. A stalled request must not hold the file lease and retry queue.
+    const networkStep = async <T>(pending: Promise<T>): Promise<T> => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        return await Promise.race([
+          pending,
+          new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => {
+              reject(new AppError("E_TIMEOUT", "下载超时，请稍后重试"));
+              controller.abort();
+            }, 30_000);
+          }),
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    const response = await networkStep(
+      options.fetch(options.url, {
+        headers: { Range: `bytes=${start}-${end - 1}` },
+        cache: "no-store",
+        credentials: "same-origin",
+        signal: controller.signal,
+      }),
+    );
     try {
       assertActive();
       if (response.status === 401 || response.status === 403)
@@ -49,7 +71,7 @@ export async function fetchFileRanges(options: {
     let offset = 0;
     try {
       while (true) {
-        const result = await reader.read();
+        const result = await networkStep(reader.read());
         assertActive();
         if (result.done) break;
         if (offset + result.value.length > bytes.length)
