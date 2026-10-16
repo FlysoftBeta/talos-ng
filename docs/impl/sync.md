@@ -145,6 +145,14 @@ dirty, blocks cursor advancement and outbox flushing, and schedules a fresh pull
 500 ms–30 s exponential backoff. Malformed delta events trigger the same authoritative
 repair. Authentication, lock and version failures pause instead of retrying indefinitely.
 
+A pull starts from the current user's admitted scopes, not every cached scope in the shared
+IndexedDB database. First admission replaces inherited rows and windows before applying a
+complete snapshot from zero. At commit, compare each admitted scope's current cursor with
+the captured request base: another tab may advance it, while eviction may reset it. Either
+change aborts the transaction and restarts the pull, at most twice immediately before normal
+backoff. Progress counts the current attempt. This preserves strict page-chain validation
+without treating another account's cached cursor as the first page's lower bound.
+
 Scope purges atomically persist per-user cleanup markers alongside row removal. Module
 cleanup retries after failed callbacks or restarts, even when the server no longer reports
 the scope as gone. A new grant cancels stale cleanup; callbacks and lease updates remain

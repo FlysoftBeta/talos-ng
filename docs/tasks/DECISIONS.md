@@ -552,3 +552,11 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   writes retain their intent. Download no-progress timeouts preserve durable offsets and
   release stalled network work. Replayed logout clears binding without revoking a newer
   session. Regression tests cover large payloads, races, user isolation and recovery.
+
+- **D-118 — Reconcile pull baselines across shared client storage.** Scope admission is
+  per user while persisted scope rows are shared. New admission replaces cached rows/windows
+  from a complete pull starting at zero. Existing admission must retain its captured request
+  cursor until atomic apply; both external advances and cache-invalidation resets restart
+  the pull, with two immediate retries then normal backoff. Keep backwards-chain validation
+  and reset progress per attempt. Login regression seeds an unadmitted cached cursor before
+  a real paginated pull; the old build fails with the deployed error on Chromium 70.
