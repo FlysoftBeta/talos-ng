@@ -217,11 +217,17 @@ export function registerLibraryApi(
     service.preference(ctx.user!, args.doc, "favourite", args.value);
     return { ok: true as const };
   });
+  host.register(contract.library.collection.recordRead, (ctx, args) => {
+    access.requireCollection(ctx.user!, args.collection);
+    service.recordUse(ctx.user!, "collection", args.collection, args.t.ms);
+    return { ok: true as const };
+  });
   host.register(contract.library.retention.set, (ctx, args) => {
-    access.requireDoc(ctx.user!, args.doc);
+    if (args.kind === "doc") access.requireDoc(ctx.user!, args.id);
+    else access.requireCollection(ctx.user!, args.id);
     if (!access.authority.can(ctx.user!, "feature.use", { feature: "offline" }))
       throw new AppError("E_DENIED", "当前账号未获离线授权");
-    service.preference(ctx.user!, args.doc, "retention", args.value);
+    service.setRetention(ctx.user!, args.kind, args.id, args.value);
     return { ok: true as const };
   });
   host.register(contract.library.progress.set, (ctx, args) => {

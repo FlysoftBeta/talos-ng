@@ -33,17 +33,14 @@ export function importMedia(
       break;
     case "media_lists": {
       if (value(row, "kind") === "queue") break;
-      const created = time(row.created_at),
-        days = number(row, "retention_days", 7),
-        expiry = time(row.expires_at);
+      const created = time(row.created_at);
+      // Legacy list retention and expiry were shared configuration, never personal consent.
       media.importPlaylist({
         id,
         owner: owner(source, target, "playlist", legacyId),
         title: value(row, "title").slice(0, 80) || "Untitled",
         tracks: [],
-        retentionDays: days,
         created,
-        lastPlayed: expiry ? Math.max(0, expiry - days * 86400000) : 0,
       });
       break;
     }

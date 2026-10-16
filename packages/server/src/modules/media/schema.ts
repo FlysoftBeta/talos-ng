@@ -3,7 +3,9 @@ export const mediaMigrations: readonly Migration[] = [
   {
     n: 1,
     up(db) {
-      db.exec(`CREATE TABLE media_tracks(id TEXT PRIMARY KEY,source TEXT NOT NULL,provider_id TEXT NOT NULL,body TEXT NOT NULL CHECK(json_valid(body)),object_id TEXT,last_played INTEGER NOT NULL DEFAULT 0,unreferenced_since INTEGER,generation INTEGER NOT NULL DEFAULT 0,rev INTEGER NOT NULL,deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN(0,1)),UNIQUE(source,provider_id)) STRICT;
+      db.exec(`CREATE TABLE media_retentions(user_id TEXT NOT NULL REFERENCES users(id),id TEXT NOT NULL,body TEXT NOT NULL CHECK(json_valid(body)),rev INTEGER NOT NULL,PRIMARY KEY(user_id,id)) STRICT;
+CREATE INDEX media_retentions_rev ON media_retentions(user_id,rev);
+CREATE TABLE media_tracks(id TEXT PRIMARY KEY,source TEXT NOT NULL,provider_id TEXT NOT NULL,body TEXT NOT NULL CHECK(json_valid(body)),object_id TEXT,last_played INTEGER NOT NULL DEFAULT 0,unreferenced_since INTEGER,generation INTEGER NOT NULL DEFAULT 0,rev INTEGER NOT NULL,deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN(0,1)),UNIQUE(source,provider_id)) STRICT;
 CREATE INDEX media_tracks_last_played ON media_tracks(last_played);
 CREATE INDEX media_tracks_unreferenced ON media_tracks(unreferenced_since) WHERE deleted=0;
 CREATE TABLE media_playlists(id TEXT PRIMARY KEY,owner TEXT NOT NULL REFERENCES users(id),body TEXT NOT NULL CHECK(json_valid(body)),rev INTEGER NOT NULL,deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN(0,1))) STRICT;

@@ -170,22 +170,22 @@ export function registerMediaApi(
       playlist: service.updatePlaylist(args.playlist, { tracks: args.tracks }),
     };
   });
-  host.register(contract.media.playlist.retention, (ctx, args) => {
-    can(ctx.user!, args.playlist, "write");
-    return {
-      playlist: service.updatePlaylist(args.playlist, {
-        retentionDays: args.days,
-      }),
-    };
+  host.register(contract.media.retention.set, (ctx, args) => {
+    if (args.kind === "track") trackAccess(ctx.user!, args.id);
+    else can(ctx.user!, args.id);
+    if (!authority.can(ctx.user!, "feature.use", { feature: "offline" }))
+      throw new AppError("E_DENIED", "当前账号未获离线授权");
+    service.setRetention(ctx.user!, args.kind, args.id, args.value);
+    return { ok: true as const };
+  });
+  host.register(contract.media.recordPlay, (ctx, args) => {
+    trackAccess(ctx.user!, args.track);
+    service.recordUse(ctx.user!, "track", args.track, args.t.ms);
+    return { ok: true as const };
   });
   host.register(contract.media.playlist.recordPlay, (ctx, args) => {
     can(ctx.user!, args.playlist);
-    service.updatePlaylist(args.playlist, {
-      lastPlayed: Math.max(
-        service.playlist(args.playlist).lastPlayed,
-        Math.min(args.t.ms, (service.options.now?.() ?? Date.now()) + 86400000),
-      ),
-    });
+    service.recordUse(ctx.user!, "playlist", args.playlist, args.t.ms);
     return { ok: true as const };
   });
   host.register(contract.media.playlist.share, (ctx, args) => {

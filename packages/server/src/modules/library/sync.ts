@@ -8,17 +8,22 @@ export function registerLibrarySync(
   access: LibraryAccess,
 ): void {
   const repo = service.repo;
-  const personal = (user: string): Row[] => [
-    ...repo
-      .docs()
-      .filter((row) => row.owner === user)
-      .map((row) => repo.row("libraryDoc", row)),
-    ...repo
-      .collections()
-      .filter((row) => row.owner === user)
-      .map((row) => repo.row("libraryCollection", row)),
-    ...repo.states(user).map((row) => repo.row("libraryState", row)),
-  ];
+  // These are the user's own preferences, not grants. Keep them after scope
+  // revocation; eligibility always requires the independently synced target.
+  const personal = (user: string): Row[] => {
+    return [
+      ...repo.retentions(user).map((row) => repo.row("libraryRetention", row)),
+      ...repo
+        .docs()
+        .filter((row) => row.owner === user)
+        .map((row) => repo.row("libraryDoc", row)),
+      ...repo
+        .collections()
+        .filter((row) => row.owner === user)
+        .map((row) => repo.row("libraryCollection", row)),
+      ...repo.states(user).map((row) => repo.row("libraryState", row)),
+    ];
+  };
   const collection = (id: string): Row[] => {
     const row = repo.collection(id);
     if (!row) return [];
@@ -65,7 +70,12 @@ export function registerLibrarySync(
     select: (scope, since, limit) =>
       select(collection(scope.slice(5)), since, limit),
   });
-  for (const type of ["libraryDoc", "libraryCollection", "libraryState"]) {
+  for (const type of [
+    "libraryDoc",
+    "libraryCollection",
+    "libraryState",
+    "libraryRetention",
+  ]) {
     hub.registerEntity(type, {
       serialize: (row) => row,
       read: (scope, id) => {

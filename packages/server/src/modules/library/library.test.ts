@@ -74,6 +74,140 @@ async function text(k: Kernel, user: string, body = "第一章\n你好，文库�
   return result.doc;
 }
 describe("library server", () => {
+  it("keeps book and booklist retention personal for read-only peers, merges LWW and revokes access", async () => {
+    const k = setup();
+    const a = await connect(k),
+      b = await connect(k, "123456");
+    const doc = await text(k, a.user.id);
+    const collection = (
+      await a.api.library.collection.create({ title: "共享" })
+    ).id;
+    await a.api.library.collection.transfer({
+      source: k.library.ensureBuiltins(a.user.id).shelf,
+      target: collection,
+      doc,
+    });
+    const grant = {
+      collection,
+      principalType: "user" as const,
+      principal: b.user.id,
+      level: "read" as const,
+      delegate: false,
+    };
+    await a.api.library.sharing.set(grant);
+    const low = id(),
+      high = id();
+    const value = { v: 7 as const, t: { ms: 100, counter: 0 }, op: high };
+    for (const target of [
+      { kind: "doc" as const, id: doc },
+      { kind: "collection" as const, id: collection },
+    ]) {
+      await a.api.library.retention.set({ ...target, value });
+      expect(
+        k.library.retention(b.user.id, target.kind, target.id).value,
+      ).toBeNull();
+      await b.api.library.retention.set({
+        ...target,
+        value: { ...value, v: 180 },
+      });
+      await b.api.library.retention.set({
+        ...target,
+        value: { ...value, v: 1, op: low },
+      });
+      await b.api.library.retention.set({
+        ...target,
+        value: { ...value, v: "auto", t: { ms: 99, counter: 0 } },
+      });
+      expect(
+        k.library.retention(b.user.id, target.kind, target.id).value?.v,
+      ).toBe(180);
+      expect(
+        k.library.retention(a.user.id, target.kind, target.id).value?.v,
+      ).toBe(7);
+    }
+    await b.api.library.collection.recordRead({
+      collection,
+      t: { ms: 200, counter: 0 },
+      op: id(),
+    });
+    await b.api.library.progress.set({
+      doc,
+      resume: {
+        v: { unit: 0, offset: 0 },
+        t: { ms: 200, counter: 0 },
+        op: id(),
+      },
+      furthest: 0,
+      seconds: 1,
+      device: b.device,
+    });
+    expect(
+      k.library.retention(a.user.id, "collection", collection).lastUsed,
+    ).toBe(0);
+    expect(k.library.retention(a.user.id, "doc", doc).lastUsed).toBe(0);
+    const pull = await b.api.sync.pull({ cursors: {} });
+    expect(
+      pull.scopes[`me:${b.user.id}`]?.rows
+        .filter((r) => r.type === "libraryRetention")
+        .map((r) => r.data),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: doc,
+          lastUsed: 200,
+          value: expect.objectContaining({ v: 180 }),
+        }),
+        expect.objectContaining({ id: collection, lastUsed: 200 }),
+      ]),
+    );
+    expect(
+      pull.scopes[`coll:${collection}`]?.rows.some(
+        (r) => r.type === "libraryRetention",
+      ),
+    ).toBe(false);
+    await expect(
+      b.client.call("library.retention.set", {
+        kind: "doc",
+        id: doc,
+        value,
+        user: a.user.id,
+      }),
+    ).rejects.toMatchObject({ code: "E_INVALID" });
+    await a.api.library.sharing.set({ ...grant, level: null });
+    for (const target of [
+      { kind: "doc" as const, id: doc },
+      { kind: "collection" as const, id: collection },
+    ])
+      await expect(
+        b.api.library.retention.set({ ...target, value }),
+      ).rejects.toMatchObject({ code: "E_DENIED" });
+    const revoked = await b.api.sync.pull({ cursors: {} });
+    expect(
+      revoked.scopes[`me:${b.user.id}`]?.rows.filter(
+        (r) => r.type === "libraryRetention" && !r.deleted,
+      ),
+    ).toHaveLength(2);
+    expect(revoked.scopes[`coll:${collection}`]).toBeUndefined();
+    await a.api.library.sharing.set(grant);
+    expect(k.library.retention(b.user.id, "doc", doc).value?.v).toBe(180);
+    await b.api.library.retention.set({
+      kind: "doc",
+      id: doc,
+      value: { ...value, v: "auto", t: { ms: 300, counter: 0 } },
+    });
+    expect(k.library.retention(b.user.id, "doc", doc).value?.v).toBe("auto");
+    expect(
+      k.library.retention(b.user.id, "collection", collection).value?.v,
+    ).toBe(180);
+    await b.api.library.retention.set({
+      kind: "doc",
+      id: doc,
+      value: { ...value, v: 365, t: { ms: 9_000_000_000_000, counter: 0 } },
+    });
+    expect(
+      k.library.retention(b.user.id, "doc", doc).value!.t.ms,
+    ).toBeLessThanOrEqual(Date.now() + 5 * 60_000);
+  });
   it("imports text through durable job, strips manifest offsets and delivers verified framed resources", async () => {
     const k = setup();
     const { api, client } = await connect(k);
@@ -375,7 +509,7 @@ describe("library server", () => {
       { op: id() },
     );
     await a.api.library.retention.set(
-      { doc, value: { ...value, v: 7 } },
+      { kind: "doc", id: doc, value: { ...value, v: 7 } },
       { op: id() },
     );
     expect(k.library.state(a.user.id, doc)).toMatchObject({
@@ -383,8 +517,8 @@ describe("library server", () => {
       furthest: 8,
       seconds: { [a.device]: 10 },
       favourite: { v: true },
-      retention: { v: 7 },
     });
+    expect(k.library.retention(a.user.id, "doc", doc).value?.v).toBe(7);
     await expect(
       a.api.library.progress.set({ ...input, device: id() }, { op: id() }),
     ).rejects.toMatchObject({ code: "E_INVALID" });

@@ -5,6 +5,7 @@ export class LibraryPurgeRepo {
   constructor(private readonly db: Db) {}
   purgeUser(user: string, ctx: WriteContext, domains: PurgePorts): void {
     const db = this.db;
+    db.run("DELETE FROM library_retentions WHERE user_id=?", user);
 
     for (const row of db.all<{ id: string; deleted: number }>(
       "SELECT id,deleted FROM library_documents WHERE owner=?",

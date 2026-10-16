@@ -3,7 +3,9 @@ export const libraryMigrations: readonly Migration[] = [
   {
     n: 1,
     up(db) {
-      db.exec(`
+      db.exec(`CREATE TABLE library_retentions(user_id TEXT NOT NULL REFERENCES users(id),id TEXT NOT NULL,body TEXT NOT NULL CHECK(json_valid(body)),rev INTEGER NOT NULL,PRIMARY KEY(user_id,id)) STRICT;
+CREATE INDEX library_retentions_rev ON library_retentions(user_id,rev);
+
 CREATE TABLE library_documents(id TEXT PRIMARY KEY,owner TEXT NOT NULL REFERENCES users(id),source TEXT NOT NULL,filename TEXT NOT NULL,body TEXT NOT NULL CHECK(json_valid(body)),rev INTEGER NOT NULL,deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN(0,1))) STRICT;
 CREATE INDEX library_documents_rev ON library_documents(owner,rev);
 CREATE TABLE library_collections(id TEXT PRIMARY KEY,owner TEXT NOT NULL REFERENCES users(id),body TEXT NOT NULL CHECK(json_valid(body)),rev INTEGER NOT NULL,deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN(0,1))) STRICT;

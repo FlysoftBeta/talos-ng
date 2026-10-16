@@ -22,10 +22,21 @@ export const libraryPositionSchema = z
   .strict();
 export const libraryRetentionSchema = z.union([
   z.literal("auto"),
-  z.literal(1),
-  z.literal(7),
-  z.literal(180),
+  z.number().int().min(1).max(365),
 ]);
+export const libraryRetentionEntitySchema = z
+  .object({
+    id: idSchema,
+    kind: z.enum(["doc", "collection"]),
+    value: lww(libraryRetentionSchema).nullable(),
+    lastUsed: revSchema,
+  })
+  .strict();
+export type LibraryRetention = z.infer<typeof libraryRetentionEntitySchema>;
+export const libraryRetention = defineEntity({
+  name: "libraryRetention",
+  schema: libraryRetentionEntitySchema,
+});
 export const libraryDocSchema = z
   .object({
     id: idSchema,
@@ -58,7 +69,6 @@ export const libraryStateSchema = z
     resume: lww(libraryPositionSchema).nullable(),
     furthest: revSchema,
     seconds: z.record(idSchema, revSchema),
-    retention: lww(libraryRetentionSchema).nullable(),
     lastRead: revSchema,
   })
   .strict();
@@ -188,6 +198,15 @@ export const library = Object.freeze({
     }),
   }),
   collection: Object.freeze({
+    recordRead: defineMethod({
+      name: "library.collection.recordRead",
+      args: z
+        .object({ collection: idSchema, t: stampSchema, op: idSchema })
+        .strict(),
+      result: okSchema,
+      auth: "user",
+      offline: "queue",
+    }),
     transfer: defineMethod({
       name: "library.collection.transfer",
       args: z
@@ -282,7 +301,11 @@ export const library = Object.freeze({
     set: defineMethod({
       name: "library.retention.set",
       args: z
-        .object({ doc: idSchema, value: lww(libraryRetentionSchema) })
+        .object({
+          kind: z.enum(["doc", "collection"]),
+          id: idSchema,
+          value: lww(libraryRetentionSchema),
+        })
         .strict(),
       result: okSchema,
       auth: "user",
@@ -305,7 +328,6 @@ export function emptyLibraryState(id: string): LibraryState {
     resume: null,
     furthest: 0,
     seconds: {},
-    retention: null,
     lastRead: 0,
   };
 }

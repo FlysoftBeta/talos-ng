@@ -1,7 +1,9 @@
+import { MAX_FUTURE_SKEW_MS } from "@talos/contract";
 import type { CancellationSignal } from "@talos/base";
 import { AppError, HybridClock, createUlid, utf8Encode } from "@talos/base";
 import { emptyLibraryState, applyLibraryProgress } from "@talos/contract";
 import type {
+  LibraryRetention,
   LibraryDoc,
   LibraryCollection,
   LibraryState,
@@ -10,7 +12,7 @@ import type {
 import { PackReader, encodeResourceBatch } from "@talos/docpack";
 import type { ConverterRegistry } from "@talos/docpipe";
 import type { ObjectStore } from "@talos/objectstore";
-import { lwwMerge } from "@talos/sync";
+import { clampFutureStamp, lwwMerge } from "@talos/sync";
 import type { Db } from "../../kernel/persistence/db.ts";
 import { migrate } from "../../kernel/persistence/db.ts";
 import type { Uow, WriteContext } from "../../kernel/persistence/uow.ts";
@@ -409,6 +411,52 @@ export class LibraryService {
       });
     });
   }
+  retention(
+    user: string,
+    kind: LibraryRetention["kind"],
+    id: string,
+  ): LibraryRetention {
+    return (
+      this.repo.retention(user, id) ?? { id, kind, value: null, lastUsed: 0 }
+    );
+  }
+  setRetention(
+    user: string,
+    kind: LibraryRetention["kind"],
+    id: string,
+    value: NonNullable<LibraryRetention["value"]>,
+  ): void {
+    const state = this.retention(user, kind, id);
+    const next = {
+      ...value,
+      t: clampFutureStamp(value.t, this.now(), MAX_FUTURE_SKEW_MS).stamp,
+    };
+    this.writeRetention(user, {
+      ...state,
+      value: state.value ? lwwMerge(state.value, next) : next,
+    });
+  }
+  recordUse(
+    user: string,
+    kind: LibraryRetention["kind"],
+    id: string,
+    ms: number,
+  ): void {
+    const state = this.retention(user, kind, id);
+    this.writeRetention(user, {
+      ...state,
+      lastUsed: Math.max(
+        state.lastUsed,
+        Math.min(ms, this.now() + MAX_FUTURE_SKEW_MS),
+      ),
+    });
+  }
+  private writeRetention(user: string, state: LibraryRetention): void {
+    this.options.uow.write((ctx) => {
+      this.repo.putRetention(user, state, ctx.rev);
+      ctx.changed(`me:${user}`, "libraryRetention", state.id);
+    });
+  }
   state(user: string, doc: string): LibraryState {
     const row = this.repo.state(user, doc);
     return row && !row.deleted
@@ -417,40 +465,25 @@ export class LibraryService {
   }
   progress(user: string, input: LibraryProgressInput): void {
     this.document(input.doc);
-    this.writeState(
-      user,
-      applyLibraryProgress(this.state(user, input.doc), input),
-    );
+    this.options.uow.write(() => {
+      this.recordUse(user, "doc", input.doc, input.resume.t.ms);
+      this.writeState(
+        user,
+        applyLibraryProgress(this.state(user, input.doc), input),
+      );
+    });
   }
   preference(
     user: string,
     id: string,
     key: "favourite",
     value: NonNullable<LibraryState["favourite"]>,
-  ): void;
-  preference(
-    user: string,
-    id: string,
-    key: "retention",
-    value: NonNullable<LibraryState["retention"]>,
-  ): void;
-  preference(
-    user: string,
-    id: string,
-    key: "favourite" | "retention",
-    value:
-      | NonNullable<LibraryState["favourite"]>
-      | NonNullable<LibraryState["retention"]>,
   ): void {
     this.document(id);
     const state = this.state(user, id);
-    if (key === "favourite") {
-      const v = value as NonNullable<LibraryState["favourite"]>;
-      state.favourite = state.favourite ? lwwMerge(state.favourite, v) : v;
-    } else {
-      const v = value as NonNullable<LibraryState["retention"]>;
-      state.retention = state.retention ? lwwMerge(state.retention, v) : v;
-    }
+    state.favourite = state.favourite
+      ? lwwMerge(state.favourite, value)
+      : value;
     this.options.uow.write(() => {
       this.writeState(user, state);
       if (key === "favourite") {

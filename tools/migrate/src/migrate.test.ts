@@ -444,10 +444,10 @@ it("imports a real-schema fixture, verifies hashes, and serves migrated data ove
     )!.new_id;
     const migratedPlaylist = kernel.media.playlist(playlistId);
     expect(migratedPlaylist.tracks).toEqual([trackId]);
-    expect(migratedPlaylist.retentionDays).toBe(30);
-    expect(migratedPlaylist.lastPlayed).toBe(
-      Date.parse("2020-01-02T00:00:00Z"),
-    );
+    expect(migratedPlaylist).not.toHaveProperty("retentionDays");
+    expect(migratedPlaylist).not.toHaveProperty("lastPlayed");
+    expect(db.all("SELECT * FROM media_retentions")).toEqual([]);
+    expect(db.all("SELECT * FROM library_retentions")).toEqual([]);
     expect(kernel.media.state(login.user.id).queue).toEqual([trackId]);
     expect(kernel.media.state(login.user.id).favorites[trackId]?.v).toBe(true);
     expect(

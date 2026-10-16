@@ -1,3 +1,5 @@
+import { MAX_FUTURE_SKEW_MS } from "@talos/contract";
+import { clampFutureStamp, lwwMerge } from "@talos/sync";
 import type { CancellationSignal } from "@talos/base";
 import {
   mediaTrackSchema,
@@ -6,6 +8,7 @@ import {
 } from "@talos/contract";
 import { AppError, compareStamp, createUlid } from "@talos/base";
 import type {
+  MediaRetention,
   MediaTrack,
   MediaPlaylist,
   MediaUserState,
@@ -162,6 +165,52 @@ export class MediaService {
     if (!row || row.deleted) throw new AppError("E_NOT_FOUND", "歌单不存在");
     return JSON.parse(row.body) as MediaPlaylist;
   }
+  retention(
+    user: string,
+    kind: MediaRetention["kind"],
+    id: string,
+  ): MediaRetention {
+    return (
+      this.repo.retention(user, id) ?? { id, kind, value: null, lastUsed: 0 }
+    );
+  }
+  setRetention(
+    user: string,
+    kind: MediaRetention["kind"],
+    id: string,
+    value: NonNullable<MediaRetention["value"]>,
+  ): void {
+    const state = this.retention(user, kind, id);
+    const next = {
+      ...value,
+      t: clampFutureStamp(value.t, this.now(), MAX_FUTURE_SKEW_MS).stamp,
+    };
+    this.writeRetention(user, {
+      ...state,
+      value: state.value ? lwwMerge(state.value, next) : next,
+    });
+  }
+  recordUse(
+    user: string,
+    kind: MediaRetention["kind"],
+    id: string,
+    ms: number,
+  ): void {
+    const state = this.retention(user, kind, id);
+    this.writeRetention(user, {
+      ...state,
+      lastUsed: Math.max(
+        state.lastUsed,
+        Math.min(ms, this.now() + MAX_FUTURE_SKEW_MS),
+      ),
+    });
+  }
+  private writeRetention(user: string, state: MediaRetention): void {
+    this.options.uow.write((ctx) => {
+      this.repo.putRetention(user, state, ctx.rev);
+      ctx.changed(`me:${user}`, "mediaRetention", state.id);
+    });
+  }
   state(user: string): MediaUserState {
     const row = this.repo.state(user);
     return row
@@ -241,6 +290,7 @@ export class MediaService {
     const track = this.track(id),
       state = this.state(user);
     this.options.uow.write((ctx) => {
+      this.recordUse(user, "track", id, this.now());
       this.repo.putState(
         user,
         {
@@ -321,8 +371,6 @@ export class MediaService {
       owner: user,
       title,
       tracks: [],
-      retentionDays: 7,
-      lastPlayed: 0,
       created: this.now(),
     };
     this.options.uow.write((ctx) => {
@@ -334,9 +382,7 @@ export class MediaService {
   }
   updatePlaylist(
     id: string,
-    patch: Partial<
-      Pick<MediaPlaylist, "tracks" | "retentionDays" | "lastPlayed">
-    >,
+    patch: Partial<Pick<MediaPlaylist, "tracks">>,
   ): MediaPlaylist {
     const before = this.playlist(id);
     if (patch.tracks) {

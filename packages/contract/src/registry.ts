@@ -13,6 +13,7 @@ import {
   libraryDoc,
   libraryCollection,
   libraryState,
+  libraryRetention,
 } from "./modules/library.ts";
 import { admin, adminMethods } from "./modules/admin/index.ts";
 import {
@@ -21,6 +22,7 @@ import {
   mediaTrack,
   mediaPlaylist,
   mediaUserState,
+  mediaRetention,
 } from "./modules/media.ts";
 import { ops, opsMethods } from "./modules/ops.ts";
 import type { Method } from "./protocol/definitions.ts";
@@ -132,9 +134,11 @@ export const entities = Object.freeze({
   libraryDoc,
   libraryCollection,
   libraryState,
+  libraryRetention,
   mediaTrack,
   mediaPlaylist,
   mediaUserState,
+  mediaRetention,
   profile,
   setting,
   grant,
