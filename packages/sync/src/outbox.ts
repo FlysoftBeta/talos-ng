@@ -44,7 +44,8 @@ export function isTerminalRejection(code: ErrorCode): boolean {
     code === "E_DENIED" ||
     code === "E_INVALID" ||
     code === "E_NOT_FOUND" ||
-    code === "E_CONFLICT"
+    code === "E_CONFLICT" ||
+    code === "E_TOO_LARGE"
   );
 }
 

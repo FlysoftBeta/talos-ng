@@ -11,6 +11,7 @@ import { ModuleRegistry, defineClientModule } from "./modules.ts";
 import { SyncEngine } from "./sync-engine.ts";
 import type { SyncSnapshot } from "./sync-engine.ts";
 
+import { chatModule } from "../../features/chat/model/module.ts";
 import type { TypedCall } from "./link.ts";
 
 type Pull = ResultOf<typeof contract.sync.pull>;
@@ -41,6 +42,7 @@ const modules = new ModuleRegistry([
   defineClientModule({
     id: "test",
     rowTypes: ["setting"],
+    orderKey: (_method, args) => (args as { key: string }).key,
     repositories: {},
     reducers: {
       "me.setting.set": (rows, args, context) => {
@@ -221,7 +223,13 @@ describe("durable outbox", () => {
     await f.engine.ack("missing");
     expect(f.engine.getSnapshot().outbox).toEqual([]);
   });
-  it.each(["E_DENIED", "E_INVALID", "E_NOT_FOUND", "E_CONFLICT"] as const)(
+  it.each([
+    "E_DENIED",
+    "E_INVALID",
+    "E_NOT_FOUND",
+    "E_CONFLICT",
+    "E_TOO_LARGE",
+  ] as const)(
     "marks %s failed, rolls back optimistic state, and supports retry",
     async (code) => {
       const f = await fixture();
@@ -542,9 +550,9 @@ it("newer pushed revision overtaking a buffered pull cannot be regressed by its 
   });
   const pulling = f.engine.connect();
   await reachedFinal.promise;
-  await f.engine.delta(response([row("one", 9, "pushed")], 9));
+  const delta = f.engine.delta(response([row("one", 9, "pushed")], 9));
   finalPage.resolve(response([row("one", 2, "old-pull")], 2));
-  await pulling;
+  await Promise.all([pulling, delta]);
   expect(f.engine.getSnapshot().rows[0]!.data).toBe("pushed");
   expect(await f.db.table<StoredScope, string>("scopes").get(scope)).toEqual({
     scope,
@@ -667,4 +675,360 @@ describe("window page admission", () => {
       (await s.db.table<StoredScope, string>("scopes").get(scope))?.cursor,
     ).toBe(9);
   });
+});
+
+it.each([false, true])(
+  "retains distinct history when a completed scope is overtaken during another scope's pagination (reset=%s)",
+  async (reset) => {
+    const f = await fixture();
+    await f.engine.delta(response([row("obsolete", 1)], 1));
+    const final = deferred<unknown>();
+    const reachedFinal = deferred<void>();
+    let page = 0;
+    f.handle(async () => {
+      if (++page === 1)
+        return {
+          scopes: {
+            [scope]: {
+              rows: [row("historical", 2)],
+              cursor: 2,
+              more: false,
+              ...(reset ? { reset: ["setting"] } : {}),
+            },
+            sys: { rows: [row("public", 1)], cursor: 1, more: true },
+          },
+          gone: [],
+          added: [],
+        };
+      reachedFinal.resolve();
+      return final.promise;
+    });
+    const pulling = f.engine.connect();
+    await reachedFinal.promise;
+    const pushed = f.engine.delta(response([row("live", 9)], 9));
+    final.resolve({
+      scopes: {
+        [scope]: { rows: [], cursor: 2, more: false },
+        sys: { rows: [], cursor: 2, more: false },
+      },
+      gone: [],
+      added: [],
+    });
+    await Promise.all([pulling, pushed]);
+    expect(
+      f.engine
+        .getSnapshot()
+        .rows.map((r) => r.id)
+        .sort(),
+    ).toEqual(
+      reset
+        ? ["historical", "live", "public"]
+        : ["historical", "live", "obsolete", "public"],
+    );
+    expect(
+      (await f.db.table<StoredScope, string>("scopes").get(scope))?.cursor,
+    ).toBe(9);
+  },
+);
+
+it("revocation queued during a pull cannot be undone by its buffered rows", async () => {
+  const f = await fixture();
+  const page = deferred<unknown>();
+  const started = deferred<void>();
+  f.handle(async () => {
+    started.resolve();
+    return page.promise;
+  });
+  const pulling = f.engine.connect();
+  await started.promise;
+  const queued = f.engine.delta(
+    response([row("queued-before-revocation", 9)], 9),
+  );
+  const revoked = f.engine.delta({ scopes: {}, gone: [scope], added: [] });
+  await revoked;
+  expect(f.engine.getSnapshot().scopes).toEqual([]);
+  page.resolve(response([row("private", 3)], 3));
+  await Promise.all([pulling, queued, revoked]);
+  expect(f.engine.getSnapshot().scopes).toEqual([]);
+  expect(await f.db.table("rows").range()).toEqual([]);
+});
+
+it("queued deltas retain their original generation across disconnect", async () => {
+  const f = await fixture();
+  const page = deferred<unknown>();
+  const started = deferred<void>();
+  f.handle(async () => {
+    started.resolve();
+    return page.promise;
+  });
+  const pulling = f.engine.connect();
+  await started.promise;
+  const pushed = f.engine.delta(response([row("stale", 9)], 9));
+  f.engine.disconnect();
+  page.resolve(response([], 0));
+  await Promise.all([pulling, pushed]);
+  expect(await f.db.table("rows").range()).toEqual([]);
+});
+
+it("a failed setting blocks only its register while unrelated queued settings flush", async () => {
+  const f = await fixture();
+  f.handle(async (name, _args, options) => {
+    if (name === "sync.pull") return empty();
+    if (options?.op === "bad") throw new AppError("E_TOO_LARGE", "过大");
+    return {};
+  });
+  await f.engine.enqueue(item("bad"));
+  await f.engine.enqueue(item("same"));
+  await f.engine.enqueue({
+    ...item("independent"),
+    args: { key: "volume", value: "quiet" },
+  });
+  await f.engine.connect();
+  expect(
+    f.calls.filter((c) => c.name !== "sync.pull").map((c) => c.options?.op),
+  ).toEqual(["bad", "independent"]);
+  expect(f.engine.getSnapshot().outbox.map((op) => [op.op, op.state])).toEqual([
+    ["bad", "failed"],
+    ["same", "pending"],
+  ]);
+  expect(f.timers.size).toBe(0);
+});
+
+it("retries a failed initial pull and then flushes pending intent without reconnecting", async () => {
+  const f = await fixture();
+  let pulls = 0;
+  f.handle(async (name) => {
+    if (name === "sync.pull" && ++pulls === 1)
+      throw new AppError("E_TIMEOUT", "超时");
+    return name === "sync.pull" ? response([row("theme", 2, "saved")], 2) : {};
+  });
+  await f.engine.enqueue(item("one"));
+  await expect(f.engine.connect()).rejects.toMatchObject({ code: "E_TIMEOUT" });
+  expect([...f.timers.values()].map((timer) => timer.ms)).toEqual([500]);
+  f.fire();
+  await until(f.engine, (s) => s.phase === "live" && s.outbox.length === 0);
+  expect(f.engine.getSnapshot().rows[0]?.data).toBe("saved");
+});
+
+it("a successful write followed by a rejected pull stays pending and replays its idempotency key", async () => {
+  const f = await fixture();
+  let pulls = 0;
+  f.handle(async (name) => {
+    if (name !== "sync.pull") return {};
+    if (++pulls === 2) throw new AppError("E_INVALID", "读取失败");
+    return response([row("theme", pulls, "saved")], pulls);
+  });
+  await f.engine.enqueue(item("accepted"));
+  await f.engine.connect();
+  expect(f.engine.getSnapshot().outbox[0]).toMatchObject({
+    op: "accepted",
+    state: "pending",
+    error: { code: "E_INVALID" },
+  });
+  f.fire();
+  await until(f.engine, (s) => s.outbox.length === 0);
+  expect(
+    f.calls
+      .filter((call) => call.name !== "sync.pull")
+      .map((call) => call.options?.op),
+  ).toEqual(["accepted", "accepted"]);
+});
+
+it("a successful stale write reply cannot acknowledge the current generation's operation", async () => {
+  const f = await fixture();
+  const old = deferred<unknown>();
+  const started = deferred<void>();
+  let writes = 0;
+  f.handle(async (name) => {
+    if (name === "sync.pull") return empty();
+    if (++writes === 1) {
+      started.resolve();
+      return old.promise;
+    }
+    return {};
+  });
+  await f.engine.enqueue(item("one"));
+  const initial = f.engine.connect();
+  await started.promise;
+  f.engine.disconnect();
+  const reconnect = f.engine.connect();
+  old.resolve({});
+  await Promise.all([initial, reconnect]);
+  expect(
+    f.calls
+      .filter((call) => call.name !== "sync.pull")
+      .map((call) => call.options?.op),
+  ).toEqual(["one", "one"]);
+  expect(f.engine.getSnapshot().outbox).toEqual([]);
+});
+
+it("a failed delta cannot let the next push advance past unapplied history", async () => {
+  const f = await fixture();
+  f.handle(async () => response([row("base", 1)], 1));
+  await f.engine.connect();
+  f.handle(async () => response([row("missing", 2), row("later", 3)], 3));
+  const invalid = f.engine.delta(response([row("invalid", 5)], 2));
+  const failed = expect(invalid).rejects.toBeInstanceOf(AppError);
+  const later = f.engine.delta(response([row("later", 3)], 3));
+  await Promise.all([failed, later]);
+  expect(
+    f.engine
+      .getSnapshot()
+      .rows.map((r) => r.id)
+      .sort(),
+  ).toEqual(["base", "later", "missing"]);
+  expect(f.calls[1]?.args).toEqual({ cursors: { [scope]: 1 } });
+});
+
+it("buffers all transfer fragments before applying and honors rotating continuation tokens", async () => {
+  const f = await fixture();
+  const encoded = JSON.stringify(response([row("large", 4, "很多文本")], 4));
+  const fragments = [
+    encoded.slice(0, 30),
+    encoded.slice(30, 60),
+    encoded.slice(60),
+  ];
+  let calls = 0;
+  const sizes: number[] = [];
+  f.engine.subscribe(() => sizes.push(f.engine.getSnapshot().rows.length));
+  f.handle(async () => {
+    if (calls < fragments.length) {
+      const index = calls++;
+      expect(await f.db.table("rows").range()).toEqual([]);
+      return {
+        ...empty(),
+        transfer: {
+          token: `part${index}`,
+          chunk: fragments[index],
+          more: index < 2,
+        },
+        ...(index === 2 ? { repull: true } : {}),
+      };
+    }
+    calls++;
+    return response([row("later", 5)], 5);
+  });
+  await f.engine.connect();
+  expect(f.calls.map((call) => call.args)).toEqual([
+    { cursors: {} },
+    { cursors: {}, continuation: "part0" },
+    { cursors: {}, continuation: "part1" },
+    { cursors: { [scope]: 4 } },
+  ]);
+  expect(sizes.every((size) => size === 0 || size === 2)).toBe(true);
+  expect(
+    f.engine
+      .getSnapshot()
+      .rows.map((r) => r.id)
+      .sort(),
+  ).toEqual(["large", "later"]);
+});
+
+it("restarts an expired fragmented response from durable cursors and handles repull hints", async () => {
+  const f = await fixture();
+  let calls = 0;
+  f.handle(async () => {
+    if (++calls === 1)
+      return {
+        ...empty(),
+        transfer: { token: "expired", chunk: '{"scopes":', more: true },
+      };
+    if (calls === 2) throw new AppError("E_CONFLICT", "分片已失效");
+    return response([row("complete", calls)], calls);
+  });
+  await expect(f.engine.connect()).rejects.toMatchObject({
+    code: "E_CONFLICT",
+  });
+  expect(await f.db.table("scopes").range()).toEqual([]);
+  f.fire();
+  await until(f.engine, (s) => s.phase === "live");
+  expect(f.calls[2]?.args).toEqual({ cursors: {} });
+  await f.engine.delta({ ...empty(), repull: true });
+  expect(f.engine.getSnapshot().rows[0]?.rev).toBe(4);
+});
+
+it("a clean fragmented response finishes without an unnecessary catchup loop", async () => {
+  const f = await fixture();
+  const encoded = JSON.stringify(response([row("complete", 4)], 4));
+  let calls = 0;
+  f.handle(async () => {
+    if (++calls > 2) throw new AppError("E_INTERNAL", "Unexpected extra pull");
+    return {
+      ...empty(),
+      transfer: {
+        token: `clean${calls}`,
+        chunk: calls === 1 ? encoded.slice(0, 20) : encoded.slice(20),
+        more: calls === 1,
+      },
+    };
+  });
+  await f.engine.connect();
+  expect(calls).toBe(2);
+  expect(f.engine.getSnapshot().rows[0]?.id).toBe("complete");
+  expect(f.engine.getSnapshot().phase).toBe("live");
+});
+
+it("isolates chat conversations while retaining durable text-upload dependencies", async () => {
+  const f = await fixture(new ModuleRegistry([chatModule]));
+  const text = "01ARZ3NDEKTSV4RRFFQ69G5FAA";
+  const conversation = "01ARZ3NDEKTSV4RRFFQ69G5FAB";
+  const message = "01ARZ3NDEKTSV4RRFFQ69G5FAC";
+  const other = "01ARZ3NDEKTSV4RRFFQ69G5FAD";
+  await f.engine.enqueue({
+    op: "upload",
+    method: "chat.text.put",
+    createdAt: 1,
+    args: { id: text, offset: 0, total: 1, text: "a" },
+  });
+  await f.engine.enqueue({
+    op: message,
+    method: "chat.post.send",
+    createdAt: 2,
+    args: { id: message, conversation, kind: "text", textId: text },
+  });
+  await f.engine.enqueue({
+    op: "same-conversation",
+    method: "chat.state.read",
+    createdAt: 3,
+    args: { conversation, seq: 1 },
+  });
+  await f.engine.enqueue({
+    op: "other-conversation",
+    method: "chat.state.read",
+    createdAt: 4,
+    args: { conversation: other, seq: 1 },
+  });
+  expect(f.engine.getSnapshot().outbox[1]?.dependsOn).toEqual(["upload"]);
+  f.handle(async (method) => {
+    if (method === "sync.pull") return empty();
+    if (method === "chat.text.put")
+      throw new AppError("E_TOO_LARGE", "文本过大");
+    return {};
+  });
+  await f.engine.connect();
+  expect(
+    f.calls
+      .filter((call) => call.name !== "sync.pull")
+      .map((call) => call.options?.op),
+  ).toEqual(["upload", "other-conversation"]);
+  expect(f.engine.getSnapshot().outbox.map((op) => [op.op, op.state])).toEqual([
+    ["upload", "failed"],
+    [message, "failed"],
+    ["same-conversation", "pending"],
+  ]);
+});
+
+it("pauses persistent version rejections until a new connection rather than retrying them", async () => {
+  const f = await fixture();
+  f.handle(async (method) => {
+    if (method === "sync.pull") return empty();
+    throw new AppError("E_VERSION", "请更新");
+  });
+  await f.engine.enqueue(item("one"));
+  await f.engine.connect();
+  await f.engine.flush();
+  expect(f.engine.getSnapshot().phase).toBe("offline");
+  expect(f.engine.getSnapshot().outbox[0]?.state).toBe("pending");
+  expect(f.timers.size).toBe(0);
+  expect(f.calls.filter((call) => call.name !== "sync.pull")).toHaveLength(1);
 });

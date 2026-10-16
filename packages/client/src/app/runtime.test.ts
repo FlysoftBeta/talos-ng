@@ -40,6 +40,7 @@ class TestLink extends LinkClient {
   connected = false;
   stateEvents = new Emitter<ClientState>();
   welcomeEvents = new Emitter<WelcomeHeader>();
+  topicEvents = new Map<string, Emitter<CallResult>>();
   calls: { method: string; args: unknown; options?: CallOptions }[] = [];
   handler?: (method: string, args: unknown, options?: CallOptions) => unknown;
   constructor() {
@@ -67,6 +68,20 @@ class TestLink extends LinkClient {
   }
   override onWelcome(fn: (welcome: WelcomeHeader) => void): () => void {
     return this.welcomeEvents.on(fn);
+  }
+  override on(
+    topic: string,
+    listener: (event: CallResult) => void,
+  ): () => void {
+    let emitter = this.topicEvents.get(topic);
+    if (!emitter) {
+      emitter = new Emitter<CallResult>();
+      this.topicEvents.set(topic, emitter);
+    }
+    return emitter.on(listener);
+  }
+  emitTopic(topic: string, data: unknown): void {
+    this.topicEvents.get(topic)?.emit({ data, body: new Uint8Array() });
   }
   override async call(
     method: string,
@@ -967,4 +982,51 @@ it("keeps root force-offline in memory without browser storage and rejects ordin
   expect(runtime.isDebugOffline()).toBe(false);
   const fresh = await setup(true);
   expect(fresh.runtime.isDebugOffline()).toBe(false);
+});
+
+it("repairs a malformed sync event before a later valid push can skip its rows", async () => {
+  const { runtime, db, link } = await setup(true);
+  const scope = `me:${user.id}`;
+  const row = (id: string, rev: number) => ({
+    id,
+    rev,
+    type: "audit",
+    data: null,
+    deleted: false,
+  });
+  const response = (rows: ReturnType<typeof row>[], cursor: number) => ({
+    scopes: { [scope]: { rows, cursor, more: false } },
+    gone: [],
+    added: [],
+  });
+  const repair = deferred<unknown>();
+  const started = deferred<void>();
+  let pulls = 0;
+  link.handler = (method) => {
+    if (method !== "sync.pull") return undefined;
+    if (++pulls === 1) return response([row("base", 1)], 1);
+    if (pulls === 2) {
+      started.resolve();
+      return repair.promise;
+    }
+    return response([], 3);
+  };
+  link.connectNow();
+  await until(
+    runtime,
+    () => runtime.getSnapshot().status.connection === "connected",
+  );
+  link.emitTopic("sync.delta", { scopes: "malformed", gone: [], added: [] });
+  await started.promise;
+  link.emitTopic("sync.delta", response([row("later", 3)], 3));
+  repair.resolve(response([row("missed", 2), row("later", 3)], 3));
+  await runtime.sync();
+  expect(
+    (await db.table<{ id: string }>("rows").range())
+      .map((row) => row.id)
+      .sort(),
+  ).toEqual(["base", "later", "missed"]);
+  expect(
+    link.calls.filter((call) => call.method === "sync.pull")[1]?.args,
+  ).toEqual({ cursors: { [scope]: 1 } });
 });
