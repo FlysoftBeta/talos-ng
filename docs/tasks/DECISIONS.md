@@ -531,3 +531,24 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   expiry and unreferenced-song grace (both 30 days); remove administrator control of these
   periods. Audio-cache expiry keeps song metadata; song collection removes live metadata,
   discovery/state and file references. No upgrade migration: use fresh development data.
+
+- **D-116 — Offline retention is personal for every target.** Documents, tracks, booklists
+  and playlists each support a per-user LWW auto/1–365 day policy with a personal usage
+  clock. Policies are private `me:<user>` rows; read access permits changing one's own
+  policy. Unset/auto never starts a background download. Applicable item and list policies
+  combine by maximum expiry. Personal metadata survives access revocation but never grants
+  content access; schedulers and eviction validate current membership and access. Shared
+  playlist retention/usage fields and old document policy fields are removed. Existing
+  configuration is discarded; only the legacy importer is updated, without a current-app
+  schema migration, as explicitly requested before the first launch. Server 30-day orphan
+  and audio-cache policies remain independent.
+
+- **D-117 — Recoverable sync transport and isolated operation failures.** Large legal
+  revision groups travel as bounded connection-bound continuation fragments, preserving
+  atomic row/cursor application. Oversized or failed pushes request authoritative repair.
+  Client full pulls serialize with deltas; revocation epochs and session fences stop stale
+  restoration. Object ordering keys preserve dependencies while allowing unrelated failed
+  queues to progress. Permanent oversize writes fail visibly; read failures after accepted
+  writes retain their intent. Download no-progress timeouts preserve durable offsets and
+  release stalled network work. Replayed logout clears binding without revoking a newer
+  session. Regression tests cover large payloads, races, user isolation and recovery.

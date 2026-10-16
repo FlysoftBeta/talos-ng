@@ -95,19 +95,25 @@ effect. Item: `{op, method, args, body?, createdAt, state: pending|sending|faile
 error?, dependencies}`.
 
 - FIFO per ordering key; only the first outstanding operation per key may fly; a failed or
-  dependency-blocked head blocks its key. Default capacity is one in flight in the app.
+  dependency-blocked head blocks its key. Modules declare independent object keys (chat
+  conversations, settings keys, library targets and media targets); unspecified modules
+  keep a conservative module-wide barrier. Default capacity is one in flight in the app.
 - `op` is the idempotency key; the server remembers results for 14 days, so a late success
   after a connection loss is harmless.
 - Ack removes the item **only after** the authoritative rows arrive by delta/pull; the
   optimistic mark clears then. Optimistic data is never promoted to authoritative base.
-- Terminal rejections (`E_DENIED, E_INVALID, E_NOT_FOUND, E_CONFLICT`) make the item
+- Terminal rejections (`E_DENIED, E_INVALID, E_NOT_FOUND, E_CONFLICT, E_TOO_LARGE`) make the item
   `failed`; the affected rows roll back and are re-pulled; the status centre offers retry or
   discard. Every other error, including transport loss, returns it to pending with backoff
   (500 ms doubling to 30 s; a hint, the executor enforces it). Auth/version/lock errors
   pause flushing at the application level.
+- A confirmed write whose follow-up pull fails stays pending with its original idempotency
+  key and optimistic layer. A failed read never reclassifies that write as rejected.
 - Dependencies must already be queued (no cycles). Discarding a dependency fails its
   dependents with `E_CONFLICT`; a discarded dependency cannot recover, so dependents are
   recreated with new ids. A sending item cannot be discarded.
+- Chat records outstanding text uploads as durable prerequisites before enqueueing the
+  dependent message or draft, so isolating conversation queues cannot bypass uploads.
 - `coalesce` lets a later pending whole-register LWW write replace an earlier pending one;
   sending, failed, dependency-bearing and referenced operations are barriers. Never implicit.
 - No UI action silently drops an intent.
@@ -130,6 +136,14 @@ per-user scope admission stops one user's cached shared data projecting into ano
 session. Revision checks stop stale push/pull data regressing state. Navigator `onLine` is
 only a negative hint; going offline interrupts the carrier and leaves reconnect to the link
 retry machine.
+
+Full pull chains and deltas share an application gate: a newer delta cannot advance a
+cursor past buffered historical rows. Revocations purge immediately and carry per-scope
+epochs that prevent an older pull or queued delta from restoring access. Generation fences
+also cover successful old-session replies. A failed pull or delta marks synchronization
+dirty, blocks cursor advancement and outbox flushing, and schedules a fresh pull with
+500 ms–30 s exponential backoff. Malformed delta events trigger the same authoritative
+repair. Authentication, lock and version failures pause instead of retrying indefinitely.
 
 Retention content (documents, conversations, audio the user keeps offline) is downloaded by
 background schedulers using resumable ranged fetches into the file store (see
