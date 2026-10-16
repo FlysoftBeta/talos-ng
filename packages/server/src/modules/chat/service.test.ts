@@ -199,7 +199,10 @@ describe("chat facts and windows", () => {
   it("resets post windows once the delta threshold is exceeded", () => {
     const s = setup();
     for (let i = 0; i < 500; i++) send(s, String(i));
-    const response = s.hub.pull(s.users[0]!.id, { cursors: {} });
+    const response = s.hub.pull(s.users[0]!.id, {
+      cursors: {},
+      windowed: [`conv:${s.conversation}`],
+    });
     expect(response.scopes[`conv:${s.conversation}`]!.reset).toContain("post");
   });
 });

@@ -13,6 +13,7 @@ export {
   syncResultSchema,
   rowSchema,
   MAX_SYNC_ROWS,
+  MAX_PUSH_OPS,
   MAX_SYNC_BYTES,
   DEFAULT_SYNC_ROWS,
   WINDOW_RESET_THRESHOLD,

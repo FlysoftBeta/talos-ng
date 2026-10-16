@@ -1,7 +1,7 @@
 import { AppError, createUlid, deferred } from "@talos/base";
 import type { CancellationSignal } from "@talos/base";
 import type { ArgsOf, Method, ResultOf } from "@talos/contract";
-import { OP_RETENTION_MS } from "@talos/contract";
+import { OP_RETENTION_MS, contract } from "@talos/contract";
 import { LinkServer } from "@talos/link";
 import type { CallContext, Connection, HandlerResult } from "@talos/link";
 import { migrate } from "../persistence/db.ts";
@@ -116,6 +116,48 @@ export class LinkHost {
         return task;
       },
     });
+    this.register(contract.sync.push, (context, args, _body, signal) =>
+      this.push(context, args, signal),
+    );
+  }
+  /**
+   * Runs batched queued operations one after another, each through the ordinary
+   * dispatch (authentication, validation, rate limits, idempotency, its own write
+   * transaction). The client batches only mutually independent operations, so one
+   * entry's failure never affects the others.
+   */
+  private async push(
+    context: RequestContext,
+    args: ArgsOf<typeof contract.sync.push>,
+    signal: CancellationSignal,
+  ): Promise<ResultOf<typeof contract.sync.push>> {
+    const results: ResultOf<typeof contract.sync.push>["results"] = [];
+    for (const entry of args.ops) {
+      try {
+        if (this.handlers.get(entry.method)?.method.offline !== "queue")
+          throw new AppError("E_INVALID", "此操作不能批量提交");
+        await this.dispatch({
+          connection: context.connection,
+          method: entry.method,
+          args: entry.args,
+          body: new Uint8Array(0),
+          op: entry.op,
+          signal,
+        });
+        results.push({ op: entry.op });
+      } catch (error) {
+        if (error instanceof AppError) {
+          results.push({ op: entry.op, error: error.toJSON() });
+          continue;
+        }
+        this.options.reportIncident(error, { method: entry.method });
+        results.push({
+          op: entry.op,
+          error: new AppError("E_INTERNAL", "服务器内部错误").toJSON(),
+        });
+      }
+    }
+    return { results };
   }
   register<M extends Method>(
     method: M,

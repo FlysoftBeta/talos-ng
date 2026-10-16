@@ -102,7 +102,28 @@ error?, dependencies}`.
 - FIFO per ordering key; only the first outstanding operation per key may fly; a failed or
   dependency-blocked head blocks its key. Modules declare independent object keys (chat
   conversations, settings keys, library targets and media targets); unspecified modules
-  keep a conservative module-wide barrier. Default capacity is one in flight in the app.
+  keep a conservative module-wide barrier.
+- **Register writes** are order-irrelevant state upserts (last-writer-wins, maximum,
+  per-device counters) that a module declares per method with a register key, a merge
+  and an optional debounce: chat pin/mute/draft/retention per conversation, read marks,
+  AI drafts and read marks, reading progress per document and device, settings per key,
+  the media queue. They bypass order-key FIFO (a failed message never holds a draft back)
+  but only one write per register flies. Enqueueing merges a pending write to the same
+  register into the new one: the new operation id carries the merged arguments (an old
+  id may already be applied, and its cached result would hide the new value), the
+  earlier creation time and the union of dependencies. Sending, failed and referenced
+  writes never merge. Debounced writes wait `notBefore` (drafts 1.5 s, read marks 1 s,
+  reading progress 3 s after the last edit), bounded by a `deadline` of four quiet periods
+  after the first. The merged list is persisted like any other outbox state, so a reload
+  keeps the coalesced intent and acknowledged writes are never touched.
+- **Batching.** Each flush step sends every eligible operation in one request, up to 32
+  operations and 64 KiB of arguments: the head of each strict order key plus due register
+  writes. Two operations whose order matters never share a request (same key, or a
+  dependency on an outstanding operation), so the entries are mutually independent.
+  `sync.push {ops:[{op, method, args}]}` runs them through the ordinary dispatch one by
+  one, each with its own idempotency record and write transaction, and answers per
+  operation (`{op}` or `{op, error}`); a single eligible operation uses its method
+  directly. One pull then precedes the acknowledgements of all accepted operations.
 - `op` is the idempotency key; the server remembers results for 14 days, so a late success
   after a connection loss is harmless.
 - Ack removes the item **only after** the authoritative rows arrive by delta/pull; the
@@ -119,8 +140,6 @@ error?, dependencies}`.
   recreated with new ids. A sending item cannot be discarded.
 - Chat records outstanding text uploads as durable prerequisites before enqueueing the
   dependent message or draft, so isolating conversation queues cannot bypass uploads.
-- `coalesce` lets a later pending whole-register LWW write replace an earlier pending one;
-  sending, failed, dependency-bearing and referenced operations are barriers. Never implicit.
 - No UI action silently drops an intent.
 
 ### Optimistic projections

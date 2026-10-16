@@ -132,7 +132,9 @@ describe("SyncHub", () => {
       row("b", 6),
       row("c", 7),
     );
-    const first = f.hub.pull("u", { cursors: {} }).scopes["me:u"]!;
+    const first = f.hub.pull("u", { cursors: {}, windowed: ["me:u"] }).scopes[
+      "me:u"
+    ]!;
     expect(first).toEqual({
       rows: [row("a", 1), row("b", 6)],
       cursor: 6,
@@ -155,12 +157,6 @@ describe("SyncHub", () => {
     expect(
       f.hub
         .pull("u", { cursors: { "me:u": 1 }, windowed: ["me:u"] })
-        .scopes["me:u"]!.rows.map((item) => item.id),
-    ).toEqual(["p2", "s"]);
-    // Older clients that do not declare windows keep receiving every row.
-    expect(
-      f.hub
-        .pull("u", { cursors: { "me:u": 1 } })
         .scopes["me:u"]!.rows.map((item) => item.id),
     ).toEqual(["p2", "s"]);
   });
@@ -262,14 +258,17 @@ describe("SyncHub", () => {
         serialize: (r) => r,
         read: () => undefined,
       });
-    const first = hub.pull("u", { cursors: {} }).scopes.scope!;
+    const first = hub.pull("u", { cursors: {}, windowed: ["scope"] }).scopes
+      .scope!;
     expect(first.rows).toHaveLength(700);
     expect(first.more).toBe(true);
     expect(first.cursor).toBe(1);
     expect(first.reset).toEqual(["post"]);
     expect(Math.max(...requested)).toBe(1024);
-    const final = hub.pull("u", { cursors: { scope: first.cursor } }).scopes
-      .scope!;
+    const final = hub.pull("u", {
+      cursors: { scope: first.cursor },
+      windowed: ["scope"],
+    }).scopes.scope!;
     expect(final.rows).toEqual([row("tail", 4002)]);
     expect(final.more).toBe(false);
     expect(final.cursor).toBe(4002);

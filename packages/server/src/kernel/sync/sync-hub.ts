@@ -26,7 +26,7 @@ export interface SyncConnection {
 }
 export interface SyncRequest {
   cursors: Readonly<Record<string, number>>;
-  /** Scopes the client holds windows in; absent means every scope (legacy). */
+  /** Scopes the client holds windows in; others (default all) omit windowed rows. */
   windowed?: readonly string[];
   limit?: number;
   continuation?: string;
@@ -154,7 +154,7 @@ export class SyncHub {
       }
     }
     let remainingBytes = MAX_SYNC_BYTES;
-    const windowed = request.windowed && new Set(request.windowed);
+    const windowed = new Set(request.windowed ?? []);
     for (const scope of accessible) {
       const cursor = request.cursors[scope] ?? 0;
       const { rows, reset } = this.select(
@@ -163,7 +163,7 @@ export class SyncHub {
         cursor,
         limit,
         revision,
-        !windowed || windowed.has(scope),
+        windowed.has(scope),
       );
       const selected = selectDelta(rows, cursor, limit);
       const wireRows = selected.rows.map((row) =>

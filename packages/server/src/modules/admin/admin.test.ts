@@ -128,7 +128,10 @@ describe("admin workbench over memory link", () => {
       expect(
         db.all("SELECT * FROM learning_progress WHERE user_id=?", uid),
       ).toEqual([]);
-      const after = await admin.api.sync.pull({ cursors });
+      const after = await admin.api.sync.pull({
+        cursors,
+        windowed: [`conv:${conv}`],
+      });
       expect(after.gone).toEqual(
         expect.arrayContaining([`coll:${collection}`, `coll:${playlist}`]),
       );

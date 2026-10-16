@@ -578,3 +578,23 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   caches cannot trigger retention cleanup or replacement of an unseen playback queue.
   Missing feature rows show loading/offline states, and arriving idle settings reset the
   timer. This supersedes the earlier full-sync-before-login assumption.
+
+- **D-121 — Every held window grows; visible chat gaps backfill.** Pull planning extends any
+  window by consecutive rows, not only the newest: a history page fetched during a buffered
+  pull created a newer window and the bridging run was dropped for good, because the
+  advanced cursor never redelivers it. Open conversations fetch a visible gap between loaded
+  posts once; the manual action remains after a failure.
+
+- **D-122 — Per-scope partial commit and window-aware pulls.** A pull commits each scope as
+  soon as its chain completes; revocations stay with the final commit. A durable
+  `partialSync` marker keeps `cacheReady` false until then, also across reloads. Pulls list
+  `windowed` scopes and the server omits windowed rows elsewhere (they were discarded
+  anyway), so conversations complete on the first page; a window opened mid-pull restarts it.
+
+- **D-123 — Register writes and batched push.** Modules declare order-irrelevant upserts
+  (register key, merge, debounce). They bypass order-key FIFO, merge in the durable outbox
+  into a fresh operation id, and wait a bounded quiet period. Each flush sends all eligible
+  independent operations in one `sync.push` request with per-operation idempotency and
+  results, then one pull. Strict FIFO keys and dependencies keep messages and text uploads
+  ordered. Supersedes the explicit-only `coalesce` helper, which is removed. Wire format and
+  stored outbox changed without migration (nothing released).

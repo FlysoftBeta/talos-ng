@@ -261,6 +261,48 @@ describe("LinkHost middleware", () => {
     expect(s.uow.revision).toBe(1);
     expect(s.committed).toHaveBeenCalledOnce();
   });
+  it("runs batched queued operations independently with per-operation idempotency", async () => {
+    const s = setup();
+    s.db.exec(
+      "CREATE TABLE counter(value INTEGER NOT NULL) STRICT; INSERT INTO counter VALUES(0)",
+    );
+    s.host.register(method("test.write", "user", "queue"), (_context, args) =>
+      s.uow.write(() => {
+        if (args.value < 0) throw new AppError("E_DENIED", "denied");
+        s.db.run("UPDATE counter SET value=value+?", args.value);
+        return { value: args.value };
+      }),
+    );
+    s.host.register(method("test.online"), (_context, args) => args);
+    const client = await connect(s.host);
+    const other = "01ARZ3NDEKTSV4RRFFQ69G5FAW";
+    const push = async (ops: unknown[]) => {
+      const call = client.call("sync.push", { ops });
+      await tick();
+      return (await call).data as { results: unknown[] };
+    };
+    const batch = [
+      { op, method: "test.write", args: { value: 1 } },
+      { op: other, method: "test.write", args: { value: -1 } },
+      { op: "online", method: "test.online", args: { value: 2 } },
+      { op: "bad", method: "test.write", args: { value: "x" } },
+    ];
+    const expected = {
+      results: [
+        { op },
+        { op: other, error: { code: "E_DENIED", message: "denied" } },
+        { op: "online", error: expect.objectContaining({ code: "E_INVALID" }) },
+        { op: "bad", error: expect.objectContaining({ code: "E_INVALID" }) },
+      ],
+    };
+    expect(await push(batch)).toEqual(expected);
+    // A replayed batch after a lost reply applies nothing twice.
+    expect(await push(batch)).toEqual(expected);
+    expect(
+      s.db.get<{ value: number }>("SELECT value FROM counter")?.value,
+    ).toBe(1);
+    expect(s.committed).toHaveBeenCalledOnce();
+  });
   it("retains operation replies for fourteen days and permits execution after expiry", async () => {
     const s = setup();
     let count = 0;

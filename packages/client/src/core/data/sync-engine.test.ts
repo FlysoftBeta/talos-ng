@@ -87,11 +87,34 @@ async function fixture(
     args: unknown,
     options?: CallOptions,
   ) => Promise<unknown> = async () => empty();
+  const batches: string[][] = [];
   const call: TypedCall = async <M extends Method>(
     method: M,
     args: ArgsOf<M>,
     options?: CallOptions,
   ): Promise<ResultOf<M>> => {
+    // Plays the server's batch endpoint: each entry is an ordinary queued call.
+    if (method.name === "sync.push") {
+      const { ops } = args as ArgsOf<typeof contract.sync.push>;
+      batches.push(ops.map((entry) => entry.op));
+      const results = [];
+      for (const entry of ops) {
+        calls.push({
+          name: entry.method,
+          args: structuredClone(entry.args),
+          options: { op: entry.op },
+        });
+        try {
+          await handler(entry.method, entry.args, { op: entry.op });
+          results.push({ op: entry.op });
+        } catch (error) {
+          if (!(error instanceof AppError) || error.code === "E_DISCONNECTED")
+            throw error;
+          results.push({ op: entry.op, error: error.toJSON() });
+        }
+      }
+      return { results } as ResultOf<M>;
+    }
     calls.push({ name: method.name, args: structuredClone(args), options });
     return (await handler(method.name, args, options)) as ResultOf<M>;
   };
@@ -126,6 +149,7 @@ async function fixture(
     db,
     engine,
     calls,
+    batches,
     timers,
     make,
     setNow: (value: number) => {
@@ -1205,6 +1229,8 @@ it("isolates chat conversations while retaining durable text-upload dependencies
   const conversation = "01ARZ3NDEKTSV4RRFFQ69G5FAB";
   const message = "01ARZ3NDEKTSV4RRFFQ69G5FAC";
   const other = "01ARZ3NDEKTSV4RRFFQ69G5FAD";
+  const same = "01ARZ3NDEKTSV4RRFFQ69G5FAE";
+  const elsewhere = "01ARZ3NDEKTSV4RRFFQ69G5FAF";
   await f.engine.enqueue({
     op: "upload",
     method: "chat.text.put",
@@ -1218,16 +1244,26 @@ it("isolates chat conversations while retaining durable text-upload dependencies
     args: { id: message, conversation, kind: "text", textId: text },
   });
   await f.engine.enqueue({
-    op: "same-conversation",
-    method: "chat.state.read",
+    op: same,
+    method: "chat.post.send",
     createdAt: 3,
-    args: { conversation, seq: 1 },
+    args: {
+      id: same,
+      conversation,
+      kind: "text",
+      text: "b",
+    },
   });
   await f.engine.enqueue({
-    op: "other-conversation",
-    method: "chat.state.read",
+    op: elsewhere,
+    method: "chat.post.send",
     createdAt: 4,
-    args: { conversation: other, seq: 1 },
+    args: {
+      id: elsewhere,
+      conversation: other,
+      kind: "text",
+      text: "c",
+    },
   });
   expect(f.engine.getSnapshot().outbox[1]?.dependsOn).toEqual(["upload"]);
   f.handle(async (method) => {
@@ -1241,11 +1277,11 @@ it("isolates chat conversations while retaining durable text-upload dependencies
     f.calls
       .filter((call) => call.name !== "sync.pull")
       .map((call) => call.options?.op),
-  ).toEqual(["upload", "other-conversation"]);
+  ).toEqual(["upload", elsewhere]);
   expect(f.engine.getSnapshot().outbox.map((op) => [op.op, op.state])).toEqual([
     ["upload", "failed"],
     [message, "failed"],
-    ["same-conversation", "pending"],
+    [same, "pending"],
   ]);
 });
 
@@ -1371,4 +1407,79 @@ it("certifies empty scopes at cursor zero, preserves completeness across restart
   expect(restored.getSnapshot().cacheReady).toBe(false);
   await restored.connect();
   expect(restored.getSnapshot().cacheReady).toBe(true);
+});
+
+describe("outbound batching and debounce", () => {
+  const conversation = "01ARZ3NDEKTSV4RRFFQ69G5FAB";
+  const draft = (op: string, ms: number, v: string) => ({
+    op,
+    method: "chat.state.set",
+    createdAt: ms,
+    args: {
+      conversation,
+      key: "draft",
+      value: { v, t: { ms, counter: 0 }, op },
+    },
+  });
+  it("merges a burst of draft edits durably and sends only the latest after the quiet period", async () => {
+    const f = await fixture(new ModuleRegistry([chatModule]));
+    f.handle(async () => empty());
+    await f.engine.connect();
+    f.setNow(1000);
+    await f.engine.enqueue(draft("01ARZ3NDEKTSV4RRFFQ69G5FA1", 1000, "h"));
+    f.setNow(1400);
+    await f.engine.enqueue(draft("01ARZ3NDEKTSV4RRFFQ69G5FA2", 1400, "he"));
+    f.setNow(1800);
+    await f.engine.enqueue(draft("01ARZ3NDEKTSV4RRFFQ69G5FA3", 1800, "hey"));
+    await f.engine.flush();
+    expect(f.calls.filter((c) => c.name !== "sync.pull")).toEqual([]);
+    // The coalesced pending state survives a reload and still projects locally.
+    const restored = f.make();
+    await restored.hydrate();
+    expect(restored.getSnapshot().outbox).toEqual([
+      expect.objectContaining({
+        op: "01ARZ3NDEKTSV4RRFFQ69G5FA3",
+        createdAt: 1000,
+        notBefore: 3300,
+        args: expect.objectContaining({
+          value: expect.objectContaining({ v: "hey" }),
+        }),
+      }),
+    ]);
+    restored.close();
+    expect([...f.timers.values()].map((timer) => timer.ms)).toContain(1500);
+    f.setNow(3300);
+    f.fire();
+    await until(f.engine, (s) => s.outbox.length === 0);
+    expect(
+      f.calls
+        .filter((c) => c.name !== "sync.pull")
+        .map((c) => [
+          c.options?.op,
+          (c.args as { value: { v: string } }).value.v,
+        ]),
+    ).toEqual([["01ARZ3NDEKTSV4RRFFQ69G5FA3", "hey"]]);
+  });
+  it("sends independent operations in one request followed by one pull", async () => {
+    const f = await fixture();
+    f.handle(async () => empty());
+    await f.engine.enqueue(item("theme"));
+    await f.engine.enqueue({
+      ...item("volume"),
+      args: { key: "volume", value: "quiet" },
+    });
+    await f.engine.enqueue(item("theme-again"));
+    await f.engine.connect();
+    await until(f.engine, (s) => s.outbox.length === 0);
+    // Strict operations on one key never share a request; independent heads do.
+    expect(f.batches).toEqual([["theme", "volume"]]);
+    expect(f.calls.map((c) => c.name)).toEqual([
+      "sync.pull",
+      "me.setting.set",
+      "me.setting.set",
+      "sync.pull",
+      "me.setting.set",
+      "sync.pull",
+    ]);
+  });
 });

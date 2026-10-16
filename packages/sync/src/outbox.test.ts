@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import { random } from "../test/random.ts";
 import {
   attemptBackoffMs,
-  coalesce,
   isTerminalRejection,
   nextToSend,
   reduceOutbox,
@@ -239,34 +238,98 @@ describe("outbox", () => {
     expect(() => attemptBackoffMs(-1)).toThrow(AppError);
   });
 
-  it("coalesces only replaceable pending writes and keeps the later FIFO position", () => {
-    const items = enqueue(enqueue(enqueue([], "1"), "2", "b"), "3");
-    expect(coalesce(items, (x) => String(x.args)).map((x) => x.op)).toEqual([
-      "2",
-      "3",
-    ]);
-    expect(coalesce(items, () => undefined)).toEqual(items);
-    expect(items).toHaveLength(3);
-  });
-
-  it("coalescing preserves sending/failed writes and dependency edges", () => {
-    let items = enqueue(enqueue([], "1"), "2");
-    expect(coalesce(send(items, "1"), () => "key").map((x) => x.op)).toEqual([
-      "1",
-      "2",
-    ]);
-    items = enqueue(items, "3", "b", ["1"]);
-    expect(coalesce(items, (x) => String(x.args)).map((x) => x.op)).toEqual([
-      "1",
-      "2",
-      "3",
-    ]);
-    const failed = reduceOutbox(
-      send(items, "1"),
-      { type: "rejected", op: "1", error: error("E_DENIED") },
-      options,
-    );
-    expect(coalesce(failed, () => "key")).toHaveLength(3);
+  describe("register writes", () => {
+    // "set:<key>" writes are maximum registers on <key>; others are strict FIFO.
+    const registers = {
+      ...options,
+      orderKey: () => "conversation",
+      register: (method: string, args: unknown) =>
+        method === "set" ? String((args as { key: string }).key) : undefined,
+      merge: (_method: string, earlier: unknown, later: unknown) => ({
+        ...(later as object),
+        value: Math.max(
+          (earlier as { value: number }).value,
+          (later as { value: number }).value,
+        ),
+      }),
+    };
+    const write = (
+      items: readonly OutboxItem[],
+      op: string,
+      value: number,
+      extra: Partial<EnqueueItem> = {},
+    ) =>
+      reduceOutbox(
+        items,
+        {
+          type: "enqueue",
+          item: {
+            op,
+            method: "set",
+            args: { key: "draft", value },
+            createdAt: Number(op),
+            ...extra,
+          },
+        },
+        registers,
+      );
+    const strict = (items: readonly OutboxItem[], op: string) =>
+      reduceOutbox(
+        items,
+        {
+          type: "enqueue",
+          item: { op, method: "send", args: op, createdAt: Number(op) },
+        },
+        registers,
+      );
+    it("merge a pending write into the latest one with a fresh id and its original age", () => {
+      let items = write([], "1", 5, { notBefore: 10, deadline: 30 });
+      items = write(items, "2", 3, { notBefore: 40, deadline: 60 });
+      expect(items).toEqual([
+        expect.objectContaining({
+          op: "2",
+          args: { key: "draft", value: 5 },
+          createdAt: 1,
+          // A continuously edited register still goes out by the first deadline.
+          notBefore: 30,
+          deadline: 30,
+        }),
+      ]);
+    });
+    it("bypass strict FIFO barriers in both directions but keep one in flight per register", () => {
+      let items = strict([], "1");
+      items = write(items, "2", 1);
+      items = strict(items, "3");
+      expect(nextToSend(items, registers).map((x) => x.op)).toEqual(["1", "2"]);
+      items = reduceOutbox(items, { type: "sendStarted", op: "2" }, registers);
+      // An in-flight register write is never changed; the next one waits behind it.
+      items = write(items, "4", 9);
+      expect(items.map((x) => x.op)).toEqual(["1", "2", "3", "4"]);
+      expect(nextToSend(items, registers).map((x) => x.op)).toEqual(["1"]);
+      items = reduceOutbox(items, { type: "acked", op: "2" }, registers);
+      expect(nextToSend(items, registers).map((x) => x.op)).toEqual(["1", "4"]);
+    });
+    it("never merge failed or referenced writes, and wait for debounce", () => {
+      let items = write([], "1", 1);
+      items = reduceOutbox(items, { type: "sendStarted", op: "1" }, registers);
+      items = reduceOutbox(
+        items,
+        { type: "rejected", op: "1", error: error("E_DENIED").toJSON() },
+        registers,
+      );
+      items = write(items, "2", 2, { notBefore: 50 });
+      items = reduceOutbox(
+        items,
+        { type: "enqueue", item: { ...item("3"), dependsOn: ["2"] } },
+        registers,
+      );
+      items = write(items, "4", 3);
+      expect(items.map((x) => x.op)).toEqual(["1", "2", "3", "4"]);
+      items = reduceOutbox(items, { type: "discard", op: "1" }, registers);
+      expect(nextToSend(items, registers, 49).map((x) => x.op)).toEqual([]);
+      expect(nextToSend(items, registers, 50).map((x) => x.op)).toEqual(["2"]);
+      expect(nextToSend(items, registers).map((x) => x.op)).toEqual(["2"]);
+    });
   });
 
   it("preserves operation accounting, per-key FIFO and cascades across 6000 seeded events", () => {

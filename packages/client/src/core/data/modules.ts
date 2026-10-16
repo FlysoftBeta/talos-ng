@@ -16,6 +16,12 @@ export interface ClientModule {
   ) => readonly string[];
   /** Operations sharing a key retain FIFO barriers, including failed writes. */
   readonly orderKey?: (method: string, args: unknown) => string;
+  /**
+   * Order-irrelevant state upserts by method. They bypass the order key, a pending
+   * write merges with a later one to the same register (latest value wins), and
+   * debounced writes wait so bursts of edits travel as one.
+   */
+  readonly registers?: Readonly<Record<string, RegisterWrite>>;
   readonly rowTypes: readonly string[];
   readonly windowed?: Readonly<Record<string, { seqOf(row: Row): number }>>;
   readonly reducers: Readonly<
@@ -31,6 +37,14 @@ export interface ClientModule {
   readonly repositories: Readonly<
     Record<string, (rows: readonly StoredRow[]) => readonly StoredRow[]>
   >;
+}
+export interface RegisterWrite {
+  /** The register written, or undefined to keep this call strictly ordered. */
+  key(args: unknown): string | undefined;
+  /** Arguments equivalent to applying `earlier` then `later`; default `later`. */
+  merge?(earlier: unknown, later: unknown): unknown;
+  /** Quiet period before sending; continuous edits still send within four times it. */
+  debounceMs?(args: unknown): number;
 }
 export function defineClientModule<M extends ClientModule>(module: M): M {
   return Object.freeze(module);
@@ -72,6 +86,21 @@ export class ModuleRegistry {
       module?.id ?? method,
       module?.orderKey?.(method, args) ?? "",
     ]);
+  }
+  private registerWrite(method: string): RegisterWrite | undefined {
+    return this.modules.find((entry) => entry.reducers[method])?.registers?.[
+      method
+    ];
+  }
+  register(method: string, args: unknown): string | undefined {
+    return this.registerWrite(method)?.key(args);
+  }
+  merge(method: string, earlier: unknown, later: unknown): unknown {
+    const merge = this.registerWrite(method)?.merge;
+    return merge ? merge(earlier, later) : later;
+  }
+  debounceMs(method: string, args: unknown): number {
+    return this.registerWrite(method)?.debounceMs?.(args) ?? 0;
   }
   operationTitle(method: string): string {
     return (
