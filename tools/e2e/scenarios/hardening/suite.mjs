@@ -89,6 +89,9 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
       }
     })`);
     await unlock(cdp);
+    // Admission is independent of the paginated pull. Data assertions belong
+    // after background synchronization, not at the moment the app first opens.
+    await cdp.wait(app);
     await cdp.wait("document.body.textContent.indexOf('已连接')>=0");
     assert.ok(
       (await readDb(cdp, "scopes", personal)).cursor >= finalPage.cursor,
@@ -113,7 +116,7 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
     assert.equal(
       restoredSettings,
       250,
-      "all pages are persisted before login completes",
+      "all pages are eventually persisted after background sync",
     );
     console.log("Paginated login with a pre-existing unadmitted cursor passed");
     await cdp.wait(

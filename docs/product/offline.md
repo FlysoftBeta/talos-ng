@@ -13,6 +13,18 @@ the live connection to the server, not the browser's network flag.
   (an insecure intranet address); online sign-in still works.
 - A user without the offline gate sees no cached content while disconnected.
 
+## Signing in while data is still arriving
+
+Successful server sign-in opens the app without waiting for all data to synchronize. Cached
+content is usable immediately; missing lists and items fill in as synchronization completes.
+The connection status shows ongoing synchronization, and temporary failures retry in the
+background. Available online actions can run after authentication; queued changes wait for
+safe reconciliation before sending. A later session or admission refusal returns to sign-in
+or the device lock screen. Locking remains effective while data arrives.
+
+Missing data during recovery does not remove retained downloads. Cleanup waits until the
+app has enough synchronized state to distinguish an absent item from an unfinished load.
+
 ## Two kinds of actions
 
 - **Queued**: applied on the device at once and sent when connected. Queued: settings (theme,

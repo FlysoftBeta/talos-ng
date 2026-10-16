@@ -188,3 +188,33 @@ describe("personal media retention", () => {
     expect(t.port.releaseFiles).toHaveBeenCalledWith("media:a:retained");
   });
 });
+
+it("preserves retained audio through incomplete sync and disconnect, then reconciles a complete offline cache", async () => {
+  const t = setup();
+  const retained = [{ track: "a", rid: "r-a", expires: 10 * DAY }];
+  t.store.set("media:retained", retained);
+  const missing = { ...data(), tracks: [], playlists: [] };
+  for (const offline of [false, true]) {
+    t.scheduler.update({
+      user: "u",
+      active: true,
+      syncing: true,
+      offline,
+      data: missing,
+    });
+    await t.scheduler.idle();
+    expect(t.port.releaseFiles).not.toHaveBeenCalled();
+    expect(t.port.collectFiles).not.toHaveBeenCalled();
+    expect(t.store.get("media:retained")).toEqual(retained);
+  }
+  t.scheduler.update({
+    user: "u",
+    active: true,
+    syncing: false,
+    offline: true,
+    data: missing,
+  });
+  await t.scheduler.idle();
+  expect(t.port.releaseFiles).toHaveBeenCalledWith("media:a:retained");
+  expect(t.store.get("media:retained")).toEqual([]);
+});

@@ -22,6 +22,10 @@ export function MediaBackground(): null {
       user: snapshot.user?.id,
       active: snapshot.gate === "app",
       offline: snapshot.status.connection === "offline",
+      syncing:
+        snapshot.cacheReady !== true ||
+        snapshot.status.connection === "syncing" ||
+        snapshot.status.connection === "connecting",
       data,
     });
     return () => scheduler.current!.stop();
@@ -29,6 +33,7 @@ export function MediaBackground(): null {
     runtime,
     snapshot.user?.id,
     snapshot.gate,
+    snapshot.cacheReady,
     snapshot.status.connection,
     mediaRetentionSignature(data),
   ]);

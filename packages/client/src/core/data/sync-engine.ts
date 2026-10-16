@@ -36,6 +36,7 @@ export interface SyncSnapshot {
   locked: boolean;
   updating: boolean;
   lastSync?: number;
+  cacheReady: boolean;
   rows: readonly StoredRow[];
   outbox: readonly OutboxItem[];
   scopes: readonly string[];
@@ -57,6 +58,7 @@ export class SyncEngine {
   private snapshot: SyncSnapshot = {
     phase: "offline",
     progress: 0,
+    cacheReady: false,
     locked: true,
     updating: false,
     rows: [],
@@ -111,11 +113,12 @@ export class SyncEngine {
   }
   private async refresh(): Promise<void> {
     const { db, user, modules } = this.options;
-    const [rows, outbox, lastSync, admitted] = await Promise.all([
+    const [rows, outbox, lastSync, admitted, scopes] = await Promise.all([
       db.table<StoredRow>("rows").range(),
       db.table<readonly OutboxItem[], string>("outbox").get(user),
       db.table<number, string>("kv").get(`lastSync:${user}`),
       db.table<readonly string[], string>("kv").get(`scopes:${user}`),
+      db.table<StoredScope>("scopes").range(),
     ]);
     // Every engine owns a per-account set of admitted scopes; other users' me rows never project.
     const visible = rows.filter((row) => (admitted ?? []).includes(row.scope));
@@ -124,6 +127,14 @@ export class SyncEngine {
       outbox: outbox ?? [],
       scopes: admitted ?? [],
       lastSync,
+      cacheReady:
+        lastSync !== undefined &&
+        (admitted ?? []).every((scope) =>
+          scopes.some(
+            (saved) =>
+              saved.scope === scope && (saved.complete ?? saved.cursor > 0),
+          ),
+        ),
     });
   }
   private async change(event: OutboxEvent, generation?: number): Promise<void> {
@@ -564,6 +575,7 @@ export class SyncEngine {
                       scopes.put({
                         scope,
                         cursor: operation.cursor,
+                        complete: true,
                         ...(Object.keys(windows).length ? { windows } : {}),
                       });
                   }
@@ -653,7 +665,12 @@ export class SyncEngine {
                     });
                     return tx
                       .table<StoredScope, string>("scopes")
-                      .put({ scope, cursor: saved?.cursor ?? 0, windows });
+                      .put({
+                        scope,
+                        cursor: saved?.cursor ?? 0,
+                        complete: saved?.complete,
+                        windows,
+                      });
                   });
               });
           }),

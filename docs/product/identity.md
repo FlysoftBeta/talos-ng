@@ -17,6 +17,8 @@ a track still being prepared, so a concealed app never starts audio.
 - The credential is a six-digit PIN, unique across all users and live invitations, so
   there is no account name at sign-in. The sixth digit submits automatically. A touch
   keypad and the keyboard (digits, Backspace, Delete) both work.
+- Successful online sign-in and onboarding open the app while data continues synchronizing
+  in the background; incomplete synchronization does not hold the PIN screen open.
 - A user has one or two PINs; the second is an equivalent credential for the same account,
   not a confirmation or duress code.
 - A sign-in lasts 24 hours and slides with use. A device remembers at most two live accounts

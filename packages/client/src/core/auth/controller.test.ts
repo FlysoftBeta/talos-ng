@@ -492,3 +492,20 @@ describe("credential changes", () => {
     });
   });
 });
+
+it("finishes authenticated resume while background connection remains unfinished", async () => {
+  let finish!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const t = setup({
+    device: "dev",
+    saved: { ...savedBase },
+    engine: { phase: vi.fn(), connect: vi.fn(() => pending), close: vi.fn() },
+  });
+  (t.ports.call as ReturnType<typeof vi.fn>).mockResolvedValueOnce(savedBase);
+  await t.controller.connected({ build: "new" } as never);
+  expect(t.ports.checkUpdate).toHaveBeenCalledOnce();
+  expect(t.ports.engine!.connect).toHaveBeenCalledOnce();
+  finish();
+});
