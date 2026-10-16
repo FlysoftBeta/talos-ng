@@ -501,6 +501,46 @@ it("returns invalid-client over memory link for an unknown saved device and perm
   }
 });
 
+it("replays logout without revoking a session created after the original logout", async () => {
+  const db = new Db();
+  const kernel = createKernel({
+    db,
+    store: createMemoryObjectStore(),
+    build: "test",
+    dev: true,
+    testSeed: true,
+  });
+  const current = await connect(kernel, null);
+  try {
+    await current.api.auth.device.register({});
+    const original = await current.api.auth.login({ pin: "654321" });
+    if (!("token" in original)) throw new Error("expected a session");
+    const op = createUlid()();
+    await current.api.auth.logout({ token: original.token }, { op });
+    await expect(
+      current.api.auth.resume({ token: original.token }),
+    ).rejects.toMatchObject({ code: "E_UNAUTHENTICATED" });
+    const newer = await current.api.auth.login({ pin: "654321" });
+    if (!("token" in newer)) throw new Error("expected a session");
+    await current.api.auth.logout({ token: original.token }, { op });
+    // The replay conceals the current connection, while its newer saved login
+    // remains resumable. It must not replay the original token revocation.
+    await expect(current.api.sync.pull({ cursors: {} })).rejects.toMatchObject({
+      code: "E_UNAUTHENTICATED",
+    });
+    await expect(
+      current.api.auth.resume({ token: newer.token }),
+    ).resolves.toMatchObject({ token: newer.token, user: newer.user });
+    await expect(
+      current.api.auth.resume({ token: original.token }),
+    ).rejects.toMatchObject({ code: "E_UNAUTHENTICATED" });
+  } finally {
+    current.client.stop();
+    await kernel.close();
+    db.close();
+  }
+});
+
 it("replays a login by operation id after reconnect: same session, connection re-bound, conflicting reuse rejected", async () => {
   const db = new Db();
   const kernel = createKernel({
