@@ -567,3 +567,14 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   Local verification is optional for quick reproduction or targeted feedback; regression
   tests and accurate verification reporting remain required. This supersedes earlier
   worktree and main-branch local-gate prerequisites.
+
+- **D-120 — Authentication admits partial-sync sessions.** Successful login, onboarding
+  and resume start fenced background synchronization instead of awaiting the full pull.
+  Authenticated syncing sessions can use online RPCs; authentication and concealment gates
+  still apply. Recoverable pull failures retain admission and retry; invalid credentials
+  invalidate the current session. Cached profile revisions cannot overwrite freshly
+  authenticated permissions. Atomic row/cursor application remains unchanged.
+  Durable scope completeness distinguishes a valid empty cursor from eviction; incomplete
+  caches cannot trigger retention cleanup or replacement of an unseen playback queue.
+  Missing feature rows show loading/offline states, and arriving idle settings reset the
+  timer. This supersedes the earlier full-sync-before-login assumption.

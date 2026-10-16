@@ -1,3 +1,19 @@
+# Partial-sync admission — 2026-10-16
+
+- Pushed implementation `7233ce3`: login/onboarding/resume no longer wait for full sync;
+  authenticated online commands work while sync continues. Background failures retry,
+  invalid sessions are cleared, and old-session callbacks are fenced.
+- Cached profiles cannot restore stale roles after authentication. Synced idle settings
+  reset idle timers. Library/media loading states distinguish missing data from revocation.
+- Explicit durable scope completeness protects retention during partial cache/disconnect
+  and protects queue replacement from overwriting unseen entries. Valid empty scopes
+  remain complete; normal complete offline caches retain expiry/queue behavior (D-120).
+- Targeted verification: 145 auth/runtime/sync/retention tests, 26 list-model tests and
+  18 playback tests pass; helpers also checked client types and changed-file lint.
+  Full local checks/browser/package runs intentionally omitted under D-119.
+- CI run `38856673408` for `7233ce3` is pending/in progress; monitor exact final pushed
+  commit and fix failures. Earlier `29c4174` CI check and all three packages passed.
+
 # Initial-login cursor repair — 2026-10-16
 
 - Deployed build `16810b2` failed first paginated sync when a scope had a cached cursor but was
@@ -12,12 +28,14 @@
   eviction before a delta, and invalid server chains. Full tests: 177 files, 1,840 passed,
   one optional test skipped. Typechecks, lint and build/static compatibility pass.
 - Real-browser hardening now seeds an unadmitted cached cursor, requires pagination,
-  and verifies all 250 settings persist before login completes. It fails on old code with
+  and verifies all 250 settings eventually persist after background sync. It fails on old code with
   `Pull cursor moved backwards` and passes on the repaired Chromium 70 build.
 - Three-target package, full modern browser and full real Chromium 70 suites pass,
   including the new login regression, performance budgets and packaged update/rollback,
   SQLite/object restore and HTTPS/WSS. Existing browser data is repaired through sync;
   no reset or migration is needed.
+- GitHub CI for `29c4174` passed `check` and all three package targets
+  (run `38855596388`).
 - Owner changed verification workflow after these runs: push first and monitor CI by
   default; no mandatory full local checks. Use targeted local checks only when useful for
   quick feedback (D-119; AGENTS.md, CHARTER.md and _common.md updated).
@@ -184,7 +202,7 @@ project is not DONE before it. Inputs:
   binaries are tracked. Git history still contains ~540 MiB of old screenshot PNGs; whether
   to rewrite history is the top level's decision (not done).
 - Remote: `origin` = https://github.com/FlysoftBeta/talos-ng.git. Rule: push `main` after
-  each completed unit once gates are green (orchestrator only).
+  each completed unit, then inspect exact-commit CI (orchestrator only; D-119).
 
 ## Verified by the orchestrator (session 8)
 
