@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { Button, IconButton } from "../../../ui/actions/index.ts";
 import { Icon } from "../../../ui/icon/index.ts";
 import { Dialog, Menu } from "../../../ui/overlays/index.ts";
@@ -39,6 +39,8 @@ export function TrackRowView({
   onEnqueue,
   onAdd,
   onRemove,
+  onRetention,
+  retentionDialog,
 }: {
   /** 1-based position in the shown list. */
   index: number;
@@ -63,6 +65,8 @@ export function TrackRowView({
   onEnqueue(): void;
   onAdd(): void;
   onRemove(): void;
+  onRetention(): void;
+  retentionDialog: ReactNode;
 }): ReactElement {
   return (
     <div
@@ -114,6 +118,7 @@ export function TrackRowView({
         <Menu
           label={`更多操作 ${title}`}
           items={[
+            { label: "我的离线保留", icon: "download", onSelect: onRetention },
             {
               label: `加入队列 ${title}`,
               icon: "queue",
@@ -141,6 +146,7 @@ export function TrackRowView({
           {error}
         </p>
       )}
+      {retentionDialog}
       {adding && (
         <Dialog
           open

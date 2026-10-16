@@ -17,12 +17,6 @@ interface Owner {
   owner: string;
   rid: string;
 }
-interface Retained {
-  expires: number;
-  doc?: string;
-  playlist?: string;
-  track?: string;
-}
 export interface QuotaOptions {
   now?: () => number;
   estimate?: () => Promise<{ usage?: number; quota?: number }>;
@@ -67,7 +61,15 @@ export class EvictionManager {
       const policyStamp = (values: readonly StoredRow[]): string =>
         JSON.stringify(
           values.filter((r) =>
-            ["chatState", "libraryState", "mediaPlaylist"].includes(r.type),
+            [
+              "chatState",
+              "libraryRetention",
+              "mediaRetention",
+              "libraryCollection",
+              "mediaPlaylist",
+              "libraryDoc",
+              "mediaTrack",
+            ].includes(r.type),
           ),
         );
       const policiesAtScan = policyStamp(rows);
@@ -92,62 +94,74 @@ export class EvictionManager {
       let needed = (estimate.usage ?? usage) + incoming - quota * 0.9;
       if (force) needed = Math.max(needed, 1024 * 1024);
       if (needed <= 0) return;
-      const retained = new Map<string, number>();
-      const users = new Set(
-        rows
-          .filter((r) => r.scope.startsWith("me:"))
-          .map((r) => r.scope.slice(3)),
-      );
-      for (const { owner } of owners) users.add(owner.split(":")[0]!);
-      for (const user of users) {
-        for (const area of ["library", "media"]) {
-          const values = await this.db
-            .table<Retained[], string>("kv")
-            .get(`feature:${user}:${area}:retained`);
-          for (const value of values ?? [])
-            retained.set(
-              area === "library"
-                ? `${user}:library:${value.doc}`
-                : `${user}:media:${value.playlist}:${value.track}`,
-              value.expires,
-            );
-        }
-      }
       const expiry = (key: string, rid?: string): number => {
         let retainedUntil = 0;
-        for (const [prefix, expires] of retained)
-          if (key.startsWith(prefix))
-            retainedUntil = Math.max(retainedUntil, expires);
+        const user = key.split(":")[0];
         const library = /(?:^|:)library:([^:]+)/.exec(key)?.[1];
         const media = /(?:^|:)media:([^:]+)/.exec(key)?.[1];
-        for (const row of rows) {
-          if (row.deleted) continue;
-          if (library && row.type === "libraryState" && row.id === library) {
-            const policy = (
-              row.data as {
-                retention?: { v: number | string; t: { ms: number } };
-              }
-            ).retention;
-            if (policy && typeof policy.v === "number")
-              retainedUntil = Math.max(
-                retainedUntil,
-                policy.t.ms + policy.v * 86400000,
-              );
-          }
-          if (media && row.type === "mediaPlaylist" && row.id === media) {
+        const id = library ?? media;
+        if (id) {
+          const area = library ? "library" : "media";
+          const itemType = library ? "libraryDoc" : "mediaTrack";
+          const listType = library ? "libraryCollection" : "mediaPlaylist";
+          const members = library ? "docs" : "tracks";
+          // Saved scheduler bookkeeping is never authoritative after policy changes.
+          if (
+            !rows.some(
+              (row) =>
+                !row.deleted &&
+                row.type === itemType &&
+                row.id === id &&
+                (row.scope === `me:${user}` ||
+                  (row.scope.startsWith("coll:") &&
+                    rows.some(
+                      (list) =>
+                        !list.deleted &&
+                        list.scope === row.scope &&
+                        list.type === listType &&
+                        (list.data as Record<string, string[]>)[
+                          members
+                        ]?.includes(id),
+                    ))),
+            )
+          )
+            return 0;
+          for (const row of rows) {
+            if (
+              row.deleted ||
+              row.scope !== `me:${user}` ||
+              row.type !== `${area}Retention`
+            )
+              continue;
             const policy = row.data as {
-              lastPlayed: number;
-              created: number;
-              retentionDays: number;
+              kind: string;
+              value: { v: number | string; t: { ms: number } } | null;
+              lastUsed: number;
             };
+            if (!policy.value || typeof policy.value.v !== "number") continue;
+            const individual = policy.kind === (library ? "doc" : "track");
+            if (
+              individual
+                ? row.id !== id
+                : !rows.some(
+                    (list) =>
+                      !list.deleted &&
+                      list.type === listType &&
+                      list.id === row.id &&
+                      (list.data as Record<string, string[]>)[
+                        members
+                      ]?.includes(id),
+                  )
+            )
+              continue;
             retainedUntil = Math.max(
               retainedUntil,
-              Math.max(policy.lastPlayed, policy.created) +
-                policy.retentionDays * 86400000,
+              Math.max(policy.value.t.ms, policy.lastUsed) +
+                policy.value.v * 86400000,
             );
           }
+          return retainedUntil;
         }
-        if (library || media) return retainedUntil;
         const conv = /(?:^|:)conv:([^:]+)/.exec(key)?.[1];
         if (conv) {
           const policies = rows.filter(

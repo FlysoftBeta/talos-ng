@@ -302,6 +302,15 @@ export class PlaybackController {
         error: "",
       });
       this.session.playing(track);
+      try {
+        await this.port.command(contract.media.recordPlay, {
+          track: track.id,
+          ...this.port.operation(),
+        });
+      } catch (error) {
+        if (turn === this.generation)
+          this.patch({ error: message(error, "播放记录保存失败") });
+      }
     } catch (e) {
       this.patch({ error: message(e, "播放失败"), playing: false });
     }

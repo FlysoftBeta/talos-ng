@@ -18,7 +18,18 @@ const fixture = {
 };
 const data = {
   docs: [fixture],
-  states: new Map([[fixture.id, { retention: { v: 7, t: { ms: 0 } } }]]),
+  retentions: new Map([
+    [
+      fixture.id,
+      {
+        id: fixture.id,
+        kind: "doc",
+        value: { v: 7, t: { ms: 0 } },
+        lastUsed: 0,
+      },
+    ],
+  ]),
+  states: new Map(),
   collections: [],
   rows: [],
 } as unknown as LibraryData;

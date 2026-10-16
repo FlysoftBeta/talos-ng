@@ -1,21 +1,27 @@
 import {
+  libraryRetentionEntitySchema,
   libraryCollectionSchema,
   libraryDocSchema,
   libraryStateSchema,
 } from "@talos/contract";
 import type {
+  LibraryRetention,
   LibraryCollection,
   LibraryDoc,
   LibraryState,
 } from "@talos/contract";
 import type { StoredRow } from "../../../core/data/db.ts";
 export interface LibraryData {
+  retentions: Map<string, LibraryRetention>;
   docs: LibraryDoc[];
   collections: LibraryCollection[];
   states: Map<string, LibraryState>;
   rows: readonly StoredRow[];
 }
-export function decodeLibrary(rows: readonly StoredRow[]): LibraryData {
+export function decodeLibrary(
+  rows: readonly StoredRow[],
+  user?: string,
+): LibraryData {
   const docs = new Map<string, LibraryDoc>(),
     collections = new Map<string, LibraryCollection>(),
     states = new Map<string, LibraryState>();
@@ -24,8 +30,17 @@ export function decodeLibrary(rows: readonly StoredRow[]): LibraryData {
       .filter((row) => !row.deleted && row.type === "libraryCollection")
       .map((row) => [row.scope, libraryCollectionSchema.safeParse(row.data)]),
   );
+  const retentions = new Map<string, LibraryRetention>();
   for (const row of rows.slice().sort((a, b) => a.rev - b.rev)) {
     if (row.deleted) continue;
+    if (
+      row.type === "libraryRetention" &&
+      row.scope.startsWith("me:") &&
+      (!user || row.scope === `me:${user}`)
+    ) {
+      const value = libraryRetentionEntitySchema.safeParse(row.data);
+      if (value.success) retentions.set(row.id, value.data);
+    }
     if (row.type === "libraryDoc") {
       if (row.scope.startsWith("coll:")) {
         const collection = admitted.get(row.scope);
@@ -45,6 +60,7 @@ export function decodeLibrary(rows: readonly StoredRow[]): LibraryData {
     }
   }
   return {
+    retentions,
     docs: Array.from(docs.values()).sort(
       (a, b) =>
         (states.get(b.id)?.lastRead ?? b.created) -

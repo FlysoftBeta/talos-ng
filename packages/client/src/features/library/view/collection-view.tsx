@@ -21,6 +21,7 @@ export interface CollectionItem {
   tag?: RowTag;
 }
 export interface CollectionViewProps {
+  retentionControl: ReactNode;
   title: string;
   items: CollectionItem[];
   canWrite: boolean;
@@ -60,6 +61,7 @@ export function CollectionView(props: CollectionViewProps): ReactElement {
         subtitle={`${props.items.length} 份文档`}
         actions={
           <>
+            {props.retentionControl}
             {props.canShare && (
               <IconButton
                 label="分享"

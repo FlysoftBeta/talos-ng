@@ -53,7 +53,8 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
     ).data.doc;
     const opened = await ready(wire, doc);
     await wire.call("library.retention.set", {
-      doc,
+      kind: "doc",
+      id: doc,
       value: { v: 7, t: { ms: Date.now(), counter: 0 }, op: id(1) },
     });
     await cdp.navigate(server.url + "/");

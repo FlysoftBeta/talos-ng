@@ -10,7 +10,7 @@ export const trackHint = (track: MediaTrack): string =>
 export const artistLine = (track: MediaTrack): string =>
   track.artists.join("、") || "未知艺人";
 export const playlistHint = (playlist: MediaPlaylist): string =>
-  `${playlist.tracks.length} 首 · 保留 ${playlist.retentionDays} 天`;
+  `${playlist.tracks.length} 首`;
 /** Server cache states are labelled separately from the bytes held on this device. */
 export function cacheLabel(track: MediaTrack, deviceCached: boolean): string {
   return deviceCached ? "本机已缓存" : track.audio ? "服务器已缓存" : "准备中";

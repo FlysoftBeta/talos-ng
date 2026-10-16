@@ -31,6 +31,26 @@ describe("one storage eviction policy", () => {
       ],
       "feature:u:library:retained",
     );
+    await db
+      .table("rows")
+      .put({
+        scope: "me:u",
+        type: "libraryDoc",
+        id: "d3",
+        rev: 1,
+        deleted: false,
+        data: {},
+      });
+    await db
+      .table("rows")
+      .put({
+        scope: "me:u",
+        type: "libraryRetention",
+        id: "d3",
+        rev: 1,
+        deleted: false,
+        data: { kind: "doc", value: { v: 1, t: { ms: 1 } }, lastUsed: 0 },
+      });
     await db.table("outbox").put([{ op: "pending" }], "u");
     await db.table("kv").put("draft", "feature:u:ai:text:draft");
     let usage = 400;
@@ -125,11 +145,11 @@ it("rechecks retention changed by another tab after candidate discovery", async 
     estimate: async () => {
       await db.table("rows").put({
         scope: "me:u",
-        type: "libraryState",
+        type: "libraryRetention",
         id: "d",
         rev: 1,
         deleted: false,
-        data: { retention: { v: 7, t: { ms: 100 } } },
+        data: { kind: "doc", value: { v: 7, t: { ms: 100 } }, lastUsed: 0 },
       });
       return { usage: 1000000, quota: 100 };
     },

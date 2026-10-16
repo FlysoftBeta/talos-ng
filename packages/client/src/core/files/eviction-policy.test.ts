@@ -84,17 +84,24 @@ describe("eviction retention policies", () => {
     f.db.close();
   });
 
-  it("honours a playlist's retention days from the later of lastPlayed and created", async () => {
+  it("honours my playlist policy from my own last use, independent of shared list metadata", async () => {
     const f = await fixture("media-retention");
-    const rid = await f.put(3, "u:media:pl1:t1");
+    const rid = await f.put(3, "u:media:t1:retained");
     await f.row({
       scope: "coll:pl1",
       type: "mediaPlaylist",
       id: "pl1",
+      data: { tracks: ["t1"] },
+    });
+    await f.row({ scope: "coll:pl1", type: "mediaTrack", id: "t1", data: {} });
+    await f.row({
+      scope: "me:u",
+      type: "mediaRetention",
+      id: "pl1",
       data: {
-        created: f.clock() - 40 * DAY,
-        lastPlayed: f.clock() - DAY,
-        retentionDays: 30,
+        kind: "playlist",
+        value: { v: 30, t: { ms: f.clock() - 40 * DAY } },
+        lastUsed: f.clock() - DAY,
       },
     });
     await f.manager(10_000).makeRoom(0);
@@ -105,15 +112,19 @@ describe("eviction retention policies", () => {
     f.db.close();
   });
 
-  it("treats a deleted policy row as no policy and keeps a per-item kv retention until it expires", async () => {
+  it("does not let stale bookkeeping or a deleted policy pin files", async () => {
     const f = await fixture("kv-retention");
     const rid = await f.put(4, "u:library:d1:retained");
     await f.row({
       scope: "me:u",
-      type: "libraryState",
+      type: "libraryRetention",
       id: "d1",
       deleted: true,
-      data: { retention: { v: 365, t: { ms: f.clock() } } },
+      data: {
+        kind: "doc",
+        value: { v: 365, t: { ms: f.clock() } },
+        lastUsed: 0,
+      },
     });
     await f.db
       .table("kv")
@@ -122,8 +133,90 @@ describe("eviction retention policies", () => {
         "feature:u:library:retained",
       );
     await f.manager(10_000).makeRoom(0);
+    expect(await f.files.has(rid)).toBe(false);
+    f.db.close();
+  });
+  it("never uses another user's personal policy to protect my copy", async () => {
+    const f = await fixture("two-users");
+    const rid = await f.put(7, "alice:media:t:retained");
+    await f.row({
+      scope: "coll:shared",
+      type: "mediaTrack",
+      id: "t",
+      data: {},
+    });
+    await f.row({
+      scope: "coll:shared",
+      type: "mediaPlaylist",
+      id: "shared",
+      data: { tracks: ["t"] },
+    });
+    await f.row({
+      scope: "me:bob",
+      type: "mediaRetention",
+      id: "shared",
+      data: {
+        kind: "playlist",
+        value: { v: 365, t: { ms: f.clock() } },
+        lastUsed: 0,
+      },
+    });
+    await f.manager(10_000).makeRoom(0);
+    expect(await f.files.has(rid)).toBe(false);
+    f.db.close();
+  });
+  it("does not protect a stale shared item with a direct pin after membership revocation", async () => {
+    const f = await fixture("revoked-direct");
+    const rid = await f.put(9, "u:library:d:retained");
+    await f.row({ scope: "coll:c", type: "libraryDoc", id: "d", data: {} });
+    await f.row({
+      scope: "coll:c",
+      type: "libraryCollection",
+      id: "c",
+      data: { docs: [] },
+    });
+    await f.row({
+      scope: "me:u",
+      type: "libraryRetention",
+      id: "d",
+      data: {
+        kind: "doc",
+        value: { v: 30, t: { ms: f.clock() } },
+        lastUsed: 0,
+      },
+    });
+    await f.manager(10_000).makeRoom(0);
+    expect(await f.files.has(rid)).toBe(false);
+    f.db.close();
+  });
+  it("removes collection protection as soon as membership disappears", async () => {
+    const f = await fixture("membership");
+    const rid = await f.put(8, "u:library:d:retained");
+    await f.row({ scope: "coll:c", type: "libraryDoc", id: "d", data: {} });
+    await f.row({
+      scope: "coll:c",
+      type: "libraryCollection",
+      id: "c",
+      data: { docs: ["d"] },
+    });
+    await f.row({
+      scope: "me:u",
+      type: "libraryRetention",
+      id: "c",
+      data: {
+        kind: "collection",
+        value: { v: 7, t: { ms: f.clock() } },
+        lastUsed: 0,
+      },
+    });
+    await f.manager(10_000).makeRoom(0);
     expect(await f.files.has(rid)).toBe(true);
-    f.advance(6 * DAY);
+    await f.row({
+      scope: "coll:c",
+      type: "libraryCollection",
+      id: "c",
+      data: { docs: [] },
+    });
     await f.manager(10_000).makeRoom(0);
     expect(await f.files.has(rid)).toBe(false);
     f.db.close();

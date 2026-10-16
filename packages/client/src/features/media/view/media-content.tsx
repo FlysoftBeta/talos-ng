@@ -4,7 +4,6 @@ import { ConfirmDialog, Dialog, Menu } from "../../../ui/overlays/index.ts";
 import { Field, SelectField } from "../../../ui/inputs/index.ts";
 import { Icon } from "../../../ui/icon/index.ts";
 import { Pane, PaneBody, PaneHeader } from "../../../ui/layout/index.ts";
-import { Segmented } from "../../../ui/navigation/index.ts";
 import { InlineNotice, StatePanel } from "../../../ui/feedback/index.ts";
 import "./media.css";
 
@@ -100,16 +99,16 @@ export function TrackListView({
 
 export interface PlaylistPanelProps {
   title: string;
-  retentionDays: number;
+  personalRetention: number | "auto";
   retentionOpen: boolean;
   onToggleRetention(): void;
-  days: number;
-  daysChoices: readonly number[];
+  days: number | "auto";
+  daysChoices: readonly (number | "auto")[];
   daysValid: boolean;
   /** Retention days may be edited. */
   editable: boolean;
   retentionReason: string | undefined;
-  onDays(value: number): void;
+  onDays(value: number | "auto"): void;
   onSaveDays(): void;
   shareReason: string | undefined;
   onShare(): void;
@@ -147,7 +146,8 @@ export function PlaylistActionsView(p: PlaylistPanelProps): ReactElement {
         aria-haspopup="dialog"
         onClick={p.onToggleRetention}
       >
-        离线保留 · {p.retentionDays} 天
+        我的离线保留 ·{" "}
+        {p.personalRetention === "auto" ? "自动" : `${p.personalRetention} 天`}
         <Icon name="down" size={14} />
       </Button>
       <IconButton
@@ -200,36 +200,43 @@ export function PlaylistDialogsView(p: PlaylistPanelProps): ReactElement {
                 disabledReason={p.retentionReason}
                 onClick={p.onSaveDays}
               >
-                保存天数
+                保存设置
               </Button>
             </>
           }
         >
           <div className="media-retention-form">
             <p className="media-dialog-text">
-              歌单的音乐保存在本机，可离线播放；最后一次播放后再保留所选天数。
+              仅影响我的设备。自动不主动下载；选定天数后，从设置或我最近播放此歌单起保留。
             </p>
-            <Segmented
+            <SelectField
               label="常用天数"
-              block
               value={String(p.days)}
-              disabled={!p.editable}
-              options={p.daysChoices.map((n) => ({
-                value: String(n),
-                label: `${n} 天`,
-              }))}
-              onChange={(value) => p.onDays(Number(value))}
-            />
+              onChange={(e) =>
+                p.onDays(
+                  e.target.value === "auto" ? "auto" : Number(e.target.value),
+                )
+              }
+            >
+              {p.daysChoices.map((n) => (
+                <option key={n} value={n}>
+                  {n === "auto" ? "自动" : `${n} 天`}
+                </option>
+              ))}
+            </SelectField>
             <Field
               label="保留天数"
               type="number"
               min={1}
               max={365}
-              value={p.days}
-              disabled={!p.editable}
-              hint="1–365 天"
+              value={p.days === "auto" ? "" : p.days}
+              hint="1–365 天；自动不主动下载"
+              onChange={(event) =>
+                p.onDays(
+                  event.target.value ? Number(event.target.value) : "auto",
+                )
+              }
               error={p.daysValid ? undefined : "请输入 1–365 之间的整数"}
-              onChange={(e) => p.onDays(Number(e.target.value))}
             />
           </div>
         </Dialog>

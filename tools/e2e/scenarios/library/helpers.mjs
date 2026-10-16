@@ -13,7 +13,12 @@ export async function click(cdp, label) {
   );
 }
 export async function fill(cdp, label, value) {
-  if (label === "保留时长" || label === "文档" || label === "目标书单") {
+  if (
+    label === "保留时长" ||
+    label === "保留天数" ||
+    label === "文档" ||
+    label === "目标书单"
+  ) {
     await cdp.evaluate(
       `(function(){var trigger=Array.prototype.slice.call(document.querySelectorAll('button[aria-haspopup=listbox]')).find(function(b){var l=document.getElementById(b.getAttribute('aria-labelledby').split(' ')[0]);return l&&l.textContent===${JSON.stringify(label)}});if(!trigger)throw Error('Missing picker '+${JSON.stringify(label)});trigger.click()})()`,
     );

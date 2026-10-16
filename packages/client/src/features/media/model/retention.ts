@@ -2,14 +2,12 @@ import { contract } from "@talos/contract";
 import type {
   RuntimeClockPort,
   RuntimeCommandPort,
-  RuntimeFilePort,
   RuntimeQueryPort,
+  RuntimeFilePort,
   RuntimeStatusPort,
 } from "../../../core/runtime-port.ts";
 import type { MediaData } from "./data.ts";
-
 interface Saved {
-  playlist: string;
   track: string;
   rid: string;
   expires: number;
@@ -27,34 +25,42 @@ export type MediaRetentionPort = Pick<RuntimeCommandPort, "command" | "can"> &
     | "downloadFile"
   > &
   Pick<RuntimeStatusPort, "setDownload"> &
-  Pick<RuntimeClockPort, "time">;
+  Pick<RuntimeClockPort, "time" | "delay" | "clearDelay">;
 export interface MediaRetentionInput {
   user: string | undefined;
-  /** Unlocked application. */
   active: boolean;
-  offline: boolean;
+  offline?: boolean;
   data: MediaData;
 }
-const expiry = (p: MediaData["playlists"][number]): number =>
-  Math.max(p.lastPlayed, p.created) + p.retentionDays * 86400000;
-/** Changes when a playlist, its members or their audio change; effect key for callers. */
-export function mediaRetentionSignature(data: MediaData): string {
-  return JSON.stringify(
-    data.playlists.map((p) => [
-      p.id,
-      p.tracks,
-      p.retentionDays,
-      p.lastPlayed,
-      data.tracks.map((t) => t.audio?.id),
-    ]),
-  );
+/** A member is kept until the latest personal item or containing-list deadline. */
+export function retentionDeadline(data: MediaData, id: string): number {
+  if (!data.tracks.some((item) => item.id === id)) return 0;
+  let deadline = 0;
+  for (const policy of data.retentions.values()) {
+    if (!policy.value || typeof policy.value.v !== "number") continue;
+    if (
+      policy.kind === "track"
+        ? policy.id !== id
+        : !data.playlists.some(
+            (list) => list.id === policy.id && list.tracks.includes(id),
+          )
+    )
+      continue;
+    deadline = Math.max(
+      deadline,
+      Math.max(policy.value.t.ms, policy.lastUsed) + policy.value.v * 86400000,
+    );
+  }
+  return deadline;
 }
-
-/**
- * Keeps the audio of retained playlists downloaded and releases expired or removed
- * members. FileStore owners are per user, playlist and track; runs are serialised and
- * every step re-checks that the account has not changed.
- */
+export function mediaRetentionSignature(data: MediaData): string {
+  return JSON.stringify([
+    data.tracks.map((item) => [item.id, item.audio?.id]),
+    data.playlists.map((list) => [list.id, list.tracks]),
+    [...data.retentions.values()],
+  ]);
+}
+/** Serialized passes never perform cleanup or publish progress for a replaced account. */
 export class MediaRetentionScheduler {
   private queue: Promise<void> = Promise.resolve();
   private cancel: (() => void) | undefined;
@@ -64,100 +70,138 @@ export class MediaRetentionScheduler {
     if (!input.user || !input.active) return;
     const { port } = this,
       { user, data } = input;
-    let cancelled = false;
-    const active = (): boolean =>
-      !cancelled && port.getSnapshot().user?.id === user;
+    let cancelled = false,
+      failed = false;
+    let timer: ReturnType<MediaRetentionPort["delay"]> | undefined;
+    const active = () => !cancelled && port.getSnapshot().user?.id === user;
+    const publish: MediaRetentionPort["setDownload"] = (id, value) => {
+      if (active()) port.setDownload(id, value);
+    };
+    const owner = (id: string) => `media:${id}:retained`;
+    const allowed = (id: string) => retentionDeadline(data, id);
     const run = async () => {
+      if (!active()) return;
       const saved = (await port.getLocal<Saved[]>("media:retained")) ?? [];
+      if (!active()) return;
       const retained: Saved[] = [];
       for (const item of saved) {
-        const p = data.playlists.find((v) => v.id === item.playlist);
-        const expires = p ? expiry(p) : 0;
-        if (expires <= port.time() || !p?.tracks.includes(item.track)) {
-          await port.releaseFiles(`coll:${item.playlist}:media:${item.track}`);
+        if (!active()) return;
+        const expires = allowed(item.track);
+        if (
+          expires <= port.time() ||
+          (data.tracks.find((value) => value.id === item.track)?.audio?.id &&
+            data.tracks.find((value) => value.id === item.track)?.audio?.id !==
+              item.rid)
+        ) {
+          await port.releaseFiles(owner(item.track));
+          if (!active()) return;
+          publish(`media:${item.track}`, undefined);
         } else retained.push({ ...item, expires });
       }
       if (!active()) return;
       await port.setLocal("media:retained", retained);
+      if (!active()) return;
       await port.collectFiles();
-      if (input.offline) return;
-      for (const p of data.playlists) {
-        const expires = expiry(p);
+      if (!active()) return;
+      for (const item of data.tracks) {
+        if (!active()) return;
+        const id = item.id,
+          expires = allowed(id),
+          key = owner(id),
+          status = `media:${id}`;
         if (expires <= port.time()) continue;
-        for (const id of p.tracks) {
+        try {
+          const cached = item.audio && (await port.hasFile(item.audio.id));
           if (!active()) return;
-          let track = data.tracks.find((t) => t.id === id);
-          if (!track) continue;
-          const key = `coll:${p.id}:media:${id}`;
-          if (track.audio && (await port.hasFile(track.audio.id))) {
-            await port.retainFile(track.audio.id, key);
-            if (!retained.some((i) => i.playlist === p.id && i.track === id))
-              retained.push({
-                playlist: p.id,
-                track: id,
-                rid: track.audio.id,
-                expires,
-              });
-            await port.setLocal("media:retained", retained.slice());
-            continue;
-          }
-          try {
-            if (!port.can(contract.media.prepare).ok) continue;
-            const prepared = await port.command(contract.media.prepare, {
+          let resource = item.audio,
+            url: string | undefined;
+          if (!cached) {
+            if (input.offline || !port.can(contract.media.prepare).ok) continue;
+            const opened = await port.command(contract.media.prepare, {
               track: id,
             });
-            if ("queued" in prepared) continue;
-            if (!prepared.download) continue;
-            track = prepared.track;
-            if (!track.audio) continue;
-            const title = track.title;
-            port.setDownload(key, { title, progress: 0 });
+            if (!active()) return;
+            if ("queued" in opened || !opened.download || !opened.track.audio)
+              continue;
+            resource = opened.track.audio;
+            url = opened.download.url;
+            if (!active()) return;
+          }
+          if (!resource || allowed(id) <= port.time()) continue;
+          const entry = { track: id, rid: resource.id, expires };
+          const previous = retained.findIndex((value) => value.track === id);
+          if (previous < 0) retained.push(entry);
+          else retained[previous] = entry;
+          // Persist before downloading so a replacement policy pass can release partial bytes.
+          await port.setLocal("media:retained", retained.slice());
+          if (!active()) return;
+          if (cached) await port.retainFile(resource.id, key);
+          else {
+            publish(status, { title: item.title, progress: 0 });
             await port.downloadFile(
-              track.audio.id,
-              track.audio.size,
-              prepared.download.url,
+              resource.id,
+              resource.size,
+              url!,
               key,
               (written, total) =>
-                port.setDownload(key, {
-                  title,
+                publish(status, {
+                  title: item.title,
                   progress: total ? written / total : 1,
                 }),
             );
-            if (!active()) {
-              await port.releaseFiles(key);
-              await port.collectFiles();
-              port.setDownload(key, undefined);
-              return;
-            }
-            retained.push({
-              playlist: p.id,
-              track: id,
-              rid: track.audio.id,
-              expires,
-            });
-            await port.setLocal("media:retained", retained.slice());
-            port.setDownload(key, undefined);
-          } catch (error) {
-            port.setDownload(key, {
-              title: track.title,
-              progress: 0,
-              error: error instanceof Error ? error.message : "音频下载失败",
-            });
           }
+          if (!active()) return;
+          if (allowed(id) <= port.time()) {
+            await port.releaseFiles(key);
+            if (!active()) return;
+            await port.collectFiles();
+          }
+          publish(status, undefined);
+        } catch (error) {
+          failed = true;
+          publish(status, {
+            title: item.title,
+            progress: 0,
+            error: error instanceof Error ? error.message : "离线下载失败",
+          });
         }
       }
     };
-    this.queue = this.queue.then(run).catch(() => {});
+    this.queue = this.queue
+      .then(run)
+      .catch((error: unknown) => {
+        failed = true;
+        publish("media:retention", {
+          title: "离线音乐",
+          progress: 0,
+          error: error instanceof Error ? error.message : "离线保留失败",
+        });
+      })
+      .then(() => {
+        if (!active()) return;
+        if (!failed) publish("media:retention", undefined);
+        const deadlines = data.tracks
+          .map((item) => allowed(item.id))
+          .filter((time) => time > port.time());
+        if (failed) deadlines.push(port.time() + 30000);
+        if (deadlines.length)
+          timer = port.delay(
+            () => this.update(input),
+            Math.min(
+              2147483647,
+              Math.max(1, Math.min(...deadlines) - port.time()),
+            ),
+          );
+      });
     this.cancel = () => {
       cancelled = true;
+      port.clearDelay(timer);
     };
   }
-  /** Cancels the current pass; steps already started finish but publish nothing further. */
   stop(): void {
     this.cancel?.();
     this.cancel = undefined;
   }
-  /** Resolves when every started pass has settled. */
   idle(): Promise<void> {
     return this.queue;
   }

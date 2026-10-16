@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { RetentionScheduler } from "./retention.ts";
+import { RetentionScheduler, retentionDeadline } from "./retention.ts";
 import type { RetentionPort } from "./retention.ts";
 import type { LibraryData } from "./library-data.ts";
 
@@ -16,8 +16,12 @@ const dataOf = (
 ): LibraryData =>
   ({
     docs,
-    states: new Map(
-      Object.entries(retention).map(([id, r]) => [id, { retention: r }]),
+    states: new Map(),
+    retentions: new Map(
+      Object.entries(retention).map(([id, value]) => [
+        id,
+        { id, kind: "doc", value, lastUsed: 0 },
+      ]),
     ),
     collections: [],
     rows: [],
@@ -31,6 +35,7 @@ function setup(now = 10 * DAY) {
     getSnapshot: () => ({ user: { id: "u" } }),
     getLocal: vi.fn(async (k: string) => local.get(k)),
     setLocal: vi.fn(async (k: string, v: unknown) => void local.set(k, v)),
+    retainFile: vi.fn(async () => {}),
     releaseFiles: vi.fn(async () => {}),
     collectFiles: vi.fn(async () => {}),
     hasFile: vi.fn<(rid: string) => Promise<boolean>>(async () => false),
@@ -68,6 +73,72 @@ function setup(now = 10 * DAY) {
 const keep = (days: number, from = 0) => ({ v: days, t: { ms: from } });
 
 describe("library retention scheduler", () => {
+  it("keeps shared lists automatic until personally chosen and combines item/list clocks", async () => {
+    const t = setup(DAY);
+    const data = dataOf([doc("a")], {});
+    data.collections.push({
+      id: "shared",
+      owner: "other",
+      title: "shared",
+      docs: ["a"],
+    } as LibraryData["collections"][number]);
+    t.scheduler.update({ user: "u", active: true, data });
+    await t.scheduler.idle();
+    expect(t.port.downloadFile).not.toHaveBeenCalled();
+    data.retentions.set("shared", {
+      id: "shared",
+      kind: "collection",
+      value: { v: 7, t: { ms: 0, counter: 0 }, op: "set" },
+      lastUsed: 2 * DAY,
+    });
+    data.retentions.set("a", {
+      id: "a",
+      kind: "doc",
+      value: { v: 1, t: { ms: 0, counter: 0 }, op: "set" },
+      lastUsed: DAY,
+    });
+    expect(retentionDeadline(data, "a")).toBe(9 * DAY);
+    t.scheduler.update({ user: "u", active: true, data });
+    await t.scheduler.idle();
+    expect(t.port.downloadFile).toHaveBeenCalledTimes(1);
+    data.collections = [];
+    t.scheduler.update({ user: "u", active: true, data });
+    await t.scheduler.idle();
+    expect(retentionDeadline(data, "a")).toBe(2 * DAY);
+    t.clock.now = 3 * DAY;
+    t.scheduler.update({ user: "u", active: true, data });
+    await t.scheduler.idle();
+    expect(t.port.releaseFiles).toHaveBeenCalledWith("library:a:retained");
+  });
+  it("releases a partial document after its policy becomes auto during download", async () => {
+    const t = setup(DAY);
+    let finish!: () => void, begin!: () => void;
+    const started = new Promise<void>((resolve) => {
+      begin = resolve;
+    });
+    t.port.downloadFile.mockImplementationOnce(() => {
+      begin();
+      return new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    });
+    t.scheduler.update({
+      user: "u",
+      active: true,
+      data: dataOf([doc("a")], { a: keep(7) }),
+    });
+    await started;
+    t.scheduler.update({
+      user: "u",
+      active: true,
+      data: dataOf([doc("a")], { a: { v: "auto", t: { ms: DAY } } }),
+    });
+    finish();
+    await t.scheduler.idle();
+    expect(t.port.releaseFiles).toHaveBeenCalledWith("library:a:retained");
+    expect(t.local.get("library:retained")).toEqual([]);
+  });
+
   it("downloads a retained document once, registers ownership and clears progress", async () => {
     const t = setup(1 * DAY);
     t.scheduler.update({
@@ -84,9 +155,9 @@ describe("library retention scheduler", () => {
       expect.any(Function),
     );
     expect(t.local.get("library:retained")).toEqual([
-      { doc: "a", pack: doc("a").pack.id, expires: 7 * DAY },
+      { doc: "a", rid: doc("a").pack.id, expires: 7 * DAY },
     ]);
-    expect(t.port.setDownload).toHaveBeenLastCalledWith("library:a", undefined);
+    expect(t.port.setDownload).toHaveBeenCalledWith("library:a", undefined);
   });
 
   it("skips auto policies, expired policies, non-ready packs, present files and offline sessions", async () => {
@@ -126,7 +197,7 @@ describe("library retention scheduler", () => {
     t.local.set("library:retained", [
       { doc: "gone", pack: "p", expires: 5 * DAY },
       { doc: "a", pack: "q", expires: 8 * DAY },
-      { doc: "live", pack: "r", expires: 30 * DAY },
+      { doc: "live", rid: doc("l").pack.id, expires: 30 * DAY },
     ]);
     t.scheduler.update({
       user: "u",
@@ -148,7 +219,7 @@ describe("library retention scheduler", () => {
       "library:live:retained",
     );
     expect(t.local.get("library:retained")).toEqual([
-      { doc: "live", pack: "r", expires: 30 * DAY },
+      { doc: "live", rid: doc("l").pack.id, expires: 30 * DAY },
     ]);
     expect(
       [...t.local.entries()].some(([k, v]) => k.includes("gone") && v === null),
@@ -208,21 +279,24 @@ describe("library retention scheduler", () => {
   it("schedules a re-run at the nearest expiry (capped for setTimeout) and stop cancels it", async () => {
     const t = setup(1 * DAY);
     const data = dataOf([doc("a"), doc("b")], { a: keep(7), b: keep(3) });
-    t.scheduler.update({ user: "u", active: false, data });
+    t.scheduler.update({ user: "u", active: true, data });
+    await t.scheduler.idle();
     expect(t.timers).toHaveLength(1);
     expect(t.timers[0]!.ms).toBe(
       3 * DAY - 1 * DAY > 2_147_483_647 ? 2_147_483_647 : 2 * DAY,
     );
-    t.scheduler.update({ user: "u", active: false, data });
+    t.scheduler.update({ user: "u", active: true, data });
+    await t.scheduler.idle();
     expect(t.timers[0]!.cleared).toBe(true);
     t.scheduler.stop();
     expect(t.timers[1]!.cleared).toBe(true);
     const far = setup(0);
     far.scheduler.update({
       user: "u",
-      active: false,
+      active: true,
       data: dataOf([doc("a")], { a: keep(365 * 10) }),
     });
+    await far.scheduler.idle();
     expect(far.timers[0]!.ms).toBe(2_147_483_647);
   });
 

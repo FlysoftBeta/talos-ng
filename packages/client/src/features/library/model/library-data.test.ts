@@ -3,6 +3,7 @@ import {
   contract,
   emptyLibraryState,
   libraryStateSchema,
+  libraryRetentionEntitySchema,
 } from "@talos/contract";
 import type { LibraryCollection, LibraryDoc } from "@talos/contract";
 import type { StoredRow } from "../../../core/data/db.ts";
@@ -91,10 +92,14 @@ describe("library durable projections", () => {
   it("replays retention with deterministic LWW and ignores malformed intents", () => {
     const rows = libraryModule.reducers["library.retention.set"](
       [],
-      { doc, value: { v: 7, t: { ms: 10, counter: 0 }, op: user } },
+      {
+        kind: "doc",
+        id: doc,
+        value: { v: 7, t: { ms: 10, counter: 0 }, op: user },
+      },
       { user, op: user },
     );
-    expect(libraryStateSchema.parse(rows[0]!.data).retention?.v).toBe(7);
+    expect(libraryRetentionEntitySchema.parse(rows[0]!.data).value?.v).toBe(7);
     expect(
       libraryModule.reducers["library.retention.set"](
         rows,
@@ -103,6 +108,42 @@ describe("library durable projections", () => {
       ),
     ).toBe(rows);
   });
+  it("keeps two users' choices and clocks isolated for the same shared booklist", () => {
+    const reduce = libraryModule.reducers["library.retention.set"];
+    const a = reduce(
+      [],
+      {
+        kind: "collection",
+        id: collection,
+        value: { v: 7, t: { ms: 10, counter: 0 }, op: user },
+      },
+      { user, op: user },
+    );
+    const b = reduce(
+      a,
+      {
+        kind: "collection",
+        id: collection,
+        value: { v: 30, t: { ms: 20, counter: 0 }, op: device },
+      },
+      { user: device, op: device },
+    );
+    const c = libraryModule.reducers["library.collection.recordRead"](
+      b,
+      { collection, t: { ms: 100, counter: 0 }, op: device },
+      { user: device, op: device },
+    );
+    expect(decodeLibrary(c, user).retentions.get(collection)).toMatchObject({
+      value: { v: 7 },
+      lastUsed: 0,
+    });
+    expect(decodeLibrary(c, device).retentions.get(collection)).toMatchObject({
+      value: { v: 30 },
+      lastUsed: 100,
+    });
+    expect(c.every((row) => row.type === "libraryRetention")).toBe(true);
+  });
+
   it("merges duplicate me/coll collection rows once and takes newest revision", () => {
     const base = {
       id: collection,
@@ -171,6 +212,7 @@ describe("library list selectors", () => {
     const a = { ...document, id: "a", title: "甲", created: 1 },
       b = { ...document, id: "b", title: "乙", created: 2 };
     return {
+      retentions: new Map(),
       docs: [b, a],
       collections: [
         {

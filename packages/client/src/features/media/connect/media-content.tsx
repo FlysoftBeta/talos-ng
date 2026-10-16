@@ -50,7 +50,7 @@ export function MediaContent(): ReactElement {
     snapshot = useClientSnapshot(),
     search = useMediaSearch(),
     { source, playlist } = useMediaSelection(data);
-  const canRetention = useCan(contract.media.playlist.retention),
+  const canRetention = useCan(contract.media.retention.set),
     canItems = useCan(contract.media.playlist.items),
     canShare = useCan(contract.media.playlist.grants),
     canDelete = useCan(contract.media.playlist.delete);
@@ -60,11 +60,15 @@ export function MediaContent(): ReactElement {
     [adding, setAdding] = useState(false),
     [choice, setChoice] = useState(""),
     [addSource, setAddSource] = useState("search"),
-    [days, setDays] = useState(7),
+    [days, setDays] = useState<number | "auto">("auto"),
     [error, setError] = useState("");
   useEffect(() => {
-    if (playlist) setDays(playlist.retentionDays);
-  }, [playlist?.id, playlist?.retentionDays, retentionOpen]);
+    if (playlist) setDays(data.retentions.get(playlist.id)?.value?.v ?? "auto");
+  }, [
+    playlist?.id,
+    data.retentions.get(playlist?.id ?? "")?.value?.v,
+    retentionOpen,
+  ]);
   useEffect(() => setError(""), [playlist?.id, source]);
   const adapter = useMemo(
     () => (playlist ? playlistSharing(runtime, playlist.id) : null),
@@ -84,19 +88,23 @@ export function MediaContent(): ReactElement {
   if (playlist) {
     const panel: PlaylistPanelProps = {
       title: playlist.title,
-      retentionDays: playlist.retentionDays,
+      personalRetention: data.retentions.get(playlist.id)?.value?.v ?? "auto",
       retentionOpen,
       onToggleRetention: () => setRetentionOpen(!retentionOpen),
       days,
-      daysChoices: retentionChoices(playlist.retentionDays),
+      daysChoices: retentionChoices(
+        data.retentions.get(playlist.id)?.value?.v ?? "auto",
+      ),
       daysValid: validRetention(days),
-      editable: canEdit,
-      retentionReason:
-        writeReason ?? (canRetention.ok ? undefined : canRetention.reason),
+      editable: true,
+      retentionReason: canRetention.ok ? undefined : canRetention.reason,
       onDays: setDays,
       onSaveDays: () => {
-        run(saveRetention(runtime, playlist.id, days));
-        setRetentionOpen(false);
+        run(
+          saveRetention(runtime, playlist.id, days).then(() =>
+            setRetentionOpen(false),
+          ),
+        );
       },
       shareReason: canShare.ok ? undefined : canShare.reason,
       onShare: () => setSharing(true),

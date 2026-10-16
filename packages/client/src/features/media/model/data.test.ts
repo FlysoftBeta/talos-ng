@@ -12,7 +12,7 @@ describe("media offline projection", () => {
     const context = { user, op: id() };
     const start = [
       {
-        scope: `coll:${id()}`,
+        scope: `me:${user}`,
         type: "mediaTrack",
         id: track,
         rev: 1,
@@ -63,8 +63,6 @@ describe("media offline projection", () => {
           owner: user,
           title: "测试",
           tracks: [],
-          retentionDays: 7,
-          lastPlayed: 10,
           created: 1,
         },
       },
@@ -74,8 +72,11 @@ describe("media offline projection", () => {
       { playlist, t: { ms: 20, counter: 0 }, op: id() },
       { user, op: id() },
     );
-    expect(decodeMedia(result).playlists[0]?.lastPlayed).toBe(20);
-    expect((source[0]!.data as { lastPlayed: number }).lastPlayed).toBe(10);
+    expect(decodeMedia(result, user).retentions.get(playlist)?.lastUsed).toBe(
+      20,
+    );
+    expect(result[0]).toEqual(source[0]);
+    expect(decodeMedia(result, id()).retentions.size).toBe(0);
   });
 });
 describe("playlist write access", () => {
@@ -87,8 +88,6 @@ describe("playlist write access", () => {
         owner,
         title: "歌单",
         tracks: [],
-        retentionDays: 7,
-        lastPlayed: 0,
         created: 1,
       };
     const grant = (level: string) => ({
@@ -131,12 +130,11 @@ it("offers tracks only from the selected accessible playlist or live search resu
     owner: user,
     title: "目标",
     tracks: [],
-    retentionDays: 7,
-    lastPlayed: 0,
     created: 1,
   };
   const source = { ...target, id: id(), title: "来源", tracks: [shared.id] };
   const data = {
+    retentions: new Map(),
     tracks: [searched, shared, unrelated],
     playlists: [target, source],
     state: null,

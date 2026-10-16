@@ -74,10 +74,16 @@ export function playlistOfPage(
       : null;
   return data.playlists.find((p) => p.id === id);
 }
-export const retentionChoices = (days: number): number[] =>
-  [...new Set([1, 7, 30, 90, 365, days])].sort((a, b) => a - b);
-export const validRetention = (days: number): boolean =>
-  Number.isInteger(days) && days >= 1 && days <= 365;
+export const retentionChoices = (
+  days: number | "auto",
+): (number | "auto")[] => [
+  "auto",
+  ...[...new Set([1, 7, 30, 90, 365, ...(days === "auto" ? [] : [days])])].sort(
+    (a, b) => a - b,
+  ),
+];
+export const validRetention = (days: number | "auto"): boolean =>
+  days === "auto" || (Number.isInteger(days) && days >= 1 && days <= 365);
 
 // Commands
 export async function searchTracks(
@@ -157,9 +163,14 @@ export async function removeFromPlaylist(
 export async function saveRetention(
   port: MediaCommandPort,
   playlist: string,
-  days: number,
+  days: number | "auto",
+  kind: "track" | "playlist" = "playlist",
 ): Promise<void> {
-  await port.command(contract.media.playlist.retention, { playlist, days });
+  await port.command(contract.media.retention.set, {
+    kind,
+    id: playlist,
+    value: { v: days, ...port.operation() },
+  });
 }
 export async function deletePlaylist(
   port: MediaCommandPort,

@@ -7,6 +7,7 @@ import {
   useClientSnapshot,
   useRuntime,
 } from "../../../platform/react/context.tsx";
+import { CollectionRetentionView } from "../view/collection-retention.tsx";
 import { GrantSheet } from "../../sharing/index.ts";
 import {
   CollectionEditor,
@@ -35,9 +36,13 @@ function ConnectedCollection({
   const runtime = useRuntime(),
     state = useClientSnapshot(),
     data = useLibrary(),
-    can = useCan(contract.library.collection.items);
+    can = useCan(contract.library.collection.items),
+    retentionCan = useCan(contract.library.retention.set);
   const level = collectionLevel(data, collection, state.user!.id);
   const [sharing, setSharing] = useState(false),
+    [retentionOpen, setRetentionOpen] = useState(false),
+    [retention, setRetention] = useState("auto"),
+    [retentionError, setRetentionError] = useState(""),
     [deleting, setDeleting] = useState(false),
     [transferring, setTransferring] = useState(""),
     [canTransfer, setCanTransfer] = useState(
@@ -89,6 +94,40 @@ function ConnectedCollection({
   const save = (docs: string[]) => editor.save(docs);
   return (
     <CollectionView
+      retentionControl={
+        <CollectionRetentionView
+          title={collection.title}
+          open={retentionOpen}
+          value={retention}
+          error={retentionError}
+          reason={retentionCan.ok ? undefined : retentionCan.reason}
+          onValue={setRetention}
+          onClose={() => setRetentionOpen(false)}
+          onOpen={() => {
+            setRetention(
+              String(data.retentions.get(collection.id)?.value?.v ?? "auto"),
+            );
+            setRetentionOpen(true);
+          }}
+          onSave={() => {
+            void runtime
+              .command(contract.library.retention.set, {
+                kind: "collection",
+                id: collection.id,
+                value: {
+                  v: retention === "auto" ? "auto" : Number(retention),
+                  ...runtime.operation(),
+                },
+              })
+              .then(() => setRetentionOpen(false))
+              .catch((error) =>
+                setRetentionError(
+                  error instanceof Error ? error.message : "保存失败",
+                ),
+              );
+          }}
+        />
+      }
       title={collection.title}
       items={collection.docs.map((id) => {
         const doc = data.docs.find((d) => d.id === id);
@@ -105,10 +144,22 @@ function ConnectedCollection({
       canShare={!collection.builtin}
       canTransfer={canTransfer}
       busy={busy}
-      error={error}
+      error={error || retentionError}
       unavailableReason={reason}
       onBack={() => runtime.dispatch({ type: "back" })}
-      onOpenDocument={(id) => runtime.dispatch({ type: "openDocument", id })}
+      onOpenDocument={(id) => {
+        void runtime
+          .command(contract.library.collection.recordRead, {
+            collection: collection.id,
+            ...runtime.operation(),
+          })
+          .catch((error) =>
+            setRetentionError(
+              error instanceof Error ? error.message : "阅读记录保存失败",
+            ),
+          );
+        runtime.dispatch({ type: "openDocument", id });
+      }}
       onMove={(index, direction) =>
         void save(moveDocument(collection.docs, index, direction))
       }

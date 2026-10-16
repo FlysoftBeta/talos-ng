@@ -289,6 +289,10 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     await click(cdp, "创建书单");
     await cdp.wait("!document.querySelector('[role=dialog]')");
     await click(cdp, "共享书单");
+    await click(cdp, "我的离线保留");
+    await fill(cdp, "保留天数", "7");
+    await click(cdp, "保存设置");
+    await cdp.wait("!document.querySelector('[role=dialog]')");
     assert.equal(
       await cdp.evaluate("!!document.querySelector('[aria-label=添加文档]')"),
       false,

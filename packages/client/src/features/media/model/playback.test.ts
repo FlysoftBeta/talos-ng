@@ -101,7 +101,11 @@ describe("playback controller", () => {
     await offline.controller.play(offline.tracks[0]!);
     expect(offline.controller.getState().maxVolume).toBe(0.3);
     expect(offline.volumes.at(-1)).toBeCloseTo(0.3);
-    expect(offline.command).not.toHaveBeenCalled();
+    expect(
+      offline.command.mock.calls.map(
+        (call) => (call[0] as { name: string }).name,
+      ),
+    ).toEqual(["media.track.recordPlay"]);
     const online = setup();
     online.command.mockResolvedValue(granted(0.2));
     await online.controller.play(online.tracks[0]!);
@@ -186,7 +190,11 @@ describe("playback transport edge cases", () => {
       .mockResolvedValueOnce({ track: track("a"), maxVolume: 1, job: "j" })
       .mockResolvedValueOnce(granted(1));
     await t.controller.play(t.tracks[0]!);
-    expect(t.command).toHaveBeenCalledTimes(3);
+    expect(
+      t.command.mock.calls.filter(
+        (call) => (call[0] as { name: string }).name === "media.track.play",
+      ),
+    ).toHaveLength(3);
     expect(t.controller.getState().playing).toBe(true);
   });
 

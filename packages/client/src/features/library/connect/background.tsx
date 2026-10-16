@@ -21,6 +21,7 @@ export function LibraryBackground(): null {
       releaseFiles: runtime.releaseFiles,
       collectFiles: runtime.collectFiles,
       hasFile: runtime.hasFile,
+      retainFile: runtime.retainFile,
       downloadFile: runtime.downloadFile,
       setDownload: runtime.setDownload,
       time: runtime.time,
@@ -31,6 +32,7 @@ export function LibraryBackground(): null {
   useEffect(() => {
     scheduler.current!.update({
       user,
+      offline: snapshot.status.connection === "offline",
       active: !!snapshot.user && snapshot.gate === "app",
       data,
     });

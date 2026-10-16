@@ -7,10 +7,9 @@ import type {
 import { describeDocument, documentKey } from "./documents.ts";
 import type { DocumentReadPort } from "./documents.ts";
 import type { LibraryData } from "./library-data.ts";
-
-interface RetainedDocument {
+interface Saved {
   doc: string;
-  pack: string;
+  rid: string;
   expires: number;
 }
 export type RetentionPort = DocumentReadPort &
@@ -21,164 +20,189 @@ export type RetentionPort = DocumentReadPort &
     | "releaseFiles"
     | "collectFiles"
     | "hasFile"
+    | "retainFile"
     | "downloadFile"
   > &
   Pick<RuntimeStatusPort, "setDownload"> &
   Pick<RuntimeClockPort, "time" | "delay" | "clearDelay">;
 export interface RetentionInput {
-  /** Signed-in account, if any. */
   user: string | undefined;
-  /** True while the application is unlocked and may transfer data. */
   active: boolean;
+  offline?: boolean;
   data: LibraryData;
 }
-/** Changes when a document, its pack or its retention policy changes; effect key for callers. */
-export function retentionSignature(data: LibraryData): string {
-  return JSON.stringify(
-    data.docs.map((doc) => [
-      doc.id,
-      doc.pack?.id,
-      data.states.get(doc.id)?.retention,
-    ]),
-  );
+/** A member is kept until the latest personal item or containing-list deadline. */
+export function retentionDeadline(data: LibraryData, id: string): number {
+  if (!data.docs.some((item) => item.id === id)) return 0;
+  let deadline = 0;
+  for (const policy of data.retentions.values()) {
+    if (!policy.value || typeof policy.value.v !== "number") continue;
+    if (
+      policy.kind === "doc"
+        ? policy.id !== id
+        : !data.collections.some(
+            (list) => list.id === policy.id && list.docs.includes(id),
+          )
+    )
+      continue;
+    deadline = Math.max(
+      deadline,
+      Math.max(policy.value.t.ms, policy.lastUsed) + policy.value.v * 86400000,
+    );
+  }
+  return deadline;
 }
-
-/**
- * Keeps retained document packs downloaded and releases expired ones. Runs outside the
- * reader so retained downloads resume after an offline restart; runs are serialised and
- * every step re-checks that the account has not changed.
- */
+export function retentionSignature(data: LibraryData): string {
+  return JSON.stringify([
+    data.docs.map((item) => [item.id, item.pack?.id]),
+    data.collections.map((list) => [list.id, list.docs]),
+    [...data.retentions.values()],
+  ]);
+}
+/** Serialized passes never perform cleanup or publish progress for a replaced account. */
 export class RetentionScheduler {
   private queue: Promise<void> = Promise.resolve();
-  private stopCurrent: (() => void) | undefined;
+  private cancel: (() => void) | undefined;
   constructor(private readonly port: RetentionPort) {}
-  /** Starts a new pass for the given state, cancelling the previous one and its expiry timer. */
   update(input: RetentionInput): void {
     this.stop();
-    const { port } = this;
-    const { user, data } = input;
-    let cancelled = false;
-    const sameUser = (): boolean =>
-      !!user && port.getSnapshot().user?.id === user;
+    if (!input.user || !input.active) return;
+    const { port } = this,
+      { user, data } = input;
+    let cancelled = false,
+      failed = false;
+    let timer: ReturnType<RetentionPort["delay"]> | undefined;
+    const active = () => !cancelled && port.getSnapshot().user?.id === user;
     const publish: RetentionPort["setDownload"] = (id, value) => {
-      if (sameUser()) port.setDownload(id, value);
+      if (active()) port.setDownload(id, value);
     };
-    const allowed = (id: string): number => {
-      const policy = data.states.get(id)?.retention;
-      return policy &&
-        policy.v !== "auto" &&
-        data.docs.some((doc) => doc.id === id)
-        ? policy.t.ms + policy.v * 86400000
-        : 0;
-    };
+    const owner = (id: string) => `library:${id}:retained`;
+    const allowed = (id: string) => retentionDeadline(data, id);
     const run = async () => {
-      if (cancelled || !sameUser()) return;
-      const saved =
-        (await port.getLocal<RetainedDocument[]>("library:retained")) ?? [];
-      const keep: RetainedDocument[] = [];
+      if (!active()) return;
+      const saved = (await port.getLocal<Saved[]>("library:retained")) ?? [];
+      if (!active()) return;
+      const retained: Saved[] = [];
       for (const item of saved) {
-        if (!sameUser()) return;
+        if (!active()) return;
         const expires = allowed(item.doc);
-        if (expires <= port.time()) {
-          await port.releaseFiles(`library:${item.doc}:retained`);
-          if (!sameUser()) return;
+        if (
+          expires <= port.time() ||
+          (data.docs.find((value) => value.id === item.doc)?.pack?.id &&
+            data.docs.find((value) => value.id === item.doc)?.pack?.id !==
+              item.rid)
+        ) {
+          await port.releaseFiles(owner(item.doc));
+          if (!active()) return;
+          publish(`library:${item.doc}`, undefined);
           if (!data.docs.some((doc) => doc.id === item.doc))
             await port.setLocal(documentKey(item.doc), null);
-        } else keep.push({ ...item, expires });
+        } else retained.push({ ...item, expires });
       }
-      if (!sameUser()) return;
-      await port.setLocal("library:retained", keep);
-      if (!sameUser()) return;
+      if (!active()) return;
+      await port.setLocal("library:retained", retained);
+      if (!active()) return;
       await port.collectFiles();
-      for (const doc of data.docs) {
-        if (cancelled || !sameUser()) break;
-        const policy = data.states.get(doc.id)?.retention;
-        if (
-          !policy ||
-          policy.v === "auto" ||
-          !doc.pack ||
-          doc.status !== "ready"
-        )
+      if (!active()) return;
+      for (const item of data.docs) {
+        if (!active()) return;
+        const id = item.id,
+          expires = allowed(id),
+          key = owner(id),
+          status = `library:${id}`;
+        if (expires <= port.time() || item.status !== "ready" || !item.pack)
           continue;
-        const expires = policy.t.ms + policy.v * 86400000;
-        if (expires <= port.time()) continue;
-        if (await port.hasFile(doc.pack.id)) continue;
-        if (!sameUser()) return;
-        if (!port.can(contract.library.doc.open).ok) continue;
-        const id = `library:${doc.id}`;
         try {
-          const opened = await describeDocument(port, doc.id);
-          if (!sameUser()) return;
-          if (allowed(doc.id) <= port.time()) continue;
-          await port.setLocal(documentKey(doc.id), opened);
-          if (!sameUser()) return;
-          // Register incomplete ownership too, so expiry/revocation can release it.
-          const entry = { doc: doc.id, pack: opened.pack.id, expires };
-          const index = keep.findIndex((item) => item.doc === doc.id);
-          if (index < 0) keep.push(entry);
-          else keep[index] = entry;
-          await port.setLocal("library:retained", keep.slice());
-          if (!sameUser()) return;
-          publish(id, { title: doc.title, progress: 0 });
-          await port.downloadFile(
-            opened.pack.id,
-            opened.pack.size,
-            opened.download.url,
-            `library:${doc.id}:retained`,
-            (written, total) =>
-              publish(id, {
-                title: doc.title,
-                progress: total ? written / total : 1,
-              }),
-          );
-          if (!sameUser()) return;
-          if (allowed(doc.id) <= port.time()) {
-            await port.releaseFiles(`library:${doc.id}:retained`);
-            if (!sameUser()) return;
-            if (!data.docs.some((value) => value.id === doc.id))
-              await port.setLocal(documentKey(doc.id), null);
+          const cached = item.pack && (await port.hasFile(item.pack.id));
+          if (!active()) return;
+          let resource = item.pack,
+            url: string | undefined;
+          if (!cached) {
+            if (input.offline || !port.can(contract.library.doc.open).ok)
+              continue;
+            const opened = await describeDocument(port, id);
+            if (!active()) return;
+            resource = opened.pack;
+            url = opened.download.url;
+            await port.setLocal(documentKey(id), opened);
+            if (!active()) return;
           }
-          publish(id, undefined);
+          if (!resource || allowed(id) <= port.time()) continue;
+          const entry = { doc: id, rid: resource.id, expires };
+          const previous = retained.findIndex((value) => value.doc === id);
+          if (previous < 0) retained.push(entry);
+          else retained[previous] = entry;
+          // Persist before downloading so a replacement policy pass can release partial bytes.
+          await port.setLocal("library:retained", retained.slice());
+          if (!active()) return;
+          if (cached) await port.retainFile(resource.id, key);
+          else {
+            publish(status, { title: item.title, progress: 0 });
+            await port.downloadFile(
+              resource.id,
+              resource.size,
+              url!,
+              key,
+              (written, total) =>
+                publish(status, {
+                  title: item.title,
+                  progress: total ? written / total : 1,
+                }),
+            );
+          }
+          if (!active()) return;
+          if (allowed(id) <= port.time()) {
+            await port.releaseFiles(key);
+            if (!active()) return;
+            await port.collectFiles();
+          }
+          publish(status, undefined);
         } catch (error) {
-          publish(id, {
-            title: doc.title,
+          failed = true;
+          publish(status, {
+            title: item.title,
             progress: 0,
-            error:
-              error instanceof Error
-                ? error.message
-                : "下载失败，重新连接后继续",
+            error: error instanceof Error ? error.message : "离线下载失败",
           });
         }
       }
     };
-    if (input.user && input.active)
-      this.queue = this.queue.then(run).catch((error: unknown) => {
+    this.queue = this.queue
+      .then(run)
+      .catch((error: unknown) => {
+        failed = true;
         publish("library:retention", {
           title: "离线文档",
           progress: 0,
           error: error instanceof Error ? error.message : "离线保留失败",
         });
+      })
+      .then(() => {
+        if (!active()) return;
+        if (!failed) publish("library:retention", undefined);
+        const deadlines = data.docs
+          .map((item) => allowed(item.id))
+          .filter((time) => time > port.time());
+        if (failed) deadlines.push(port.time() + 30000);
+        if (deadlines.length)
+          timer = port.delay(
+            () => this.update(input),
+            Math.min(
+              2147483647,
+              Math.max(1, Math.min(...deadlines) - port.time()),
+            ),
+          );
       });
-    const deadlines = data.docs
-      .map((doc) => allowed(doc.id))
-      .filter((time) => time > port.time());
-    const timer = deadlines.length
-      ? port.delay(
-          () => this.update(input),
-          Math.min(
-            2147483647,
-            Math.max(1, Math.min(...deadlines) - port.time()),
-          ),
-        )
-      : undefined;
-    this.stopCurrent = () => {
+    this.cancel = () => {
       cancelled = true;
       port.clearDelay(timer);
     };
   }
-  /** Cancels the current pass and its expiry timer. */
   stop(): void {
-    this.stopCurrent?.();
-    this.stopCurrent = undefined;
+    this.cancel?.();
+    this.cancel = undefined;
+  }
+  idle(): Promise<void> {
+    return this.queue;
   }
 }

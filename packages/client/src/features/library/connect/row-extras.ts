@@ -17,7 +17,7 @@ export function documentRowExtras(
         ? ` · 已读 ${Math.round((Math.min(doc.units, state.furthest + 1) / doc.units) * 100)}%`
         : "";
   const download = downloads.find((d) => d.id === `library:${doc.id}`),
-    policy = state?.retention?.v;
+    policy = data.retentions.get(doc.id)?.value?.v;
   const tag: RowTag | undefined = download
     ? download.error
       ? { label: "待下载", tone: "pending" }
@@ -26,7 +26,7 @@ export function documentRowExtras(
           tone: "accent",
         }
     : policy !== undefined && policy !== "auto"
-      ? { label: "已保留", tone: "confirmed" }
+      ? { label: "离线保留已设置", tone: "pending" }
       : undefined;
   return { hint: documentHint(doc) + read, tag };
 }

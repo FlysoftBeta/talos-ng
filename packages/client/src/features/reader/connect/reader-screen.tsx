@@ -68,7 +68,7 @@ export function ReaderScreen({ id }: { id: string }): ReactElement {
     [retention, setRetention] = useState(false),
     [deleting, setDeleting] = useState(false),
     [zoom, setZoom] = useState("fit"),
-    [policy, setPolicy] = useState(retentionChoice(state));
+    [policy, setPolicy] = useState(retentionChoice(data.retentions.get(id)));
   if (!doc) return <ReaderMissingView />;
   return (
     <ReaderScreenView
@@ -104,7 +104,10 @@ export function ReaderScreen({ id }: { id: string }): ReactElement {
         })
       }
       retentionOpen={retention}
-      onShowRetention={() => setRetention(true)}
+      onShowRetention={() => {
+        setPolicy(retentionChoice(data.retentions.get(id)));
+        setRetention(true);
+      }}
       onCloseRetention={() => setRetention(false)}
       policy={policy}
       onPolicy={setPolicy}

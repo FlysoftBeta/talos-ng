@@ -56,8 +56,10 @@ const messageOf = (error: unknown, fallback: string): string =>
 export function retentionValue(policy: string): "auto" | 1 | 7 | 180 {
   return policy === "auto" ? "auto" : (Number(policy) as 1 | 7 | 180);
 }
-export function retentionChoice(state: LibraryState): string {
-  return String(state.retention?.v ?? "auto");
+export function retentionChoice(
+  state: { value?: { v: string | number } | null } | undefined,
+): string {
+  return String(state?.value?.v ?? "auto");
 }
 export function retentionStatus(
   retained: boolean,
@@ -291,7 +293,11 @@ export class ReadingSession {
     try {
       await this.port.command(
         contract.library.retention.set,
-        { doc: this.id, value: { v: retentionValue(policy), ...op } },
+        {
+          kind: "doc",
+          id: this.id,
+          value: { v: retentionValue(policy), ...op },
+        },
         { op: op.op },
       );
       return true;

@@ -336,7 +336,7 @@ describe("reader presentation helpers", () => {
   it("maps retention choices to wire values and labels", () => {
     expect(retentionValue("auto")).toBe("auto");
     expect(retentionValue("180")).toBe(180);
-    expect(retentionChoice(emptyLibraryState("doc"))).toBe("auto");
+    expect(retentionChoice(undefined)).toBe("auto");
     expect(retentionStatus(true, [], "d")).toContain("已保留");
     expect(retentionStatus(false, [{ id: "library:d" }], "d")).toContain(
       "下载中",

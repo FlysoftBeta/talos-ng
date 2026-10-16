@@ -12,12 +12,14 @@ import {
   errorMessage,
   isFavorite,
   recordPlay,
+  saveRetention,
   removeFromPlaylist,
   setFavorite,
   watchDeviceCache,
   writablePlaylists,
 } from "../model/actions.ts";
 import { artistLine, formatTime } from "../model/format.ts";
+import { TrackRetentionView } from "../view/track-retention.tsx";
 import { TrackRowView } from "../view/track-row.tsx";
 import { useMediaPlayer } from "./player.tsx";
 import { useMedia } from "./use-media.ts";
@@ -38,8 +40,11 @@ export function TrackRow({
     snapshot = useClientSnapshot(),
     data = useMedia(),
     player = useMediaPlayer(),
-    canItems = useCan(contract.media.playlist.items);
+    canItems = useCan(contract.media.playlist.items),
+    canRetention = useCan(contract.media.retention.set);
   const [error, setError] = useState(""),
+    [retentionOpen, setRetentionOpen] = useState(false),
+    [days, setDays] = useState("auto"),
     [addingTo, setAddingTo] = useState(false),
     [target, setTarget] = useState(""),
     [deviceCached, setDeviceCached] = useState(false);
@@ -54,6 +59,32 @@ export function TrackRow({
   const itemsReason = canItems.ok ? undefined : canItems.reason;
   return (
     <TrackRowView
+      onRetention={() => {
+        setDays(String(data.retentions.get(track.id)?.value?.v ?? "auto"));
+        setRetentionOpen(true);
+      }}
+      retentionDialog={
+        <TrackRetentionView
+          title={track.title}
+          open={retentionOpen}
+          value={days}
+          error={error}
+          reason={canRetention.ok ? undefined : canRetention.reason}
+          onOpen={() => setRetentionOpen(true)}
+          onClose={() => setRetentionOpen(false)}
+          onValue={setDays}
+          onSave={() =>
+            execute(
+              saveRetention(
+                runtime,
+                track.id,
+                days === "auto" ? "auto" : Number(days),
+                "track",
+              ).then(() => setRetentionOpen(false)),
+            )
+          }
+        />
+      }
       index={index}
       title={track.title}
       artist={artistLine(track)}

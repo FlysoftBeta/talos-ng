@@ -4,7 +4,9 @@ import {
   emptyLibraryState,
   libraryStateSchema,
   libraryCollectionSchema,
+  libraryRetentionEntitySchema,
 } from "@talos/contract";
+import type { LibraryRetention } from "@talos/contract";
 import { lwwMerge } from "@talos/sync";
 import { defineClientModule } from "../../core/data/modules.ts";
 import type { ClientModule } from "../../core/data/modules.ts";
@@ -12,7 +14,7 @@ import type { StoredRow } from "../../core/data/db.ts";
 
 type Reducer = ClientModule["reducers"][string];
 const reduce =
-  (kind: "favourite" | "retention" | "progress"): Reducer =>
+  (kind: "favourite" | "progress"): Reducer =>
   (rows, args, { user }) => {
     const scope = `me:${user}`;
     const method = contract.library[kind].set;
@@ -35,12 +37,6 @@ const reduce =
       data = {
         ...data,
         favourite: data.favourite ? lwwMerge(data.favourite, value) : value,
-      };
-    } else {
-      const { value } = contract.library.retention.set.args.parse(args);
-      data = {
-        ...data,
-        retention: data.retention ? lwwMerge(data.retention, value) : value,
       };
     }
     const row: StoredRow = {
@@ -74,14 +70,62 @@ const reduce =
           : parsed.data.docs.filter((id) => id !== input.doc);
         return { ...row, data: { ...parsed.data, docs } };
       });
-    return [...next, row];
+    const result = [...next, row];
+    return kind === "progress"
+      ? projectRetention(
+          result,
+          user,
+          input.doc,
+          "doc",
+          undefined,
+          data.lastRead,
+        )
+      : result;
   };
 export const libraryModule = defineClientModule({
   id: "library",
-  rowTypes: ["libraryDoc", "libraryCollection", "libraryState"],
+  orderKey: (method: string, args: unknown): string => {
+    if (!args || typeof args !== "object") return "";
+    const input = args as Record<string, unknown>;
+    if (
+      method === "library.retention.set" &&
+      (input.kind === "doc" || input.kind === "collection") &&
+      typeof input.id === "string"
+    )
+      return `${input.kind}:${input.id}`;
+    if (typeof input.doc === "string") return `doc:${input.doc}`;
+    if (typeof input.collection === "string")
+      return `collection:${input.collection}`;
+    return "";
+  },
+  rowTypes: [
+    "libraryDoc",
+    "libraryCollection",
+    "libraryState",
+    "libraryRetention",
+  ],
   reducers: {
     "library.favourite.set": reduce("favourite"),
-    "library.retention.set": reduce("retention"),
+    "library.retention.set": (rows, args, { user }) => {
+      const parsed = contract.library.retention.set.args.safeParse(args);
+      if (!parsed.success) return rows;
+      const input = parsed.data;
+      return projectRetention(rows, user, input.id, input.kind, input.value);
+    },
+    "library.collection.recordRead": (rows, args, { user }) => {
+      const parsed =
+        contract.library.collection.recordRead.args.safeParse(args);
+      if (!parsed.success) return rows;
+      const input = parsed.data;
+      return projectRetention(
+        rows,
+        user,
+        input.collection,
+        "collection",
+        undefined,
+        input.t.ms,
+      );
+    },
     "library.progress.set": reduce("progress"),
   },
   repositories: {
@@ -93,9 +137,48 @@ export const libraryModule = defineClientModule({
             "libraryDoc",
             "libraryCollection",
             "libraryState",
+            "libraryRetention",
             "grant",
             "communityConversation",
           ].includes(row.type),
       ),
   },
 });
+
+function projectRetention(
+  rows: readonly StoredRow[],
+  user: string,
+  id: string,
+  kind: "doc" | "collection",
+  value?: LibraryRetention["value"],
+  used = 0,
+): StoredRow[] {
+  const scope = `me:${user}`;
+  const previous = rows.find(
+    (row) =>
+      row.scope === scope && row.type === "libraryRetention" && row.id === id,
+  );
+  const parsed = libraryRetentionEntitySchema.safeParse(previous?.data);
+  const data = parsed.success
+    ? parsed.data
+    : { id, kind, value: null, lastUsed: 0 };
+  return [
+    ...rows.filter((row) => row !== previous),
+    {
+      scope,
+      type: "libraryRetention",
+      id,
+      rev: previous?.rev ?? 0,
+      deleted: false,
+      data: {
+        ...data,
+        value: value
+          ? data.value
+            ? lwwMerge(data.value, value)
+            : value
+          : data.value,
+        lastUsed: Math.max(data.lastUsed, used),
+      },
+    },
+  ];
+}

@@ -146,8 +146,8 @@ describe("media actions", () => {
     ).rejects.toThrow("搜索尚未完成");
   });
   it("validates and lists retention choices", () => {
-    expect(retentionChoices(45)).toEqual([1, 7, 30, 45, 90, 365]);
-    expect(retentionChoices(30)).toEqual([1, 7, 30, 90, 365]);
+    expect(retentionChoices(45)).toEqual(["auto", 1, 7, 30, 45, 90, 365]);
+    expect(retentionChoices(30)).toEqual(["auto", 1, 7, 30, 90, 365]);
     for (const [v, ok] of [
       [0, false],
       [1, true],

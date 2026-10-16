@@ -13,7 +13,12 @@ async function click(cdp, label) {
   );
 }
 async function fill(cdp, label, value) {
-  if (label === "曲目来源" || label === "曲目" || label === "目标歌单") {
+  if (
+    label === "曲目来源" ||
+    label === "曲目" ||
+    label === "目标歌单" ||
+    label === "歌曲保留天数"
+  ) {
     await cdp.evaluate(
       `(function(){var trigger=Array.prototype.slice.call(document.querySelectorAll('button[aria-haspopup=listbox]')).find(function(b){var l=document.getElementById(b.getAttribute('aria-labelledby').split(' ')[0]);return l&&l.textContent===${JSON.stringify(label)}});if(!trigger)throw Error('Missing picker '+${JSON.stringify(label)});trigger.click()})()`,
     );
@@ -135,6 +140,11 @@ export async function mediaSuite(browser, server, { legacy = false } = {}) {
     await cdp.wait(`${text}.indexOf('晨光练习曲')>=0`);
     await capture(cdp, name, "search");
     await click(cdp, "更多操作 晨光练习曲");
+    await click(cdp, "我的离线保留");
+    await fill(cdp, "歌曲保留天数", "7");
+    await click(cdp, "保存设置");
+    await cdp.wait("!document.querySelector('[role=dialog]')");
+    await click(cdp, "更多操作 晨光练习曲");
     await click(cdp, "加入队列 晨光练习曲");
     await click(cdp, "更多操作 夜色练习曲");
     await click(cdp, "加入队列 夜色练习曲");
@@ -206,9 +216,9 @@ export async function mediaSuite(browser, server, { legacy = false } = {}) {
     await cdp.wait(
       '!!document.querySelector(\'[data-testid="media.content"] [data-testid="media.track"]\')',
     );
-    await click(cdp, "离线保留 · 7 天");
+    await click(cdp, "我的离线保留 · 自动");
     await fill(cdp, "保留天数", "123");
-    await click(cdp, "保存天数");
+    await click(cdp, "保存设置");
     await click(cdp, "分享");
     await cdp.wait("!!document.querySelector('[role=dialog]')");
     assert.equal(
@@ -234,6 +244,10 @@ export async function mediaSuite(browser, server, { legacy = false } = {}) {
     await cdp.wait(
       "document.querySelector('[data-testid=\"media.content.title\"]').textContent==='离线歌单'",
     );
+    await click(cdp, "我的离线保留 · 自动");
+    await fill(cdp, "保留天数", "7");
+    await click(cdp, "保存设置");
+    await cdp.wait("!document.querySelector('[role=dialog]')");
     await eventually(
       async () => {
         const result = (await wire.call("media.library.get", {})).data;
@@ -285,6 +299,40 @@ export async function mediaSuite(browser, server, { legacy = false } = {}) {
     await unlock(cdp, "654321");
     await click(cdp, "音乐");
     await click(cdp, "离线歌单");
+    await cdp.wait(
+      "document.querySelectorAll('[data-testid=\"media.track\"]').length===3",
+    );
+    assert.equal(
+      await cdp.evaluate(
+        "Array.prototype.every.call(document.querySelectorAll('[data-testid=\"media.track\"]'),function(e){return e.getAttribute('data-device-cache')==='false'})",
+      ),
+      true,
+      "read-only shared playlist defaults to no personal download",
+    );
+    await click(cdp, "我的离线保留 · 自动");
+    await fill(cdp, "保留天数", "1");
+    await click(cdp, "保存设置");
+    await cdp.wait("!document.querySelector('[role=dialog]')");
+    await eventually(
+      async () => {
+        const sync = (await second.call("sync.pull", { cursors: {} })).data;
+        return sync.scopes[`me:${second.user.id}`].rows.find(
+          (row) => row.type === "mediaRetention" && row.id === playlist.id,
+        )?.data.value?.v;
+      },
+      (value) => value === 1,
+      "shared reader personal retention",
+      WAIT_TIMEOUT,
+    );
+    assert.equal(
+      (await wire.call("sync.pull", { cursors: {} })).data.scopes[
+        `me:${wire.user.id}`
+      ].rows.find(
+        (row) => row.type === "mediaRetention" && row.id === playlist.id,
+      )?.data.value?.v,
+      7,
+      "reader cannot change owner's retention",
+    );
     await cdp.wait(
       "document.querySelectorAll('[data-testid=\"media.content\"] [data-testid=\"media.track\"]').length===3 && Array.prototype.every.call(document.querySelectorAll('[data-testid=\"media.content\"] [data-testid=\"media.track\"]'),function(e){return e.getAttribute('data-device-cache')==='true'})",
     );
