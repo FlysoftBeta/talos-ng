@@ -14,6 +14,8 @@
     "build": "node scripts/build.mjs && node ../../tools/compat-check/cli.mjs dist"
   },
   "dependencies": {
+    "@stablelib/pbkdf2": "1.0.1",
+    "@stablelib/sha256": "1.0.1",
     "@talos/base": "workspace:*",
     "@talos/contract": "workspace:*",
     "@talos/docpack": "workspace:*",

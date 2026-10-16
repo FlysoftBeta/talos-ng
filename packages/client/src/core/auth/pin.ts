@@ -1,3 +1,5 @@
+import { deriveKey } from "@stablelib/pbkdf2";
+import { SHA256 } from "@stablelib/sha256";
 import { AppError, equals, fromHex, toHex, utf8Encode } from "@talos/base";
 export interface PinVerifier {
   salt: string;
@@ -13,7 +15,7 @@ async function derive(
 ): Promise<Uint8Array> {
   if (!/^\d{6}$/.test(pin)) throw new AppError("E_INVALID", "请输入六位 PIN");
   if (!crypto.subtle)
-    throw new AppError("E_UNAVAILABLE", "请使用 HTTPS 或本机地址启用离线解锁");
+    return deriveKey(SHA256, utf8Encode(pin), salt, iterations, 32);
   const key = await crypto.subtle.importKey(
     "raw",
     utf8Encode(pin) as BufferSource,

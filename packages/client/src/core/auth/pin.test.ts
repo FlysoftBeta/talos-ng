@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { webcrypto } from "node:crypto";
+import { pbkdf2Sync, webcrypto } from "node:crypto";
 import { AppError } from "@talos/base";
 import {
   authMessage,
@@ -9,6 +9,30 @@ import {
 } from "./pin.ts";
 const crypto = webcrypto as unknown as Crypto;
 describe("offline PIN verifier", () => {
+  it("uses compatible salted PBKDF2 without SubtleCrypto", async () => {
+    const fallback = {
+      getRandomValues: crypto.getRandomValues.bind(crypto),
+    } as Crypto;
+    const a = await createPinVerifier("012345", fallback);
+    const b = await createPinVerifier("012345", fallback);
+    expect(a.salt).not.toBe(b.salt);
+    expect(a.hash).toBe(
+      pbkdf2Sync(
+        "012345",
+        Buffer.from(a.salt, "hex"),
+        PIN_ITERATIONS,
+        32,
+        "sha256",
+      ).toString("hex"),
+    );
+    expect(await verifyPin("012345", a, crypto)).toBe(true);
+    const native = await createPinVerifier("012345", crypto);
+    expect(await verifyPin("012345", native, fallback)).toBe(true);
+    expect(await verifyPin("012346", native, fallback)).toBe(false);
+    await expect(
+      verifyPin("012345", { ...a, iterations: 1 }, fallback),
+    ).rejects.toMatchObject({ code: "E_INTEGRITY" });
+  });
   it("stores independent salted PBKDF2 hashes and checks the complete PIN", async () => {
     const a = await createPinVerifier("654321", crypto);
     const b = await createPinVerifier("654321", crypto);

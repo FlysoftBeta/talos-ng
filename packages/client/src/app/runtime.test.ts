@@ -543,36 +543,48 @@ it("removes offline access when a resumed profile no longer has the offline feat
   expect(await runtime.login("654321")).toBe(false);
   expect(runtime.getSnapshot().gate).toBe("appLocked");
 });
-it("online login remains available without WebCrypto; no weak offline verifier is saved", async () => {
-  const db = await openAppDb({
-    indexedDB: new IDBFactory(),
-    keyRange: IDBKeyRange,
-    channel: null,
-  });
-  databases.push(db);
-  await db.table("session").put(device, "device");
-  const link = new TestLink();
-  const runtime = new ClientRuntime({
-    build: "test",
-    production: false,
-    db: async () => db,
-    link: () => link,
-    crypto: {} as Crypto,
-  });
-  runtimes.push(runtime);
-  await runtime.start();
-  link.connectNow();
-  expect(await runtime.login("654321")).toBe(true);
-  expect(
-    (await db.table<SavedSession, string>("session").get("active"))!.verifier,
-  ).toBeUndefined();
-  link.stop();
-  runtime.lock();
-  expect(await runtime.login("654321")).toBe(false);
-  expect(runtime.getSnapshot().error).toBe(
-    "当前连接不支持离线解锁，请连接服务器登录，或使用 HTTPS / 本机地址",
-  );
-});
+it.each([false, true])(
+  "login without SubtleCrypto (secure random available: %s)",
+  async (hasRandom) => {
+    const db = await openAppDb({
+      indexedDB: new IDBFactory(),
+      keyRange: IDBKeyRange,
+      channel: null,
+    });
+    databases.push(db);
+    await db.table("session").put(device, "device");
+    const link = new TestLink();
+    const runtime = new ClientRuntime({
+      build: "test",
+      production: false,
+      db: async () => db,
+      link: () => link,
+      crypto: (hasRandom
+        ? { getRandomValues: crypto.getRandomValues.bind(crypto) }
+        : {}) as Crypto,
+    });
+    runtimes.push(runtime);
+    await runtime.start();
+    link.connectNow();
+    expect(await runtime.login("654321")).toBe(true);
+    const saved = (await db
+      .table<SavedSession, string>("session")
+      .get("active"))!;
+    if (hasRandom) expect(saved.verifier?.iterations).toBe(210_000);
+    else expect(saved.verifier).toBeUndefined();
+    link.stop();
+    runtime.lock();
+    if (hasRandom) {
+      expect(await runtime.login("654320")).toBe(false);
+      expect(await runtime.login("654321")).toBe(true);
+    } else {
+      expect(await runtime.login("654321")).toBe(false);
+      expect(runtime.getSnapshot().error).toBe(
+        "此账户尚未在本机登录，请联网后首次登录",
+      );
+    }
+  },
+);
 it("a protected RPC admission denial conceals the app and removes its offline verifier", async () => {
   const { runtime, db, link } = await setup(true);
   link.connectNow();

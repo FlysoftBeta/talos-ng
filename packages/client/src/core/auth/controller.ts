@@ -285,20 +285,17 @@ export class SessionController {
           prior.credentialVersion === session.credentialVersion
             ? (prior.verifiers ?? (prior.verifier ? [prior.verifier] : []))
             : [];
-        const alreadyKnown =
-          !(this.ports.options.crypto ?? this.ports.environment.crypto)
-            ?.subtle ||
-          (
-            await Promise.all(
-              known.map((item) =>
-                verifyPin(
-                  pin,
-                  item,
-                  this.ports.options.crypto ?? this.ports.environment.crypto,
-                ),
+        const alreadyKnown = (
+          await Promise.all(
+            known.map((item) =>
+              verifyPin(
+                pin,
+                item,
+                this.ports.options.crypto ?? this.ports.environment.crypto,
               ),
-            )
-          ).some(Boolean);
+            ),
+          )
+        ).some(Boolean);
         if (!current()) return false;
         const verifiers = alreadyKnown
           ? known
@@ -320,13 +317,6 @@ export class SessionController {
         if (!current()) return false;
         this.ports.environment.persist();
       } else {
-        if (
-          !(this.ports.options.crypto ?? this.ports.environment.crypto)?.subtle
-        )
-          throw new AppError(
-            "E_UNAVAILABLE",
-            "当前连接不支持离线解锁，请连接服务器登录，或使用 HTTPS / 本机地址",
-          );
         if (this.ports.saved && !this.gate("offline").ok)
           throw new AppError(
             "E_DENIED",
@@ -452,7 +442,9 @@ export class SessionController {
   }
   async offlineVerifier(pin: string): Promise<PinVerifier | undefined> {
     const crypto = this.ports.options.crypto ?? this.ports.environment.crypto;
-    return crypto?.subtle ? createPinVerifier(pin, crypto) : undefined;
+    return typeof crypto?.getRandomValues === "function"
+      ? createPinVerifier(pin, crypto)
+      : undefined;
   }
   async onboard(
     args: Omit<
