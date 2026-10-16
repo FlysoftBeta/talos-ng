@@ -377,7 +377,9 @@ export function createKernel(options: KernelOptions): Kernel {
           ctx.device,
         );
       } else if (method === "auth.lock") identity.lock(ctx.connection);
-      else if (method === "auth.logout") identity.logout(ctx.connection);
+      // The original logout already revoked its requested token. Replays only
+      // restore the connection binding, never revoke a newer login's session.
+      else if (method === "auth.logout") identity.lock(ctx.connection);
       else if (method === "auth.device.register")
         identity.bindDevice(
           ctx.connection,
