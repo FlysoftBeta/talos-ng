@@ -8,11 +8,13 @@
 - Explicit durable scope completeness protects retention during partial cache/disconnect
   and protects queue replacement from overwriting unseen entries. Valid empty scopes
   remain complete; normal complete offline caches retain expiry/queue behavior (D-120).
-- Targeted verification: 145 auth/runtime/sync/retention tests, 26 list-model tests and
+- Targeted verification: 146 auth/runtime/sync/retention tests, 26 list-model tests and
   18 playback tests pass; helpers also checked client types and changed-file lint.
   Full local checks/browser/package runs intentionally omitted under D-119.
-- CI run `38856673408` for `7233ce3` is pending/in progress; monitor exact final pushed
-  commit and fix failures. Earlier `29c4174` CI check and all three packages passed.
+- Final regression patch `2cd9e57` passed all three CI package targets; its check stopped
+  at Prettier formatting in sync-engine.ts. Fixed by `22674d6`; monitor the final pushed
+  commit for complete CI results. Earlier `29c4174` CI check and all packages passed.
+  Intermediate pending runs were superseded; no full browser rerun for this change.
 
 # Initial-login cursor repair — 2026-10-16
 
