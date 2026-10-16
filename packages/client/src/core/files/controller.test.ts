@@ -352,8 +352,6 @@ describe("feature key/value scope", () => {
           owner: T1,
           title: "list",
           tracks: [T1],
-          retentionDays: 30,
-          lastPlayed: 1,
           created: 1,
         },
       },
