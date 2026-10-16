@@ -33,7 +33,8 @@ or `model/module.ts`, `connect`, `index.ts`).
 
 ## Library, reader, netbooks
 
-- `libraryModule` projects `libraryDoc`, `libraryCollection`, `libraryState`; `app/areas.tsx`
+- `libraryModule` projects `libraryDoc`, `libraryCollection`, `libraryState` and personal
+  `libraryRetention`; `app/areas.tsx`
   supplies the reader slot and the netbooks toolbar entry, so the library imports neither.
   `SharingAdapter` lets the grant sheet serve media playlists without library RPCs.
 - Models: `library-data`, `collections`, `documents` (ranged pack reading), `import`
@@ -41,9 +42,12 @@ or `model/module.ts`, `connect`, `index.ts`).
   job; transfer failures show in the status centre, conversion failures in tasks),
   `retention` (serialised background scheduler); reader: `reading-session`, `resources`,
   `clock`. Viewer details: `documents.md`.
-- Retention expiry is based on the chosen policy timestamp with an injected expiry timer;
-  cancellation or revocation is re-checked after each download. Cleanup releases expired or
-  revoked ownership and collects unowned files.
+- Library and media retention are personal `me:<user>` rows per item or collection. Policies
+  use LWW values and personal last-use clocks; schedulers take the latest applicable expiry
+  across an item and its current collections. Unset/auto never starts background downloads.
+  Expiry timers and bounded retry timers drive serial passes. Account changes, cancellation
+  and revocation are re-checked after awaited work. Cleanup releases expired or revoked
+  ownership and collects unowned files.
 - Netbooks: a controller owns search, cooldown and download submission through runtime ports;
   search state is memory-only; countdown uses the server-provided remaining duration to
   tolerate clock skew; button actions are serialised; closing the dialog leaves the job.

@@ -65,10 +65,17 @@ there is no token or link that grants access to whoever holds it.
 
 ## Retention
 
-Per document: auto, or keep 1, 7 or 180 days for offline use. Explicit policies download the
-whole rendition in the background (resumable); only a complete, hash-verified document is
-readable offline. Auto does not promise offline availability. Expired or revoked retention
-is released and its files collected.
+Each user can set offline retention independently for a document or an accessible booklist:
+auto, or 1–365 days. Read access is sufficient to set one's own policy. Sharing or changing
+a booklist never changes another user's retention settings; auto does not request a
+background download or promise offline availability.
+
+An explicit policy downloads whole renditions in the background (resumable). The retention
+deadline uses that user's policy timestamp or latest use, whichever is later. A document
+covered by several of the user's policies remains retained until the latest applicable
+deadline. Clearing one policy does not cancel another applicable policy. Removed membership,
+expired policies and lost access release ownership. Only complete, hash-verified documents
+are readable offline.
 
 ## Network novels
 

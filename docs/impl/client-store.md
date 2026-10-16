@@ -106,6 +106,10 @@ reconstructible mirrors and windowed history.
   into FileStore writers, in a serialised background queue that resumes after reconnect and
   runs independently of any viewer; cancellation or revocation is re-checked after each
   download completes. Only complete, hash-verified content is readable offline. Owners are
-  scoped (`user`, `playlist`, `conv:<id>` prefixes) so revocation can purge by prefix.
+  scoped to users and content (`library:<doc>:retained`, `media:<track>:retained`,
+  `conv:<id>`), with retained item access checked against admitted rows. Library/media
+  schedulers aggregate only the current user's item and collection policies; eviction
+  protection likewise uses the owner's personal policy. Network headers and streamed
+  chunks time out after 30 seconds without progress; retries keep the durable offset.
   Binary downloads are bounded to four concurrent calls per runtime so sends and sync keep
   transport capacity.

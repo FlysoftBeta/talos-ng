@@ -39,10 +39,14 @@ it can fetch live or keeps for offline use.
   another writable playlist and share the source playlist at their own grant level or below.
   Members may not downgrade stronger grants, change the original owner's access, or revoke
   without own authority. A saved copy remains accessible after the original grant is revoked.
-- Retention for offline: the audio of a retained playlist is downloaded and kept. Retention
-  starts when the playlist is created or retention is set and, once the playlist is played,
-  extends to the last play plus 1-365 days. Deleting a playlist releases its retention; its
-  tracks stay available to people who still reach them.
+- Each user can set offline retention for an individual song or an accessible playlist:
+  auto, or 1–365 days. These are personal settings, including for read-only shared playlists.
+  Creating or sharing a playlist never enables background downloads for another user.
+  Auto requests no explicit retention. An explicit policy downloads the audio and expires
+  after the selected duration from that user's policy change or latest use, whichever is
+  later. Several applicable personal policies combine using the latest deadline. Clearing
+  one policy does not cancel the user's other policies. Removing membership or losing access
+  releases the affected ownership; other accessible copies and applicable policies survive.
 - Songs without any playlist references are reclaimed **after a delay**, including search
   results that were never saved. The delay is fixed at 30 days, measured from discovery
   for never-saved songs or from the removal
