@@ -22,6 +22,12 @@ import type { TypedCall } from "./link.ts";
 import type { ModuleRegistry } from "./modules.ts";
 import { methodRegistry } from "@talos/contract";
 
+class SyncCursorChanged extends AppError {
+  constructor() {
+    super("E_CONFLICT", "同步进度已变更，正在重新同步");
+  }
+}
+
 export type SyncPhase =
   "offline" | "connecting" | "authenticating" | "syncing" | "live";
 export interface SyncSnapshot {
@@ -206,47 +212,70 @@ export class SyncEngine {
       await this.pulls.run(async () => {
         if (generation !== this.generation) return;
         this.needsPull = true;
-        const revocations = new Map(this.revocations);
-        const { db, user } = this.options;
-        const admitted =
-          (await db
-            .table<readonly string[], string>("kv")
-            .get(`scopes:${user}`)) ?? [];
-        const scopes = await db.table<StoredScope>("scopes").range();
-        const cursors: Record<string, number> = {};
-        for (const scope of scopes)
-          if (admitted.includes(scope.scope))
-            cursors[scope.scope] = scope.cursor;
-        const pages = new Map<string, ScopePull[]>();
-        const gone = new Set<string>();
-        let more: boolean;
-        do {
-          const response = await this.pullResponse(cursors, generation);
-          if (!response) return;
+        // Other tabs and cache eviction share the database, not this engine's gate.
+        // Retry a changed request base before exposing a transient conflict to login.
+        for (let attempt = 0; ; attempt++) {
           if (generation !== this.generation) return;
-          more = response.repull === true;
-          for (const scope of response.gone) {
-            gone.add(scope);
-            delete cursors[scope];
-            pages.delete(scope);
+          this.publish({ progress: 0 });
+          const revocations = new Map(this.revocations);
+          const { db, user } = this.options;
+          const admitted =
+            (await db
+              .table<readonly string[], string>("kv")
+              .get(`scopes:${user}`)) ?? [];
+          const scopes = await db.table<StoredScope>("scopes").range();
+          const cursors: Record<string, number> = {};
+          for (const scope of scopes)
+            if (admitted.includes(scope.scope))
+              cursors[scope.scope] = scope.cursor;
+          const bases = { ...cursors };
+          const pages = new Map<string, ScopePull[]>();
+          const gone = new Set<string>();
+          let more: boolean;
+          do {
+            const response = await this.pullResponse(cursors, generation);
+            if (!response) return;
+            if (generation !== this.generation) return;
+            more = response.repull === true;
+            for (const scope of response.gone) {
+              gone.add(scope);
+              delete cursors[scope];
+              delete bases[scope];
+              pages.delete(scope);
+            }
+            for (const [scope, page] of Object.entries(response.scopes)) {
+              const list = pages.get(scope) ?? [];
+              // Another scope can require more pages after this scope completed.
+              // Continue its buffered history without dropping newer rows or resets.
+              if (list.length)
+                list[list.length - 1] = {
+                  ...list[list.length - 1]!,
+                  more: true,
+                };
+              list.push(page);
+              pages.set(scope, list);
+              cursors[scope] = page.cursor;
+              more = more || page.more;
+              this.publish({
+                progress: this.snapshot.progress + page.rows.length,
+              });
+            }
+          } while (more);
+          try {
+            await this.applyPages(
+              pages,
+              [...gone],
+              generation,
+              revocations,
+              bases,
+            );
+          } catch (error) {
+            if (error instanceof SyncCursorChanged && attempt < 2) continue;
+            throw error;
           }
-          for (const [scope, page] of Object.entries(response.scopes)) {
-            const list = pages.get(scope) ?? [];
-            // Another scope can require more pages after this scope completed.
-            // Continue its buffered history without dropping newer rows or resets.
-            if (list.length)
-              list[list.length - 1] = { ...list[list.length - 1]!, more: true };
-            list.push(page);
-            pages.set(scope, list);
-            cursors[scope] = page.cursor;
-            more = more || page.more;
-            this.publish({
-              progress: this.snapshot.progress + page.rows.length,
-            });
-          }
-        } while (more);
-        await this.applyPages(pages, [...gone], generation, revocations);
-        if (generation === this.generation) this.needsPull = false;
+          if (generation === this.generation) this.needsPull = false;
+          break;
+        }
       });
       if (generation === this.generation) {
         this.timers.clear(this.pullRetryTimer);
@@ -390,6 +419,7 @@ export class SyncEngine {
     gone: readonly string[],
     generation: number,
     revocations: ReadonlyMap<string, number>,
+    bases?: Readonly<Record<string, number>>,
   ): Promise<void> {
     await this.writes.run(async () => {
       if (generation !== this.generation) return;
@@ -430,13 +460,30 @@ export class SyncEngine {
                     (revocations.get(scope) ?? 0)
                   )
                     continue;
+                  const wasAdmitted = admitted.has(scope);
+                  const currentCursor = wasAdmitted
+                    ? (cursors.get(scope) ?? 0)
+                    : 0;
+                  // Both advances from another tab and eviction resets invalidate
+                  // the request base. Never overwrite that change with buffered pages.
+                  if (bases && currentCursor !== (bases[scope] ?? 0))
+                    throw new SyncCursorChanged();
+                  if (!wasAdmitted && bases) {
+                    for (const row of current.values())
+                      if (row.scope === scope) {
+                        rows.delete([scope, row.type, row.id]);
+                        current.delete(key(row));
+                      }
+                    cursors.delete(scope);
+                  }
                   admitted.add(scope);
                   // A later page may legitimately regrant a scope removed earlier in this chain.
                   // Its fresh data must not inherit the removed scope's windows or cleanup job.
                   cleanup.delete(scope);
-                  const savedScope = gone.includes(scope)
-                    ? undefined
-                    : saved.find((item) => item.scope === scope);
+                  const savedScope =
+                    gone.includes(scope) || (!wasAdmitted && bases)
+                      ? undefined
+                      : saved.find((item) => item.scope === scope);
                   const cursor = cursors.get(scope) ?? 0;
                   // Delayed pushes must not regress a completed pull or replay stale resets.
                   if (chain[chain.length - 1]!.cursor < cursor) continue;

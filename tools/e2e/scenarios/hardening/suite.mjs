@@ -57,9 +57,48 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
       id: doc,
       value: { v: 7, t: { ms: Date.now(), counter: 0 }, op: id(1) },
     });
+    // Reproduce a cached cursor without this account's scope admission. The
+    // authoritative first sync must span pages, not just one final snapshot.
+    for (let n = 0; n < 250; n++)
+      await wire.call("me.setting.set", {
+        key: `cursor-regression.${n}`,
+        value: { v: n, t: { ms: Date.now(), counter: 0 }, op: id(10000 + n) },
+      });
+    const personal = `me:${wire.user.id}`;
+    const firstPage = (await wire.call("sync.pull", { cursors: {} })).data
+      .scopes[personal];
+    assert.equal(firstPage.more, true, "login regression requires pagination");
+    const finalPage = (
+      await wire.call("sync.pull", {
+        cursors: { [personal]: firstPage.cursor },
+      })
+    ).data.scopes[personal];
+    assert.ok(finalPage.cursor > firstPage.cursor);
     await cdp.navigate(server.url + "/");
+    await cdp.wait(
+      '!!document.querySelector(\'[data-testid="auth.concealed"],[data-testid="auth.numpad"] button\')',
+    );
+    await cdp.evaluate(`new Promise(function(resolve,reject){
+      var r=indexedDB.open('talos-app');
+      r.onerror=function(){reject(r.error)};
+      r.onsuccess=function(){
+        var db=r.result,tx=db.transaction(['scopes'],'readwrite');
+        tx.objectStore('scopes').put({scope:${JSON.stringify(personal)},cursor:${finalPage.cursor}});
+        tx.oncomplete=function(){db.close();resolve(true)};
+        tx.onabort=function(){db.close();reject(tx.error)};
+      }
+    })`);
     await unlock(cdp);
     await cdp.wait("document.body.textContent.indexOf('已连接')>=0");
+    assert.ok(
+      (await readDb(cdp, "scopes", personal)).cursor >= finalPage.cursor,
+    );
+    const admitted = await readDb(cdp, "kv", `scopes:${wire.user.id}`);
+    assert.ok(
+      admitted.includes(personal),
+      "paginated first login admits scope",
+    );
+    console.log("Paginated login with a pre-existing unadmitted cursor passed");
     await cdp.wait(
       "!!navigator.serviceWorker.controller && !!window.__talosShell",
     );

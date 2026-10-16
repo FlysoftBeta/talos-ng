@@ -162,6 +162,129 @@ function until(
   });
 }
 
+describe("initial shared-scope pagination", () => {
+  it("hydrates a new account from zero despite another account's cached cursor", async () => {
+    const f = await fixture();
+    const shared = "coll:shared";
+    await f.db
+      .table<StoredScope>("scopes")
+      .put({ scope: shared, cursor: 50, windows: { post: [[1, 3]] } });
+    await f.db
+      .table<StoredRow>("rows")
+      .put({ ...row("removed", 40), scope: shared });
+    await f.db
+      .table<readonly string[], string>("kv")
+      .put([shared], "scopes:bob");
+    let requests = 0;
+    f.handle(async (_name, args) => {
+      const cursors = (args as { cursors: Record<string, number> }).cursors;
+      requests++;
+      expect(cursors[shared]).toBe(requests === 1 ? undefined : 10);
+      return {
+        scopes: {
+          [shared]: {
+            rows: [
+              row(requests === 1 ? "early" : "late", requests === 1 ? 10 : 60),
+            ],
+            cursor: requests === 1 ? 10 : 60,
+            more: requests === 1,
+          },
+        },
+        gone: [],
+        added: requests === 1 ? [shared] : [],
+      };
+    });
+    await expect(f.engine.connect()).resolves.toBeUndefined();
+    expect(
+      f.engine
+        .getSnapshot()
+        .rows.map((r) => r.id)
+        .sort(),
+    ).toEqual(["early", "late"]);
+    expect((await f.db.table<StoredScope>("scopes").get(shared))?.cursor).toBe(
+      60,
+    );
+    expect(f.engine.getSnapshot().phase).toBe("live");
+    expect(
+      (await f.db.table<StoredScope>("scopes").get(shared))?.windows,
+    ).toBeUndefined();
+  });
+
+  it.each([0, 20])(
+    "restarts a buffered pull when another writer changes its base to %i",
+    async (changedCursor) => {
+      const f = await fixture();
+      await f.db
+        .table<readonly string[], string>("kv")
+        .put([scope], "scopes:alice");
+      await f.db.table<StoredScope>("scopes").put({ scope, cursor: 10 });
+      await f.db.table<StoredRow>("rows").put({ ...row("retained", 5), scope });
+      let requests = 0;
+      f.handle(async (_name, args) => {
+        const cursor = (args as { cursors: Record<string, number> }).cursors[
+          scope
+        ];
+        requests++;
+        if (requests === 1) {
+          expect(cursor).toBe(10);
+          return response([row("early", 15)], 15, { more: true });
+        }
+        if (requests === 2) {
+          expect(cursor).toBe(15);
+          // A second tab advances, or eviction invalidates, shared persistent state.
+          await f.db
+            .table<StoredScope>("scopes")
+            .put({ scope, cursor: changedCursor });
+          if (changedCursor === 0)
+            await f.db
+              .table<StoredRow>("rows")
+              .delete([scope, "setting", "retained"]);
+          else
+            await f.db
+              .table<StoredRow>("rows")
+              .put({ ...row("early", 15), scope });
+          return response([row("late", 30)], 30);
+        }
+        expect(requests).toBe(3);
+        expect(cursor).toBe(changedCursor);
+        return response(
+          changedCursor === 0
+            ? [row("retained", 5), row("early", 15), row("late", 30)]
+            : [row("late", 30)],
+          30,
+        );
+      });
+      await f.engine.connect();
+      expect(requests).toBe(3);
+      expect(
+        f.engine
+          .getSnapshot()
+          .rows.map((r) => r.id)
+          .sort(),
+      ).toEqual(["early", "late", "retained"]);
+      expect((await f.db.table<StoredScope>("scopes").get(scope))?.cursor).toBe(
+        30,
+      );
+      expect(f.engine.getSnapshot().phase).toBe("live");
+    },
+  );
+
+  it("still rejects a genuinely backwards response chain", async () => {
+    const f = await fixture();
+    let requests = 0;
+    f.handle(async () =>
+      ++requests === 1
+        ? response([row("first", 10)], 10, { more: true })
+        : response([row("backwards", 5)], 5),
+    );
+    await expect(f.engine.connect()).rejects.toThrow(
+      "Pull cursor moved backwards",
+    );
+    expect(await f.db.table<StoredRow>("rows").range()).toEqual([]);
+    expect(await f.db.table<StoredScope>("scopes").range()).toEqual([]);
+  });
+});
+
 describe("durable outbox", () => {
   it("persists queued intent and rebuilds optimistic data after a crash before send", async () => {
     const f = await fixture();
