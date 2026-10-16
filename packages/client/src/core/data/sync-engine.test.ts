@@ -634,7 +634,9 @@ describe("scope synchronization", () => {
       response([row("one", 2, "old")], 2, { reset: ["setting"] }),
     );
     expect(f.engine.getSnapshot().rows[0]!.rev).toBe(9);
-    expect(await f.db.table<StoredScope, string>("scopes").get(scope)).toEqual({
+    expect(
+      await f.db.table<StoredScope, string>("scopes").get(scope),
+    ).toMatchObject({
       scope,
       cursor: 9,
     });
@@ -709,7 +711,9 @@ it("newer pushed revision overtaking a buffered pull cannot be regressed by its 
   finalPage.resolve(response([row("one", 2, "old-pull")], 2));
   await Promise.all([pulling, delta]);
   expect(f.engine.getSnapshot().rows[0]!.data).toBe("pushed");
-  expect(await f.db.table<StoredScope, string>("scopes").get(scope)).toEqual({
+  expect(
+    await f.db.table<StoredScope, string>("scopes").get(scope),
+  ).toMatchObject({
     scope,
     cursor: 9,
   });
@@ -1278,4 +1282,21 @@ it("applies a fresh scope grant after an earlier page revoked it in the same cha
   ).toBe(10);
   expect(cleanups).toBe(0);
   expect(await f.db.table("kv").get("cleanupScopes:alice")).toEqual([]);
+});
+
+it("certifies empty scopes at cursor zero, preserves completeness across restart and invalidates it on eviction", async () => {
+  const f = await fixture();
+  f.handle(async () => response([], 0));
+  expect(f.engine.getSnapshot().cacheReady).toBe(false);
+  await f.engine.connect();
+  expect(f.engine.getSnapshot().cacheReady).toBe(true);
+  const restored = f.make();
+  await restored.hydrate();
+  expect(restored.getSnapshot().cacheReady).toBe(true);
+  // Eviction deliberately replaces the scope and drops its completeness certificate.
+  await f.db.table<StoredScope>("scopes").put({ scope, cursor: 0 });
+  await restored.refreshLocal();
+  expect(restored.getSnapshot().cacheReady).toBe(false);
+  await restored.connect();
+  expect(restored.getSnapshot().cacheReady).toBe(true);
 });
