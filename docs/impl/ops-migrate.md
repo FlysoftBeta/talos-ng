@@ -58,7 +58,7 @@ Legacy IDs become deterministic target ULIDs, except wild/announcement groups th
 | `ai_conversations`, `ai_messages` | `ai_rows`, `ai_messages` | Titles, messages, sequences and read cursors carry over. Finished messages remain done. Pending/streaming messages become cancelled/failed with partial text and a migration error. Image attachments resolve against validated workspace files; missing files are reported. Fork topology and derived tags are not reconstructed. |
 | `ai_credit_accounts`, `ai_plan_enrollments`, `ai_credit_ledger` | `ai_accounts`, `ai_ledger` | Top-up balance, plan end and ledger records carry over. Active reservations are closed without a charge, with zero-amount release notes naming the reserved amount; top-up balances are unchanged. Historical usage accounting is not reconstructed. |
 | `ai_workspaces` | `migration_workspace_rows`, `objects`, `object_refs`, `ai_files` | The ZIP is retained and validated entries are streamed through temporary files into `ai_files` without a whole archive or file buffer in JavaScript. Per-file modification times have no target column. Archives exceeding the target's 10 MiB / 256 file limit, missing blobs and invalid entries are reported. SQLite's BLOB concatenation can still allocate a whole value internally. |
-| `media_tracks`, `media_assets`, `media_lists`, `media_list_items`, `user_queues`, media favorites | `media_tracks`, `media_playlists`, `media_user_states`, `objects`, `object_refs` | Real module writes, no adapter. Audio checks SHA-256 and byte count before publication. Covers stay ledger-owned because target tracks have no cover field. Queue/playlist order is retained. Expiry reconstructs last-play time as expiry minus retention days. Lists over 500 tracks are reported and not silently truncated. |
+| `media_tracks`, `media_assets`, `media_lists`, `media_list_items`, `user_queues`, media favorites | `media_tracks`, `media_playlists`, `media_user_states`, `objects`, `object_refs` | Real module writes, no adapter. Audio checks SHA-256 and byte count before publication. Covers stay ledger-owned because target tracks have no cover field. Queue/playlist order is retained. Legacy shared retention and expiry are discarded; personal offline policies default to `auto`. Lists over 500 tracks are reported and not silently truncated. |
 | Audit and incident tables | none | Operational diagnostics are excluded. Preserve the legacy backup if historical access is needed. |
 
 The generated report lists row-level errors. Do not treat a journal count that matches the source count as proof that every target entity is usable.
@@ -428,8 +428,8 @@ This inventory covers the current schema, including tables intentionally exclude
 | `media_lists.kind` | playlist→media_playlists; queue→media_user_states.queue |
 | `media_lists.title` | playlist title (80-character cap); queue title omitted because queue is personal state |
 | `media_lists.revision` | not migrated because target global revisions are regenerated |
-| `media_lists.retention_days` | media_playlists.retentionDays |
-| `media_lists.expires_at` | lastPlayed = expiry minus retention days; expiry recomputed |
+| `media_lists.retention_days` | discarded; offline retention is now per user |
+| `media_lists.expires_at` | discarded; no personal usage time is inferred from shared expiry |
 | `media_lists.created_at` | media_playlists.created |
 | `media_lists.updated_at` | not migrated because target imported entity has no equivalent historical field; semantic times explicitly listed above are preserved |
 | `media_list_items.list_id` | playlist/queue membership |
