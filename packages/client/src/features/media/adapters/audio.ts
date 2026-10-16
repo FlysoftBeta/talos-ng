@@ -1,3 +1,4 @@
+import { sha256Hex } from "@talos/base";
 import type { AudioPort, AudioTransfer } from "../model/playback.ts";
 
 /** Wraps the mounted audio element and owns the temporary object URL of its source. */
@@ -64,6 +65,9 @@ export const browserTransfer: AudioTransfer = {
     };
   },
   async sha256(bytes) {
+    // Web Crypto is unavailable on non-secure origins (for example LAN HTTP).
+    if (typeof crypto === "undefined" || !crypto.subtle)
+      return sha256Hex(bytes);
     const copy = new Uint8Array(bytes.byteLength);
     copy.set(bytes);
     return Array.from(
