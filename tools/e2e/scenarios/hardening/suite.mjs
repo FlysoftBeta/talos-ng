@@ -98,6 +98,23 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
       admitted.includes(personal),
       "paginated first login admits scope",
     );
+    const restoredSettings =
+      await cdp.evaluate(`new Promise(function(resolve,reject){
+      var r=indexedDB.open('talos-app');
+      r.onerror=function(){reject(r.error)};
+      r.onsuccess=function(){
+        var db=r.result,q=db.transaction('rows').objectStore('rows').getAll();
+        q.onsuccess=function(){db.close();resolve(q.result.filter(function(row){
+          return row.scope===${JSON.stringify(personal)} && row.type==='setting' && row.id.indexOf('cursor-regression.')===0;
+        }).length)};
+        q.onerror=function(){db.close();reject(q.error)};
+      }
+    })`);
+    assert.equal(
+      restoredSettings,
+      250,
+      "all pages are persisted before login completes",
+    );
     console.log("Paginated login with a pre-existing unadmitted cursor passed");
     await cdp.wait(
       "!!navigator.serviceWorker.controller && !!window.__talosShell",
