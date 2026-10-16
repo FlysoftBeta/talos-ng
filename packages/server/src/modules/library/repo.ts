@@ -1,4 +1,5 @@
 import type {
+  LibraryRetention,
   LibraryDoc,
   LibraryCollection,
   LibraryState,
@@ -16,6 +17,29 @@ export interface RecordRow {
 }
 export class LibraryRepo {
   constructor(private readonly db: Db) {}
+  retention(user: string, id: string): LibraryRetention | undefined {
+    const row = this.db.get<{ body: string }>(
+      "SELECT body FROM library_retentions WHERE user_id=? AND id=?",
+      user,
+      id,
+    );
+    return row ? (JSON.parse(row.body) as LibraryRetention) : undefined;
+  }
+  retentions(user: string): RecordRow[] {
+    return this.db.all(
+      "SELECT id,body,rev,0 AS deleted FROM library_retentions WHERE user_id=? ORDER BY rev,id",
+      user,
+    );
+  }
+  putRetention(user: string, value: LibraryRetention, rev: number): void {
+    this.db.run(
+      "INSERT INTO library_retentions VALUES(?,?,?,?) ON CONFLICT(user_id,id) DO UPDATE SET body=excluded.body,rev=excluded.rev",
+      user,
+      value.id,
+      JSON.stringify(value),
+      rev,
+    );
+  }
   docs(): RecordRow[] {
     return this.db.all("SELECT * FROM library_documents ORDER BY rev,id");
   }

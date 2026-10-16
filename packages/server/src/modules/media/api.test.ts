@@ -125,7 +125,12 @@ describe("media API availability", () => {
       playlist: playlist.id,
       tracks: [track!.id],
     });
-    await api.media.playlist.retention({ playlist: playlist.id, days: 30 });
+    await api.media.retention.set({
+      kind: "playlist",
+      id: playlist.id,
+      value: { v: 30, ...stamp() },
+    });
+    await api.media.track.recordPlay({ track: track!.id, ...stamp() });
     await api.media.playlist.recordPlay({ playlist: playlist.id, ...stamp() });
     await api.media.playlist.share({
       playlist: playlist.id,
@@ -193,7 +198,12 @@ describe("media API availability", () => {
       "media.playlist.create": { title: "x" },
       "media.playlist.delete": { playlist: id },
       "media.playlist.items": { playlist: id, tracks: [] },
-      "media.playlist.retention": { playlist: id, days: 1 },
+      "media.retention.set": {
+        kind: "playlist",
+        id,
+        value: { v: 1, ...stamp() },
+      },
+      "media.track.recordPlay": { track: id, ...stamp() },
       "media.playlist.recordPlay": { playlist: id, ...stamp() },
       "media.playlist.share": {
         playlist: id,

@@ -5,6 +5,7 @@ export class MediaPurgeRepo {
   constructor(private readonly db: Db) {}
   purgeUser(user: string, ctx: WriteContext, domains: PurgePorts): void {
     const db = this.db;
+    db.run("DELETE FROM media_retentions WHERE user_id=?", user);
     for (const row of db.all<{ id: string; deleted: number }>(
       "SELECT id,deleted FROM media_playlists WHERE owner=?",
       user,

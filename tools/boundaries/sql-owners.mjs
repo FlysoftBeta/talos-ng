@@ -48,6 +48,7 @@ export const sqlOwners = {
       "library_collections",
       "library_items",
       "library_states",
+      "library_retentions",
       "library_delegations",
     ],
   },
@@ -57,6 +58,7 @@ export const sqlOwners = {
       "media_tracks",
       "media_playlists",
       "media_user_states",
+      "media_retentions",
       "media_delegations",
       // Present in the migrations but missing from the 147 owner table.
       "media_discoveries",

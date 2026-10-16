@@ -81,7 +81,7 @@ try {
       var aiFile = {path:'note.md',mime:'text/markdown',size:1,rev:1};
       var aiPolicy = {daily:100000000,weekly:300000000,days:30};
       var mediaTrack = {id:id,source:'fake',providerId:'one',title:'测试曲目',artists:['艺人'],album:null,durationMs:1000,audio:{id:hash,size:100,mime:'audio/wav'}};
-      var mediaPlaylist = {id:id,owner:id,title:'测试歌单',tracks:[id],retentionDays:7,lastPlayed:1000,created:1000};
+      var mediaPlaylist = {id:id,owner:id,title:'测试歌单',tracks:[id],created:1000};
       var mediaState = {id:id,favorites:{},queue:[id],queueStamp:{t:{ms:1000,counter:0},op:id},recents:[id],stopAtEnd:false,stopStamp:null};
       var values = {
         'netbooks.search': [{query:'测试'},{books:[{id:'10001',title:'测试',author:'作者',abstract:'摘要'}],retryAt:6000,serverTime:1000}],
@@ -97,7 +97,8 @@ try {
         'media.playlist.create': [{title:'测试歌单'},{playlist:mediaPlaylist}],
         'media.playlist.delete': [{playlist:id},{ok:true}],
         'media.playlist.items': [{playlist:id,tracks:[id]},{playlist:mediaPlaylist}],
-        'media.playlist.retention': [{playlist:id,days:30},{playlist:mediaPlaylist}],
+        'media.retention.set': [{kind:'playlist',id:id,value:{v:30,t:{ms:1000,counter:0},op:id}},{ok:true}],
+        'media.track.recordPlay': [{track:id,t:{ms:1000,counter:0},op:id},{ok:true}],
         'media.playlist.recordPlay': [{playlist:id,t:{ms:1000,counter:0},op:id},{ok:true}],
         'media.playlist.share': [{playlist:id,principalType:'user',principal:id,level:'read'},{ok:true}],
         'media.playlist.grants': [{playlist:id},{grants:[],canShare:true}],
@@ -228,7 +229,8 @@ try {
         'library.sharing.list': [{collection:id},{grants:[],canShare:true}],
         'library.sharing.set': [{collection:id,principalType:'user',principal:id,level:'read',delegate:false},{ok:true}],
         'library.favourite.set': [{doc:id,value:{v:true,t:{ms:1000,counter:0},op:id}},{ok:true}],
-        'library.retention.set': [{doc:id,value:{v:7,t:{ms:1000,counter:0},op:id}},{ok:true}],
+        'library.collection.recordRead': [{collection:id,t:{ms:1000,counter:0},op:id},{ok:true}],
+        'library.retention.set': [{kind:'doc',id:id,value:{v:7,t:{ms:1000,counter:0},op:id}},{ok:true}],
         'library.progress.set': [{doc:id,resume:{v:{unit:0,offset:0},t:{ms:1000,counter:0},op:id},furthest:0,seconds:1,device:id},{ok:true}],
         'tasks.retry': [{id:id},{ok:true}],
         'tasks.cancel': [{id:id},{ok:true}],

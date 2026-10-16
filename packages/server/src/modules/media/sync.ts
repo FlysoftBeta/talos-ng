@@ -19,6 +19,9 @@ export function registerMediaSync(
     const enabled = authority.can(user, "feature.use", { feature: "media" });
     const accessRev = authority.repo.revision(user);
     return [
+      // A personal preference never grants target access. Preserve it through
+      // revoke/regrant instead of synthesizing another entity's revision.
+      ...repo.retentions(user).map((row) => repo.row("mediaRetention", row)),
       ...service.options.db
         .all<MediaRow>("SELECT * FROM media_playlists WHERE owner=?", user)
         .map((row) => ({
@@ -108,7 +111,12 @@ export function registerMediaSync(
         .map((p) => `coll:${p.id}`),
     select: (s, n, l) => select(coll(s.slice(5)), n, l),
   });
-  for (const type of ["mediaTrack", "mediaPlaylist", "mediaUserState"])
+  for (const type of [
+    "mediaTrack",
+    "mediaPlaylist",
+    "mediaUserState",
+    "mediaRetention",
+  ])
     hub.registerEntity(type, {
       serialize: (r) => r,
       read: (scope, id) => {

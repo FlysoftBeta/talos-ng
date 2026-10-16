@@ -1,4 +1,5 @@
 import type {
+  MediaRetention,
   MediaTrack,
   MediaPlaylist,
   MediaUserState,
@@ -18,6 +19,29 @@ export interface MediaRow {
 }
 export class MediaRepo {
   constructor(readonly db: Db) {}
+  retention(user: string, id: string): MediaRetention | undefined {
+    const row = this.db.get<{ body: string }>(
+      "SELECT body FROM media_retentions WHERE user_id=? AND id=?",
+      user,
+      id,
+    );
+    return row ? (JSON.parse(row.body) as MediaRetention) : undefined;
+  }
+  retentions(user: string): MediaRow[] {
+    return this.db.all(
+      "SELECT id,body,rev,0 AS deleted FROM media_retentions WHERE user_id=? ORDER BY rev,id",
+      user,
+    );
+  }
+  putRetention(user: string, value: MediaRetention, rev: number): void {
+    this.db.run(
+      "INSERT INTO media_retentions VALUES(?,?,?,?) ON CONFLICT(user_id,id) DO UPDATE SET body=excluded.body,rev=excluded.rev",
+      user,
+      value.id,
+      JSON.stringify(value),
+      rev,
+    );
+  }
   discoverers(track: string): { user_id: string }[] {
     return this.db.all(
       "SELECT user_id FROM media_discoveries WHERE track=?",

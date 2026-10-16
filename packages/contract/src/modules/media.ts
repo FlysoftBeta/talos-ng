@@ -9,6 +9,26 @@ import {
   stampSchema,
 } from "../protocol/scalars.ts";
 
+export const mediaRetentionSchema = z.union([
+  z.literal("auto"),
+  z.number().int().min(1).max(365),
+]);
+export const mediaRetentionEntitySchema = z
+  .object({
+    id: idSchema,
+    kind: z.enum(["track", "playlist"]),
+    value: z
+      .object({ v: mediaRetentionSchema, t: stampSchema, op: idSchema })
+      .strict()
+      .nullable(),
+    lastUsed: revSchema,
+  })
+  .strict();
+export type MediaRetention = z.infer<typeof mediaRetentionEntitySchema>;
+export const mediaRetention = defineEntity({
+  name: "mediaRetention",
+  schema: mediaRetentionEntitySchema,
+});
 const ref = z
   .object({
     source: z.string().min(1).max(40),
@@ -37,8 +57,6 @@ export const mediaPlaylistSchema = z
     owner: idSchema,
     title: z.string().min(1).max(80),
     tracks: z.array(idSchema).max(500),
-    retentionDays: z.number().int().min(1).max(365),
-    lastPlayed: revSchema,
     created: revSchema,
   })
   .strict();
@@ -79,6 +97,28 @@ const queue = z
 const result = z.object({ track: mediaTrackSchema }).strict();
 const playlistResult = z.object({ playlist: mediaPlaylistSchema }).strict();
 export const media = Object.freeze({
+  retention: Object.freeze({
+    set: defineMethod({
+      name: "media.retention.set",
+      args: z
+        .object({
+          kind: z.enum(["track", "playlist"]),
+          id: idSchema,
+          value: mediaRetentionEntitySchema.shape.value.unwrap(),
+        })
+        .strict(),
+      result: okSchema,
+      auth: "user",
+      offline: "queue",
+    }),
+  }),
+  recordPlay: defineMethod({
+    name: "media.track.recordPlay",
+    args: track.extend(stamp.shape),
+    result: okSchema,
+    auth: "user",
+    offline: "queue",
+  }),
   search: defineMethod({
     name: "media.search",
     args: z
@@ -190,13 +230,6 @@ export const media = Object.freeze({
       auth: "user",
       offline: "online",
     }),
-    retention: defineMethod({
-      name: "media.playlist.retention",
-      args: playlist.extend({ days: z.number().int().min(1).max(365) }),
-      result: playlistResult,
-      auth: "user",
-      offline: "online",
-    }),
     recordPlay: defineMethod({
       name: "media.playlist.recordPlay",
       args: playlist.extend(stamp.shape),
@@ -258,6 +291,8 @@ export const media = Object.freeze({
   }),
 });
 export const mediaMethods = [
+  media.retention.set,
+  media.recordPlay,
   media.search,
   media.resolve,
   media.library,

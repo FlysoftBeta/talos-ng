@@ -103,9 +103,143 @@ async function connect(k: Kernel, pin = "654321") {
   await api.auth.device.register({});
   const login = await api.auth.login({ pin });
   if ("onboarding" in login) throw Error("onboarding");
-  return { api, user: login.user };
+  return { api, client, user: login.user };
 }
 describe("media module", () => {
+  it("isolates song and playlist policy and usage for two users, including revoked and restored access", async () => {
+    const { kernel: k } = setup();
+    const a = await connect(k),
+      b = await connect(k, "123456");
+    const track = (await a.api.media.search({ query: "晨光" })).tracks[0]!.id;
+    const playlist = (await a.api.media.playlist.create({ title: "共享" }))
+      .playlist.id;
+    await a.api.media.playlist.items({ playlist, tracks: [track] });
+    const grant = {
+      playlist,
+      principalType: "user" as const,
+      principal: b.user.id,
+      level: "read" as const,
+    };
+    await a.api.media.playlist.share(grant);
+    const id = createUlid(),
+      low = id(),
+      high = id();
+    const value = { v: 7 as const, t: { ms: 100, counter: 0 }, op: high };
+    for (const target of [
+      { kind: "track" as const, id: track },
+      { kind: "playlist" as const, id: playlist },
+    ]) {
+      await a.api.media.retention.set({ ...target, value });
+      expect(
+        k.media.retention(b.user.id, target.kind, target.id).value,
+      ).toBeNull();
+      await b.api.media.retention.set({
+        ...target,
+        value: { ...value, v: 180 },
+      });
+      await b.api.media.retention.set({
+        ...target,
+        value: { ...value, v: 1, op: low },
+      });
+      await b.api.media.retention.set({
+        ...target,
+        value: { ...value, v: "auto", t: { ms: 99, counter: 0 } },
+      });
+      expect(
+        k.media.retention(b.user.id, target.kind, target.id).value?.v,
+      ).toBe(180);
+      expect(
+        k.media.retention(a.user.id, target.kind, target.id).value?.v,
+      ).toBe(7);
+    }
+    await b.api.media.track.recordPlay({
+      track,
+      t: { ms: 200, counter: 0 },
+      op: id(),
+    });
+    await b.api.media.playlist.recordPlay({
+      playlist,
+      t: { ms: 200, counter: 0 },
+      op: id(),
+    });
+    await b.api.media.playlist.recordPlay({
+      playlist,
+      t: { ms: 150, counter: 0 },
+      op: id(),
+    });
+    expect(k.media.retention(a.user.id, "track", track).lastUsed).toBe(0);
+    expect(k.media.retention(a.user.id, "playlist", playlist).lastUsed).toBe(0);
+    expect(k.media.playlist(playlist)).not.toHaveProperty("retentionDays");
+    expect(k.media.playlist(playlist)).not.toHaveProperty("lastPlayed");
+    const pull = await b.api.sync.pull({ cursors: {} });
+    expect(
+      pull.scopes[`me:${b.user.id}`]?.rows
+        .filter((r) => r.type === "mediaRetention")
+        .map((r) => r.data),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: track,
+          lastUsed: 200,
+          value: expect.objectContaining({ v: 180 }),
+        }),
+        expect.objectContaining({ id: playlist, lastUsed: 200 }),
+      ]),
+    );
+    expect(
+      pull.scopes[`coll:${playlist}`]?.rows.some(
+        (r) => r.type === "mediaRetention",
+      ),
+    ).toBe(false);
+    await expect(
+      b.client.call("media.retention.set", {
+        kind: "track",
+        id: track,
+        value,
+        user: a.user.id,
+      }),
+    ).rejects.toMatchObject({ code: "E_INVALID" });
+    await a.api.media.playlist.share({ ...grant, level: null });
+    for (const target of [
+      { kind: "track" as const, id: track },
+      { kind: "playlist" as const, id: playlist },
+    ])
+      await expect(
+        b.api.media.retention.set({ ...target, value }),
+      ).rejects.toMatchObject({ code: "E_DENIED" });
+    const revoked = await b.api.sync.pull({ cursors: {} });
+    expect(
+      revoked.scopes[`me:${b.user.id}`]?.rows.filter(
+        (r) => r.type === "mediaRetention" && !r.deleted,
+      ),
+    ).toHaveLength(2);
+    expect(revoked.scopes[`coll:${playlist}`]).toBeUndefined();
+    // Regaining direct access through search must preserve the existing policy.
+    await b.api.media.search({ query: "晨光" });
+    expect(k.media.retention(b.user.id, "track", track).value?.v).toBe(180);
+    await a.api.media.playlist.share(grant);
+    expect(k.media.retention(b.user.id, "playlist", playlist).value?.v).toBe(
+      180,
+    );
+    await b.api.media.retention.set({
+      kind: "track",
+      id: track,
+      value: { ...value, v: "auto", t: { ms: 300, counter: 0 } },
+    });
+    expect(k.media.retention(b.user.id, "track", track).value?.v).toBe("auto");
+    expect(k.media.retention(b.user.id, "playlist", playlist).value?.v).toBe(
+      180,
+    );
+    await b.api.media.retention.set({
+      kind: "track",
+      id: track,
+      value: { ...value, v: 365, t: { ms: 9_000_000_000_000, counter: 0 } },
+    });
+    expect(
+      k.media.retention(b.user.id, "track", track).value!.t.ms,
+    ).toBeLessThanOrEqual(1_000_000 + 5 * 60_000);
+  });
+
   it("deduplicates active materialisation and rolls enqueue back with its outer UoW", async () => {
     const { kernel } = setup();
     const { user } = await connect(kernel);
@@ -203,8 +337,14 @@ describe("media module", () => {
     await expect(
       b.api.media.playlist.delete({ playlist: playlist.id }),
     ).rejects.toMatchObject({ code: "E_DENIED" });
-    await a.api.media.playlist.retention({ playlist: playlist.id, days: 365 });
-    expect(kernel.media.playlist(playlist.id).retentionDays).toBe(365);
+    await a.api.media.retention.set({
+      kind: "playlist",
+      id: playlist.id,
+      value: { v: 365, ...newer },
+    });
+    expect(
+      kernel.media.retention(a.user.id, "playlist", playlist.id).value?.v,
+    ).toBe(365);
   });
   it("prevents playlist delegates from downgrading stronger grants, revoking access or changing the owner", async () => {
     const { kernel } = setup();

@@ -163,7 +163,6 @@ export function importLibrary(
             resume: null,
             furthest: 0,
             seconds: {},
-            retention: null,
             lastRead: 0,
           };
       const t =
