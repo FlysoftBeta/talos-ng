@@ -16,4 +16,6 @@ export interface ClientSnapshot {
   status: StatusViewModel;
   error?: string;
   busy: boolean;
+  /** A complete durable snapshot is available for destructive cache reconciliation. */
+  cacheReady?: boolean;
 }

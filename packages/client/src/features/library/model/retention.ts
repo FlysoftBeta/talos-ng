@@ -29,6 +29,8 @@ export interface RetentionInput {
   user: string | undefined;
   active: boolean;
   offline?: boolean;
+  /** Missing rows during recovery are not evidence that retention was removed. */
+  syncing?: boolean;
   data: LibraryData;
 }
 /** A member is kept until the latest personal item or containing-list deadline. */
@@ -66,7 +68,7 @@ export class RetentionScheduler {
   constructor(private readonly port: RetentionPort) {}
   update(input: RetentionInput): void {
     this.stop();
-    if (!input.user || !input.active) return;
+    if (!input.user || !input.active || input.syncing) return;
     const { port } = this,
       { user, data } = input;
     let cancelled = false,

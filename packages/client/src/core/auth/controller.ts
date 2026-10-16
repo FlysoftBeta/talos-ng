@@ -169,8 +169,10 @@ export class SessionController {
         };
         await this.saveSession();
         if (!current()) return;
+        await this.ports.prepareUser(this.ports.saved);
+        if (!current()) return;
         this.ports.publish({ user: session.user });
-        await this.ports.engine?.connect();
+        this.connectInBackground();
       } catch (error) {
         if (!current()) return;
         if (
@@ -187,6 +189,20 @@ export class SessionController {
     } else this.ports.status({ connection: "connected" });
     if (current() && welcome.build !== this.ports.build)
       void this.ports.checkUpdate().catch(this.ports.report);
+  }
+  /** Authentication admits the app; a complete pull is independent background work. */
+  private connectInBackground(): void {
+    const engine = this.ports.engine;
+    const generation = this.ports.generation;
+    void engine?.connect().catch((error: unknown) => {
+      if (
+        !this.ports.closed &&
+        this.ports.engine === engine &&
+        generation === this.ports.generation &&
+        !(error instanceof AppError && error.code === "E_CANCELLED")
+      )
+        this.ports.report(error);
+    });
   }
   async invalidateSession(
     gate: "signedOut" | "deviceLocked",
@@ -219,6 +235,7 @@ export class SessionController {
       gate,
       nav: createNav(),
       user: undefined,
+      cacheReady: false,
       error,
       admission,
       logoutName: this.ports.revokeOnly?.name,
@@ -313,8 +330,7 @@ export class SessionController {
         if (!current()) return false;
         await this.ports.prepareUser(this.ports.saved, true);
         if (!current()) return false;
-        await this.ports.engine!.connect();
-        if (!current()) return false;
+        this.connectInBackground();
         this.ports.environment.persist();
       } else {
         if (this.ports.saved && !this.gate("offline").ok)
@@ -476,18 +492,19 @@ export class SessionController {
       await this.ports.prepareUser(this.ports.saved);
       if (this.ports.closed || generation !== this.ports.generation)
         return false;
-      await this.ports.engine!.connect();
-      if (this.ports.closed || generation !== this.ports.generation)
-        return false;
+      this.connectInBackground();
       this.ports.invitationToken = undefined;
       this.ports.publish({
         gate: concealment === this.ports.concealment ? "app" : "appLocked",
         user: session.user,
         concealed: concealment !== this.ports.concealment,
       });
+      this.ports.engine?.sideState(concealment !== this.ports.concealment);
       this.resetIdle();
       return true;
     } catch (error) {
+      if (this.ports.closed || generation !== this.ports.generation)
+        return false;
       this.ports.publish({
         error:
           error instanceof AppError ? error.message : "无法创建账号，请重试",

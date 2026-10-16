@@ -30,6 +30,8 @@ export interface MediaRetentionInput {
   user: string | undefined;
   active: boolean;
   offline?: boolean;
+  /** Missing rows during recovery are not evidence that retention was removed. */
+  syncing?: boolean;
   data: MediaData;
 }
 /** A member is kept until the latest personal item or containing-list deadline. */
@@ -67,7 +69,7 @@ export class MediaRetentionScheduler {
   constructor(private readonly port: MediaRetentionPort) {}
   update(input: MediaRetentionInput): void {
     this.stop();
-    if (!input.user || !input.active) return;
+    if (!input.user || !input.active || input.syncing) return;
     const { port } = this,
       { user, data } = input;
     let cancelled = false,

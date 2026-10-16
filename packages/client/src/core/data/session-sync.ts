@@ -35,6 +35,8 @@ export interface SessionSyncControllerPorts {
   publish(patch: Partial<ClientSnapshot>): void;
   repositories: Map<string, Repository<StoredRow>>;
   saveSession(): Promise<void>;
+  setting<T>(key: string, fallback: T): T;
+  resetIdle(): void;
   clock: HybridClock;
   status(patch: Partial<StatusViewModel>): void;
   retry(id: string): Promise<void>;
@@ -43,6 +45,8 @@ export interface SessionSyncControllerPorts {
 }
 
 export class SessionSyncController {
+  private idleMinutes = 5;
+  private profileRevision = -1;
   constructor(private readonly ports: SessionSyncControllerPorts) {}
   async prepareUser(
     session: SavedSession,
@@ -52,8 +56,17 @@ export class SessionSyncController {
       !replace &&
       this.ports.engine &&
       this.ports.snapshot.user?.id === session.user.id
-    )
+    ) {
+      this.profileRevision =
+        this.ports.engine
+          .getSnapshot()
+          .rows.find(
+            (row) =>
+              row.type === "profile" && row.scope === `me:${session.user.id}`,
+          )?.rev ?? -1;
       return;
+    }
+    this.profileRevision = Infinity;
     this.ports.engine?.close();
     const engine = new SyncEngine({
       db: this.ports.db!,
@@ -151,9 +164,18 @@ export class SessionSyncController {
       nav: isNav(nav) ? nav : createNav(),
     });
     await engine.hydrate();
+    if (this.ports.engine === engine)
+      this.profileRevision =
+        engine
+          .getSnapshot()
+          .rows.find(
+            (row) =>
+              row.type === "profile" && row.scope === `me:${session.user.id}`,
+          )?.rev ?? -1;
   }
   engineChanged(): void {
     const state = this.ports.engine!.getSnapshot();
+    this.ports.publish({ cacheReady: state.cacheReady });
     for (const repository of this.ports.repositories.values())
       repository.hydrate(state.rows);
     const profile = state.rows.find(
@@ -162,7 +184,15 @@ export class SessionSyncController {
         row.scope === `me:${this.ports.saved?.user.id}` &&
         !row.deleted,
     );
-    if (profile && this.ports.saved) {
+    // Auth replies are newer than cached profiles. Only a completed authenticated
+    // pull (or subsequent live delta) can replace those roles and entitlements.
+    if (
+      profile &&
+      this.ports.saved &&
+      state.phase === "live" &&
+      profile.rev > this.profileRevision
+    ) {
+      this.profileRevision = profile.rev;
       const parsed = contract.auth.resume.result.shape.user.safeParse(
         profile.data,
       );
@@ -195,6 +225,11 @@ export class SessionSyncController {
         setting: row.data,
       });
       if (parsed.success) this.ports.clock.observe(parsed.data.setting.value.t);
+    }
+    const idleMinutes = this.ports.setting<number>("idleLockMinutes", 5);
+    if (idleMinutes !== this.idleMinutes) {
+      this.idleMinutes = idleMinutes;
+      this.ports.resetIdle();
     }
     this.ports.status({
       connection:

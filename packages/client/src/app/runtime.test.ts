@@ -262,6 +262,10 @@ describe("client runtime session and commands", () => {
     expect(runtime.getSnapshot().gate).toBe("appLocked");
     await runtime.login("654321");
     runtime.lock();
+    await until(
+      runtime,
+      () => runtime.getSnapshot().status.connection === "connected",
+    );
     expect(runtime.getSnapshot().status.connection).toBe("connected");
     expect(link.calls.some((call) => call.method === "auth.lock")).toBe(false);
   });
@@ -1029,4 +1033,312 @@ it("repairs a malformed sync event before a later valid push can skip its rows",
   expect(
     link.calls.filter((call) => call.method === "sync.pull")[1]?.args,
   ).toEqual({ cursors: { [scope]: 1 } });
+});
+
+describe("admission with an unfinished background pull", () => {
+  const emptyPull = { scopes: {}, gone: [], added: [] };
+  const settingRow = (key: string, value: string | number, rev = 1) => ({
+    scope: `me:${user.id}`,
+    type: "setting",
+    id: key,
+    rev,
+    deleted: false,
+    data: {
+      id: key,
+      key,
+      value: {
+        v: value,
+        t: { ms: rev, counter: 0 },
+        op: "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+      },
+    },
+  });
+  const pullWith = (rows: ReturnType<typeof settingRow>[]) => ({
+    scopes: {
+      [`me:${user.id}`]: {
+        rows: rows.map(({ scope, ...row }) => {
+          void scope;
+          return row;
+        }),
+        cursor: 2,
+        more: false,
+      },
+    },
+    gone: [],
+    added: [`me:${user.id}`],
+  });
+
+  it("opens with cached data and authenticated permissions, supports commands, then hydrates settings and idle policy", async () => {
+    const { runtime, link, db, timers } = await setup();
+    await db.table("kv").put([`me:${user.id}`], `scopes:${user.id}`);
+    await db.table("scopes").put({ scope: `me:${user.id}`, cursor: 1 });
+    await db.table("rows").put(settingRow("theme", "dark"));
+    await db.table("rows").put({
+      scope: `me:${user.id}`,
+      type: "profile",
+      id: user.id,
+      rev: 1,
+      deleted: false,
+      data: { ...user, roles: ["root"], features: ["offline", "ai"] },
+    });
+    const pull = deferred<ReturnType<typeof pullWith>>();
+    const entered = deferred<void>();
+    link.handler = (method) => {
+      if (method === "sync.pull") {
+        entered.resolve();
+        return pull.promise;
+      }
+      if (method === "identity.profile.update") return { user };
+    };
+    link.connectNow();
+    expect(await runtime.login("654321")).toBe(true);
+    await entered.promise;
+    expect(runtime.getSnapshot()).toMatchObject({
+      gate: "app",
+      busy: false,
+      status: { connection: "syncing" },
+      user: { roles: [], features: ["offline"] },
+    });
+    expect(runtime.gate("ops").ok).toBe(false);
+    expect(runtime.gate("ai").ok).toBe(false);
+    expect(runtime.setting("theme", "light")).toBe("dark");
+    expect(runtime.can(contract.identity.profile.update)).toEqual({ ok: true });
+    await runtime.command(contract.identity.profile.update, {
+      name: user.name,
+    });
+    expect(
+      link.calls.some((call) => call.method === "identity.profile.update"),
+    ).toBe(true);
+    await runtime.setSetting("doNotDisturb", true);
+    expect(runtime.setting("doNotDisturb", false)).toBe(true);
+    expect(link.calls.some((call) => call.method === "me.setting.set")).toBe(
+      false,
+    );
+    // Leave the queued operation for a separate test; its send would need a server fixture.
+    await runtime.discard(runtime.outbox()[0]!.op);
+    pull.resolve(
+      pullWith([
+        settingRow("theme", "light", 2),
+        settingRow("idleLockMinutes", 1, 2),
+      ]),
+    );
+    await until(
+      runtime,
+      () => runtime.getSnapshot().status.connection === "connected",
+    );
+    expect(runtime.setting("theme", "dark")).toBe("light");
+    expect(runtime.gate("ops").ok).toBe(false);
+    expect([...timers.values()].some((timer) => timer.ms === 60_000)).toBe(
+      true,
+    );
+    expect([...timers.values()].some((timer) => timer.ms === 300_000)).toBe(
+      false,
+    );
+  });
+
+  it("keeps incomplete cache knowledge across disconnect and restores safe offline cleanup after a completed pull", async () => {
+    const { runtime, link } = await setup();
+    const pull = deferred<ReturnType<typeof pullWith>>();
+    const entered = deferred<void>();
+    link.handler = (method) => {
+      if (method === "sync.pull") {
+        entered.resolve();
+        return pull.promise;
+      }
+    };
+    link.connectNow();
+    expect(await runtime.login("654321")).toBe(true);
+    await entered.promise;
+    expect(runtime.getSnapshot().cacheReady).toBe(false);
+    link.stop();
+    expect(runtime.getSnapshot()).toMatchObject({
+      cacheReady: false,
+      status: { connection: "offline" },
+    });
+    pull.resolve(pullWith([settingRow("theme", "dark", 2)]));
+    link.handler = (method) =>
+      method === "sync.pull"
+        ? pullWith([settingRow("theme", "light", 2)])
+        : undefined;
+    link.connectNow();
+    await until(
+      runtime,
+      () => runtime.getSnapshot().status.connection === "connected",
+    );
+    expect(runtime.getSnapshot().cacheReady).toBe(true);
+    link.stop();
+    expect(runtime.getSnapshot()).toMatchObject({
+      cacheReady: true,
+      status: { connection: "offline" },
+    });
+  });
+
+  it("finishes onboarding before its first pull and keeps a later lock concealed", async () => {
+    const { runtime, link } = await setup();
+    const pull = deferred<typeof emptyPull>();
+    const entered = deferred<void>();
+    link.handler = (method) => {
+      if (method === "auth.login")
+        return { onboarding: true, invitationToken: "b".repeat(64) };
+      if (method === "identity.onboarding.complete") return session;
+      if (method === "sync.pull") {
+        entered.resolve();
+        return pull.promise;
+      }
+    };
+    link.connectNow();
+    await runtime.login("123456");
+    expect(
+      await runtime.onboard({
+        pins: ["654321"],
+        handle: "test",
+        name: user.name,
+      }),
+    ).toBe(true);
+    await entered.promise;
+    expect(runtime.getSnapshot()).toMatchObject({
+      gate: "app",
+      busy: false,
+      status: { connection: "syncing" },
+    });
+    runtime.lock();
+    pull.resolve(emptyPull);
+    await until(
+      runtime,
+      () => runtime.getSnapshot().status.connection === "connected",
+    );
+    expect(runtime.getSnapshot()).toMatchObject({
+      gate: "appLocked",
+      concealed: true,
+    });
+  });
+
+  it("returns from resume before pull while commands remain blocked until authentication finishes", async () => {
+    const { runtime, link } = await setup(true);
+    await runtime.login("654321");
+    const auth = deferred<typeof session>();
+    const pull = deferred<typeof emptyPull>();
+    const entered = deferred<void>();
+    link.handler = (method) => {
+      if (method === "auth.resume") return auth.promise;
+      if (method === "sync.pull") {
+        entered.resolve();
+        return pull.promise;
+      }
+    };
+    link.connectNow();
+    expect(runtime.can(contract.identity.profile.update).ok).toBe(false);
+    auth.resolve(session);
+    await entered.promise;
+    expect(runtime.getSnapshot().gate).toBe("app");
+    expect(runtime.getSnapshot().status.connection).toBe("syncing");
+    expect(runtime.can(contract.identity.profile.update).ok).toBe(true);
+    pull.resolve(emptyPull);
+    await until(
+      runtime,
+      () => runtime.getSnapshot().status.connection === "connected",
+    );
+  });
+
+  it("keeps admission on a recoverable pull failure, reports it and retries to hydration", async () => {
+    const { runtime, link, timers } = await setup();
+    const pull = deferred<ReturnType<typeof pullWith>>();
+    const entered = deferred<void>();
+    let attempts = 0;
+    link.handler = (method) => {
+      if (method !== "sync.pull") return;
+      if (++attempts === 1) {
+        entered.resolve();
+        return pull.promise;
+      }
+      return pullWith([settingRow("theme", "dark", 2)]);
+    };
+    link.connectNow();
+    expect(await runtime.login("654321")).toBe(true);
+    await entered.promise;
+    pull.reject(new AppError("E_UNAVAILABLE", "暂时无法同步"));
+    await until(runtime, () => runtime.getSnapshot().error === "暂时无法同步");
+    expect(runtime.getSnapshot().gate).toBe("app");
+    const retry = [...timers.entries()].find(([, timer]) => timer.ms === 500)!;
+    expect(retry).toBeDefined();
+    timers.delete(retry[0]);
+    retry[1].fn();
+    await until(
+      runtime,
+      () => runtime.getSnapshot().status.connection === "connected",
+    );
+    expect(runtime.setting("theme", "light")).toBe("dark");
+    expect(attempts).toBe(2);
+  });
+
+  it.each([
+    ["E_UNAUTHENTICATED", undefined, "signedOut"],
+    ["E_DENIED", { reason: "banned" }, "deviceLocked"],
+  ] as const)(
+    "invalidates admitted credentials on background %s",
+    async (code, data, gate) => {
+      const { runtime, link, db, timers } = await setup();
+      const pull = deferred<typeof emptyPull>();
+      const entered = deferred<void>();
+      link.handler = (method) => {
+        if (method === "sync.pull") {
+          entered.resolve();
+          return pull.promise;
+        }
+      };
+      link.connectNow();
+      expect(await runtime.login("654321")).toBe(true);
+      await entered.promise;
+      pull.reject(new AppError(code, "已失效", data));
+      await until(runtime, () => runtime.getSnapshot().gate === gate);
+      expect(await db.table("session").get("active")).toBeUndefined();
+      expect(runtime.getSnapshot().user).toBeUndefined();
+      expect(timers.size).toBe(0);
+    },
+  );
+
+  it.each(["resolve", "reject"] as const)(
+    "ignores an old account pull that later %ss",
+    async (outcome) => {
+      const { runtime, link, db } = await setup();
+      const pull = deferred<ReturnType<typeof pullWith>>();
+      const entered = deferred<void>();
+      let attempts = 0;
+      const other = {
+        ...session,
+        token: "c".repeat(64),
+        user: { ...user, id: device, name: "另一个账号" },
+      };
+      link.handler = (method) => {
+        if (method === "sync.pull" && ++attempts === 1) {
+          entered.resolve();
+          return pull.promise;
+        }
+      };
+      link.connectNow();
+      await runtime.login("654321");
+      await entered.promise;
+      link.handler = (method) => (method === "auth.login" ? other : undefined);
+      expect(await runtime.login("123456")).toBe(true);
+      await until(
+        runtime,
+        () => runtime.getSnapshot().status.connection === "connected",
+      );
+      if (outcome === "reject")
+        pull.reject(new AppError("E_UNAUTHENTICATED", "旧会话失效"));
+      else pull.resolve(pullWith([settingRow("theme", "dark", 2)]));
+      // Let request continuations and pending IDB tasks settle before inspecting durable state.
+      await db.table("rows").range();
+      await db.table("session").get("active");
+      expect(runtime.getSnapshot()).toMatchObject({
+        gate: "app",
+        user: other.user,
+      });
+      expect(runtime.getSnapshot().error).toBeUndefined();
+      expect(await db.table("session").get("active")).toMatchObject({
+        token: other.token,
+      });
+      expect(await db.table("rows").range()).toEqual([]);
+    },
+  );
 });

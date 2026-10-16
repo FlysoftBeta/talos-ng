@@ -5,5 +5,7 @@ export interface StoredRow extends Row {
 export interface StoredScope {
   scope: string;
   cursor: number;
+  /** A full pull can certify even an empty scope at cursor zero. */
+  complete?: boolean;
   windows?: Readonly<Record<string, IntervalSetJSON>>;
 }

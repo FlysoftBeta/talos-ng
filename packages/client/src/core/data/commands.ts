@@ -98,7 +98,9 @@ export class CommandController {
     if (
       method.auth === "user" &&
       method.offline === "online" &&
-      this.ports.engine?.getSnapshot().phase !== "live"
+      !(["live", "syncing"] as const).some(
+        (phase) => phase === this.ports.engine?.getSnapshot().phase,
+      )
     )
       return { ok: false, reason: "正在恢复会话，请稍后重试" };
     if (method.offline === "queue" && !this.ports.modules.supports(method.name))

@@ -33,6 +33,10 @@ export function LibraryBackground(): null {
     scheduler.current!.update({
       user,
       offline: snapshot.status.connection === "offline",
+      syncing:
+        snapshot.cacheReady !== true ||
+        snapshot.status.connection === "syncing" ||
+        snapshot.status.connection === "connecting",
       active: !!snapshot.user && snapshot.gate === "app",
       data,
     });
@@ -41,6 +45,7 @@ export function LibraryBackground(): null {
     runtime,
     user,
     snapshot.gate,
+    snapshot.cacheReady,
     snapshot.status.connection,
     retentionSignature(data),
   ]);

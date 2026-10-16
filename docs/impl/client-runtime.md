@@ -68,6 +68,30 @@ consistent Chinese text, and `useGate` checks cached profile roles and features 
 entitlement is a cached gate). Queued settings reuse one operation id for the LWW value and
 its CALL envelope. Sync, outbox and storage details: `sync.md`, `client-store.md`.
 
+## Admission and partial data
+
+Online PIN login, onboarding and resume await server authentication and local session/cache
+preparation, then start synchronization in the background. The app can render cached or
+empty repositories while the first pull remains unfinished. Online commands are available
+once authenticated (`syncing` or `live`); connecting/authenticating still blocks them.
+Queued changes remain optimistic and durable, and their sender waits for pull reconciliation.
+The status centre continues showing synchronization progress and recoverable errors; retries
+use the engine's backoff. Authentication/admission failures still invalidate credentials.
+Every detached completion is fenced by both engine identity and session generation.
+
+Server authentication supplies the admitted roles and features. Cached profile rows cannot
+replace them: a profile must have a newer revision than the cache observed at authentication
+and come from a completed pull or live delta. Lock/concealment wins over authentication and
+background completion never opens a locked gate. Offline PIN admission remains unchanged.
+
+`cacheReady` certifies a previously completed durable cache with valid admitted-scope cursors.
+It remains false across a disconnect during initial synchronization, and becomes false if
+cache eviction invalidates a cursor. Library and media retention reconciliation waits for
+that knowledge and pauses during connecting/syncing, so absent rows cannot delete retained
+bytes or document metadata. A complete offline cache still expires retention normally.
+Effective synchronized idle-lock changes update the idle timer once; progress notifications
+do not continually extend it.
+
 ## Navigation
 
 No URL router; the address never changes. Navigation is a serialisable `Nav` value owned by

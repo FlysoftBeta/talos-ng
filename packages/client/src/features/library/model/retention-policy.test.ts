@@ -315,3 +315,33 @@ describe("library retention scheduler", () => {
     expect(t.port.downloadFile).toHaveBeenCalledTimes(1);
   });
 });
+
+it("preserves retained bytes and metadata while cache knowledge is incomplete, then reconciles after recovery", async () => {
+  const t = setup(DAY);
+  const retained = [{ doc: "a", rid: doc("a").pack.id, expires: 10 * DAY }];
+  t.local.set("library:retained", retained);
+  t.local.set("library:doc:a", { cached: true });
+  for (const offline of [false, true]) {
+    t.scheduler.update({
+      user: "u",
+      active: true,
+      syncing: true,
+      offline,
+      data: dataOf([], {}),
+    });
+    await t.scheduler.idle();
+    expect(t.port.releaseFiles).not.toHaveBeenCalled();
+    expect(t.port.collectFiles).not.toHaveBeenCalled();
+    expect(t.local.get("library:retained")).toEqual(retained);
+  }
+  t.scheduler.update({
+    user: "u",
+    active: true,
+    syncing: false,
+    offline: true,
+    data: dataOf([], {}),
+  });
+  await t.scheduler.idle();
+  expect(t.port.releaseFiles).toHaveBeenCalledWith("library:a:retained");
+  expect(t.local.get("library:retained")).toEqual([]);
+});
