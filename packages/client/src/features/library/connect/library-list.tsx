@@ -23,6 +23,13 @@ import {
 import { ImportDialog } from "./import-dialog.tsx";
 import { useLibrary } from "./use-library.ts";
 import { documentRowExtras } from "./row-extras.ts";
+import { libraryRecents } from "../model/recent.ts";
+import type { LibraryRecentItem } from "../model/recent.ts";
+import {
+  useAccessEntries,
+  useAccessHistory,
+} from "../../../platform/react/use-access-history.ts";
+import { LibraryTile } from "../view/library-list.tsx";
 
 export function LibraryList({
   toolbarExtra,
@@ -42,6 +49,28 @@ export function LibraryList({
     [error, setError] = useState("");
   const stack = state.nav.areas.library.stack,
     active = stack[stack.length - 1];
+  const access = useAccessEntries(useAccessHistory()),
+    recents = libraryRecents(data, access, Date.now());
+  const openCollection = (id: string): void =>
+    runtime.dispatch({
+      type: "pushPage",
+      area: "library",
+      page: { kind: "page", id: collectionPageId(id) },
+    });
+  const view = (item: LibraryRecentItem) => ({
+    id: `${item.kind}:${item.id}`,
+    title: item.title,
+    hint: item.hint,
+    leading: <LibraryTile icon={item.kind === "book" ? "document" : "book"} />,
+    selected:
+      item.kind === "book"
+        ? active?.kind === "document" && active.id === item.id
+        : active?.kind === "page" && active.id === collectionPageId(item.id),
+    onOpen: () =>
+      item.kind === "book"
+        ? runtime.dispatch({ type: "openDocument", id: item.id })
+        : openCollection(item.id),
+  });
   return (
     <LibraryListView
       toolbarExtra={toolbarExtra}
@@ -64,6 +93,8 @@ export function LibraryList({
             }
           : row;
       })}
+      recent={recents.recent.map(view)}
+      frequent={recents.frequent.map(view)}
       emptyShelf={emptyShelf(state.status.connection)}
       onOpenCollection={(id) =>
         runtime.dispatch({

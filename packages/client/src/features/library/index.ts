@@ -6,6 +6,7 @@ export { useLibrary } from "./connect/use-library.ts";
 export { documentReadPort } from "./adapters/document-read.ts";
 export {
   collectionLevel,
+  collectionPageId,
   decodeLibrary,
   writableCollections,
 } from "./model/library-data.ts";

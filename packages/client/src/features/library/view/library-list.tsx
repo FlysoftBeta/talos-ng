@@ -11,7 +11,12 @@ import {
   PaneTools,
   Tag,
 } from "../../../ui/layout/index.ts";
-import { ListRow, StatePanel } from "../../../ui/feedback/index.ts";
+import {
+  ListRow,
+  RecentSection,
+  StatePanel,
+} from "../../../ui/feedback/index.ts";
+import type { RecentItemView } from "../../../ui/feedback/index.ts";
 import { Segmented } from "../../../ui/navigation/index.ts";
 import type { LibraryTab, ListRowModel } from "../model/library-data.ts";
 import "./library.css";
@@ -47,6 +52,10 @@ export interface LibraryListViewProps {
   collections: ListRowModel[];
   builtins: ListRowModel[];
   documents: LibraryRow[];
+  /** Recently opened books and booklists (recent tab). */
+  recent: readonly RecentItemView[];
+  /** Books and booklists opened often, not already under recent. */
+  frequent: readonly RecentItemView[];
   emptyShelf: { state: "offline" | "empty" | "loading"; title: string };
   onOpenCollection: (id: string) => void;
   onOpenDocument: (id: string) => void;
@@ -107,6 +116,12 @@ export function LibraryListView(props: LibraryListViewProps): ReactElement {
               onClick={() => props.onOpenCollection(c.id)}
             />
           ))}
+        {props.tab === "recent" && (
+          <>
+            <RecentSection title="最近阅读" items={props.recent} />
+            <RecentSection title="常读" items={props.frequent} />
+          </>
+        )}
         {props.tab === "collections" ? (
           <>
             {props.groups.length > 0 && (

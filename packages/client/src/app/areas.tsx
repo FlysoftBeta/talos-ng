@@ -12,6 +12,8 @@ import { aiAdminPanels } from "../features/ai/index.ts";
 import { OpsLiveProvider, opsPanels } from "../features/ops/index.ts";
 import { NetbooksEntry } from "../features/netbooks/index.ts";
 import { ReaderScreen } from "../features/reader/index.ts";
+import { ChatContent } from "../features/chat/connect/index.tsx";
+import { RecentHome } from "./recent.tsx";
 
 /** Library list with network books on its toolbar; booklists a user may write are the destinations. */
 export function LibraryAreaList(): ReactElement {
@@ -25,6 +27,15 @@ export function LibraryAreaList(): ReactElement {
         />
       }
     />
+  );
+}
+/** Chat content; the landing page (no conversation open) hosts the global recent panel. */
+export function ChatAreaContent(): ReactElement {
+  const stack = useClientSnapshot().nav.areas.chat.stack;
+  return stack[stack.length - 1]?.kind === "home" ? (
+    <RecentHome />
+  ) : (
+    <ChatContent />
   );
 }
 /** Library content with the reader supplied for open documents. */

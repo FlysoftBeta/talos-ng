@@ -139,3 +139,19 @@ visible in the sheet footer. Diagnostics are also available in a separate sheet 
 be read without scrolling past the preferences. PIN replacement reuses the auth PIN entry
 and its keypad styling inside a small dialog. Destructive confirmations use the shared
 confirmation dialog's busy state to prevent dismissal and repeat submissions while running.
+
+## Recent and frequent views
+
+`core/ranking` holds the pure frecency algorithm (`frecency.ts`: decayed visit counter,
+recent/frequent/frecent selection with a score-relative variable-length cut-off and a hard
+maximum, pruning) and `AccessHistory` (`history.ts`: one `[score, at]` counter per
+`<kind>:<id>` for conversations, books, booklists, songs and playlists, saved as one
+bounded kv document per user through `getLocal`/`setLocal`, debounced, local only).
+`platform/react/use-access-history.ts` shares one history per runtime and user.
+
+`app/recent.tsx` is the connect layer: `RecentTracker` turns navigation changes
+(`features/recent/model/tracking.ts`) and the current song into visits, and `RecentHome`
+resolves titles from the chat, library and media data and fills `RecentPanelView`, the global
+panel hosted by the chat area's landing page. The music and reading list panes compute their
+own recent/frequent sections from `model/recent.ts` and render the shared `RecentSection`
+ui component; items that no longer exist are filtered out before the cut-off is applied.

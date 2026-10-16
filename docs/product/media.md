@@ -5,6 +5,8 @@ it can fetch live or keeps for offline use.
 
 ## Library and search
 
+- The music panel also lists recently played and frequently played songs and playlists (a
+  variable-length list, local to the device; see `docs/impl/client-features.md`).
 - Home shows the 12 most recent tracks, favourites and the playlists the user may use. A
   track shows 已缓存 when its audio is already prepared on the server.
 - Search (Enter or button) returns bounded results with title, artist and, when the source
