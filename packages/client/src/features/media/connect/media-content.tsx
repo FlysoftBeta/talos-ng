@@ -199,6 +199,7 @@ export function MediaContent(): ReactElement {
     busy: isSearch && search.busy,
     error: isSearch ? search.error : "",
     tracks: tracks.length,
+    connection: snapshot.status.connection,
   });
   return (
     <MediaContentView
@@ -211,10 +212,11 @@ export function MediaContent(): ReactElement {
         state={
           isSearch && connection === "offline"
             ? "offline"
-            : body === "empty" || body === "playlists"
+            : body === "playlists"
               ? connection
               : body
         }
+        loadingTitle={isSearch ? "正在搜索音乐" : "正在同步音乐"}
         emptyTitle={
           isSearch && connection === "offline"
             ? "连接后搜索音乐"

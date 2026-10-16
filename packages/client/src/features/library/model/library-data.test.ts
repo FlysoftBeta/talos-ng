@@ -16,6 +16,7 @@ import {
   decodeLibrary,
   documentRows,
   emptyShelf,
+  missingCollection,
   groupChoices,
   writableCollections,
 } from "./library-data.ts";
@@ -288,6 +289,18 @@ describe("library list selectors", () => {
     expect(writableCollections(withDocs(), user)).toEqual([
       { id: "c1", title: "群组书单" },
     ]);
+  });
+  it("keeps a missing saved collection pending until synchronization resolves its access", () => {
+    for (const connection of ["connecting", "syncing"]) {
+      expect(missingCollection(connection).state).toBe("loading");
+      expect(emptyShelf(connection)).toEqual({
+        state: "loading",
+        title: "正在同步文档",
+      });
+    }
+    expect(missingCollection("offline").state).toBe("offline");
+    expect(missingCollection("connected").state).toBe("forbidden");
+    expect(emptyShelf("connected").state).toBe("empty");
   });
   it("identifies collection pages and empty-shelf placeholders", () => {
     expect(collectionOfPage({ kind: "page", id: "collection:c9" })).toBe("c9");

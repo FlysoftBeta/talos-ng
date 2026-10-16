@@ -50,6 +50,7 @@ export function MediaContentView({
 export function TrackListView({
   state,
   emptyTitle,
+  loadingTitle = "正在同步音乐",
   emptyHint,
   error,
   onRetry,
@@ -57,6 +58,7 @@ export function TrackListView({
 }: {
   state: "tracks" | "loading" | "error" | "empty" | "offline";
   emptyTitle: string;
+  loadingTitle?: string;
   emptyHint?: string;
   error?: string;
   onRetry?: () => void;
@@ -70,7 +72,7 @@ export function TrackListView({
       </div>
     );
   if (state === "loading")
-    return <StatePanel compact state="loading" title="正在搜索音乐" />;
+    return <StatePanel compact state="loading" title={loadingTitle} />;
   if (state === "error")
     return (
       <StatePanel

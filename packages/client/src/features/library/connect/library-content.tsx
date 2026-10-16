@@ -18,6 +18,7 @@ import {
 import {
   collectionLevel,
   collectionOfPage,
+  missingCollection,
   writableCollections,
 } from "../model/library-data.ts";
 import { CollectionView } from "../view/collection-view.tsx";
@@ -222,7 +223,7 @@ export function LibraryContent({
     return collection ? (
       <ConnectedCollection key={collection.id} collection={collection} />
     ) : (
-      <CollectionMissingView />
+      <CollectionMissingView {...missingCollection(state.status.connection)} />
     );
   }
   return <LibraryHomeView />;

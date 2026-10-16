@@ -47,7 +47,7 @@ export interface LibraryListViewProps {
   collections: ListRowModel[];
   builtins: ListRowModel[];
   documents: LibraryRow[];
-  emptyShelf: { state: "offline" | "empty"; title: string };
+  emptyShelf: { state: "offline" | "empty" | "loading"; title: string };
   onOpenCollection: (id: string) => void;
   onOpenDocument: (id: string) => void;
   /** Dialogs rendered inside the list container. */
@@ -140,9 +140,17 @@ export function LibraryListView(props: LibraryListViewProps): ReactElement {
             ) : (
               <StatePanel
                 compact
-                state="empty"
-                title="还没有书单"
-                hint="新建书单，把文档整理在一起"
+                state={props.emptyShelf.state}
+                title={
+                  props.emptyShelf.state === "loading"
+                    ? "正在同步书单"
+                    : "还没有书单"
+                }
+                hint={
+                  props.emptyShelf.state === "empty"
+                    ? "新建书单，把文档整理在一起"
+                    : undefined
+                }
               />
             )}
           </>
@@ -167,7 +175,11 @@ export function LibraryListView(props: LibraryListViewProps): ReactElement {
             compact
             state={props.emptyShelf.state}
             title={props.emptyShelf.title}
-            hint="导入文本或 PDF，即可开始阅读"
+            hint={
+              props.emptyShelf.state === "empty"
+                ? "导入文本或 PDF，即可开始阅读"
+                : undefined
+            }
           />
         )}
       </PaneBody>

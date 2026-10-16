@@ -187,11 +187,37 @@ export function writableCollections(
 }
 /** Placeholder shown when recent view has no documents. */
 export function emptyShelf(connection: string): {
-  state: "offline" | "empty";
+  state: "offline" | "empty" | "loading";
   title: string;
 } {
+  const loading = connection === "syncing" || connection === "connecting";
   return {
-    state: connection === "offline" ? "offline" : "empty",
-    title: "还没有文档",
+    state: loading ? "loading" : connection === "offline" ? "offline" : "empty",
+    title: loading ? "正在同步文档" : "还没有文档",
+  };
+}
+
+/** Missing local rows cannot establish deletion while sync is incomplete or offline. */
+export function missingCollection(connection: string): {
+  state: "loading" | "offline" | "forbidden";
+  title: string;
+  hint: string;
+} {
+  if (connection === "syncing" || connection === "connecting")
+    return {
+      state: "loading",
+      title: "正在同步书单",
+      hint: "同步完成后会自动显示",
+    };
+  if (connection === "offline")
+    return {
+      state: "offline",
+      title: "此书单尚未缓存在本机",
+      hint: "连接服务器后重试",
+    };
+  return {
+    state: "forbidden",
+    title: "书单不可用",
+    hint: "书单已删除或访问权限已撤销",
   };
 }
