@@ -12,6 +12,7 @@ export function registerChatSync(service: ChatSyncRead, hub: SyncHub): void {
       repo.postRows(scope.slice(5), since, limit),
   });
   hub.registerEntity("post", {
+    accessNeutral: true,
     windowed: true,
     serialize: (row) => row,
     read: (scope, id) => {
@@ -38,10 +39,12 @@ export function registerChatSync(service: ChatSyncRead, hub: SyncHub): void {
     },
   });
   hub.registerEntity("chatState", {
+    accessNeutral: true,
     serialize: (row) => row,
     read: (scope, id) => repo.stateRow(scope.slice(3), id),
   });
   hub.registerEntity("announcementAck", {
+    accessNeutral: true,
     serialize: (row) => row,
     read: (scope) => repo.ack(scope.slice(3)),
   });

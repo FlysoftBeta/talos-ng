@@ -27,6 +27,10 @@ export function registerAdminDiagnosticsApi(
     guard(ctx.user!, "admin.incident.download");
     return service.incidentDownload(ctx.user!);
   });
+  host.register(contract.admin.performance.get, (ctx, args) => {
+    guard(ctx.user!, "admin.performance");
+    return service.performance(ctx.user!, args.reset);
+  });
   host.register(contract.admin.incident.selfTest, (ctx, args) => {
     guard(ctx.user!, "admin.incident.selfTest");
     return service.selfTest(ctx.user!, args.source);

@@ -31,6 +31,10 @@ export const configSchema = z
       .optional(),
     aiModelsFile: z.string().optional(),
     binaries: z.record(z.string()).default({}),
+    /** Read-only replica workers for sync pulls; default derives from CPU count. */
+    dbReaders: z.number().int().min(0).max(32).optional(),
+    /** Statements and transactions at or above this many ms are logged as slow. */
+    slowQueryMs: z.number().int().min(1).max(600_000).default(50),
   })
   .strict()
   .superRefine((config, ctx) => {
@@ -88,6 +92,8 @@ export async function loadConfig(
     DEV: "dev",
     AI_MODELS_FILE: "aiModelsFile",
     BINARIES: "binaries",
+    DB_READERS: "dbReaders",
+    SLOW_QUERY_MS: "slowQueryMs",
   };
   for (const [key, name] of Object.entries(names)) {
     const value = env[`TALOS_${key}`];
@@ -103,7 +109,13 @@ export async function loadConfig(
           input[name] = parts.map(Number);
         }
       } else
-        input[name] = ["DEV", "TEST_SEED", "BINARIES"].includes(key)
+        input[name] = [
+          "DEV",
+          "TEST_SEED",
+          "BINARIES",
+          "DB_READERS",
+          "SLOW_QUERY_MS",
+        ].includes(key)
           ? (JSON.parse(value) as unknown)
           : value;
     } catch {

@@ -118,6 +118,7 @@ export function registerMediaSync(
     "mediaRetention",
   ])
     hub.registerEntity(type, {
+      accessNeutral: ["mediaUserState", "mediaRetention"].includes(type),
       serialize: (r) => r,
       read: (scope, id) => {
         const rows = scope.startsWith("me:")

@@ -10,13 +10,41 @@ export const stampSchema = z
   .strict();
 export type JsonValue =
   null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
-export const jsonSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([
-    z.null(),
-    z.boolean(),
-    z.number().finite(),
-    z.string(),
-    z.array(jsonSchema),
-    z.record(jsonSchema),
-  ]),
+/**
+ * Plain JSON data (finite numbers, plain objects). Checked by one recursive
+ * walk: a lazy zod union rebuilt its six member schemas for every node and
+ * collected an issue per rejected alternative, which dominated sync costs.
+ */
+export function isJsonValue(value: unknown, depth = 0): value is JsonValue {
+  if (value === null) return true;
+  switch (typeof value) {
+    case "boolean":
+    case "string":
+      return true;
+    case "number":
+      return Number.isFinite(value);
+    case "object": {
+      if (depth > 256) return false;
+      if (Array.isArray(value)) {
+        for (const item of value)
+          if (!isJsonValue(item, depth + 1)) return false;
+        return true;
+      }
+      const prototype = Object.getPrototypeOf(value) as unknown;
+      if (prototype !== Object.prototype && prototype !== null) return false;
+      for (const key in value)
+        if (
+          Object.prototype.hasOwnProperty.call(value, key) &&
+          !isJsonValue((value as Record<string, unknown>)[key], depth + 1)
+        )
+          return false;
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+export const jsonSchema: z.ZodType<JsonValue> = z.custom<JsonValue>(
+  (value) => isJsonValue(value),
+  { message: "无效的 JSON 数据" },
 );

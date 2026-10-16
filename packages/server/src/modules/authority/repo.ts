@@ -55,6 +55,46 @@ export class AuthorityRepo {
       .activeUserIds()
       .filter((id) => this.actor(id)?.roles.includes("root")).length;
   }
+  /** Live resources with the prefix granted to the user directly or to one of `groups`. */
+  grantedResources(
+    user: string,
+    groups: readonly string[],
+    prefix: string,
+  ): string[] {
+    return this.db
+      .all<{ resource: string }>(
+        `SELECT DISTINCT resource FROM authority_grants
+         WHERE deleted=0 AND substr(resource,1,length(?))=?
+           AND ((principal_type='user' AND principal=?)
+             OR (principal_type='group' AND principal IN (SELECT value FROM json_each(?))))`,
+        prefix,
+        prefix,
+        user,
+        JSON.stringify(groups),
+      )
+      .map((row) => row.resource);
+  }
+  /** Grants (live or deleted) addressed to `user` or `groups`, or projected for `user`. */
+  grantsFor(user: string, groups: readonly string[]): Grant[] {
+    return this.db.all(
+      `SELECT * FROM authority_grants
+       WHERE (principal_type='user' AND principal=?)
+          OR (principal_type='group' AND principal IN (SELECT value FROM json_each(?)))
+          OR id IN (SELECT grant_id FROM authority_grant_projections WHERE user_id=?)
+       ORDER BY rev,id`,
+      user,
+      JSON.stringify(groups),
+      user,
+    );
+  }
+  projections(
+    user: string,
+  ): { grant_id: string; rev: number; deleted: number }[] {
+    return this.db.all(
+      "SELECT grant_id,rev,deleted FROM authority_grant_projections WHERE user_id=?",
+      user,
+    );
+  }
   grants(resource: string): Grant[] {
     return this.db.all(
       "SELECT * FROM authority_grants WHERE resource=? AND deleted=0",

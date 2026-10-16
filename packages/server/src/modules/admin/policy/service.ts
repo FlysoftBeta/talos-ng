@@ -9,6 +9,8 @@ export interface AdminPolicyOptions {
   audit: AuditWriter;
   db: Db;
   identity: Pick<IdentityAdmin, "directory" | "devices">;
+  /** Re-evaluate connected sessions after an admission policy change. */
+  onAdmissionChanged?: () => void;
 }
 export class AdminPolicy {
   private readonly repo: AdminRepo;
@@ -50,6 +52,7 @@ export class AdminPolicy {
       });
       this.options.audit.append(actor, "admin.device.policy.set", null, input);
     });
+    this.options.onAdmissionChanged?.();
     return this.settings();
   }
   setMediaSettings(

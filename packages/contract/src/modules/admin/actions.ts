@@ -28,6 +28,7 @@ export const ADMIN_ACTION_ROLES = {
   "admin.incident.download": "operations",
   "admin.debug": "root",
   "admin.incident.selfTest": "operations",
+  "admin.performance": "operations",
 } as const;
 export type AdminAction = keyof typeof ADMIN_ACTION_ROLES;
 export function adminActionRole(

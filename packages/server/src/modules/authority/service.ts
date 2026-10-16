@@ -90,6 +90,14 @@ export class AuthorityService {
   actor(id: string): User | undefined {
     return this.repo.actor(id);
   }
+  /** Resource ids under `prefix` that some grant could open for the user. */
+  grantedResources(user: string, prefix: string): string[] {
+    return this.repo.grantedResources(
+      user,
+      this.options.groups?.(user) ?? [],
+      prefix,
+    );
+  }
   roots(): number {
     return this.repo.roots();
   }
@@ -225,15 +233,16 @@ export class AuthorityService {
     }
   }
   registerSync(hub: SyncHub): void {
-    const rows = (user: string): Row[] =>
-      this.repo
-        .allGrants()
-        .filter(
-          (grant) =>
-            this.visible(user, grant) || !!this.repo.projection(user, grant.id),
-        )
+    // Grants addressed to the user or their groups, plus every grant the user
+    // holds a projection for (a revoked group grant stays as a tombstone).
+    const rows = (user: string): Row[] => {
+      const projections = new Map(
+        this.repo.projections(user).map((row) => [row.grant_id, row]),
+      );
+      return this.repo
+        .grantsFor(user, this.options.groups?.(user) ?? [])
         .map((grant) => {
-          const projection = this.repo.projection(user, grant.id);
+          const projection = projections.get(grant.id);
           return this.grantRow(
             projection
               ? { ...grant, rev: projection.rev, deleted: projection.deleted }
@@ -241,6 +250,7 @@ export class AuthorityService {
           );
         })
         .sort((a, b) => a.rev - b.rev || a.id.localeCompare(b.id));
+    };
     hub.registerProvider({
       match: (scope) => scope.startsWith("me:"),
       access: (user, scope) =>

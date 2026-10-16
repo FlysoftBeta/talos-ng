@@ -49,6 +49,8 @@ interface SessionsOptions {
   upgradePin: (oldHash: string, user: string, pin: PinRecord) => void;
   admissionPolicy: AdmissionPolicy;
 }
+const ACTIVITY_REFRESH_MS = 60_000;
+const DEVICE_TOUCH_MS = 5_000;
 export class SessionsService {
   constructor(private readonly options: SessionsOptions) {}
   registerDevice(label = "", ip?: string, userAgent?: string): string {
@@ -259,15 +261,28 @@ export class SessionsService {
         state = { device: state.device };
         connection.ctx.set("session", state);
         this.options.onBindingChanged?.(connection);
-      } else
+      } else if (
+        // Authentication runs for every connection on every commit; refresh
+        // the sliding expiry at most once a minute instead of writing each time.
+        session.expires <
+        this.options.now() + SESSION_TTL_MS - ACTIVITY_REFRESH_MS
+      )
         this.options.sessions.extendSession(
           session.hash,
           this.options.now() + SESSION_TTL_MS,
         );
     }
-    // Only authenticated activity keeps idle admission alive.
-    if (state.user)
-      this.options.sessions.touchDevice(state.device, this.options.now());
+    // Only authenticated activity keeps idle admission alive (minutes-scale,
+    // so a few seconds of write coalescing cannot lock an active device).
+    if (state.user) {
+      const device = this.options.admission.device(state.device);
+      if (
+        !device ||
+        this.options.now() - device.last_seen >= DEVICE_TOUCH_MS ||
+        device.last_seen > this.options.now()
+      )
+        this.options.sessions.touchDevice(state.device, this.options.now());
+    }
     return {
       device: state.device,
       ...(state.user ? { user: state.user } : {}),

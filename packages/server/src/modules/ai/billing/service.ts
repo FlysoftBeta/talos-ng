@@ -57,6 +57,13 @@ export class Billing {
       required: 1000000,
     };
   }
+  /** Whether the synced credit row already equals the computed account. */
+  projected(user: string): boolean {
+    return (
+      JSON.stringify(this.repo.get(user, "aiCredit", "account")) ===
+      JSON.stringify(this.account(user))
+    );
+  }
   project(user: string, ctx: WriteContext): AiCredit {
     const value = this.account(user);
     if (

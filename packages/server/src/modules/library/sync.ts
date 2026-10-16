@@ -13,13 +13,9 @@ export function registerLibrarySync(
   const personal = (user: string): Row[] => {
     return [
       ...repo.retentions(user).map((row) => repo.row("libraryRetention", row)),
+      ...repo.ownedDocs(user).map((row) => repo.row("libraryDoc", row)),
       ...repo
-        .docs()
-        .filter((row) => row.owner === user)
-        .map((row) => repo.row("libraryDoc", row)),
-      ...repo
-        .collections()
-        .filter((row) => row.owner === user)
+        .ownedCollections(user)
         .map((row) => repo.row("libraryCollection", row)),
       ...repo.states(user).map((row) => repo.row("libraryState", row)),
     ];
@@ -62,11 +58,19 @@ export function registerLibrarySync(
     match: (scope) =>
       scope.startsWith("coll:") && !!repo.collection(scope.slice(5)),
     access: (user, scope) => access.collection(user, scope.slice(5)),
+    // Readable collections are owned or granted (see LibraryAccess.collection),
+    // so only those candidates are checked instead of every collection.
     list: (user) =>
-      repo
-        .collections()
-        .filter((row) => access.collection(user, row.id))
-        .map((row) => `coll:${row.id}`),
+      [
+        ...new Set([
+          ...repo.ownedCollections(user).map((row) => row.id),
+          ...access.authority
+            .grantedResources(user, "coll:")
+            .map((resource) => resource.slice(5)),
+        ]),
+      ]
+        .filter((id) => access.collection(user, id))
+        .map((id) => `coll:${id}`),
     select: (scope, since, limit) =>
       select(collection(scope.slice(5)), since, limit),
   });
@@ -77,6 +81,7 @@ export function registerLibrarySync(
     "libraryRetention",
   ]) {
     hub.registerEntity(type, {
+      accessNeutral: ["libraryState", "libraryRetention"].includes(type),
       serialize: (row) => row,
       read: (scope, id) => {
         const rows = scope.startsWith("me:")

@@ -121,8 +121,8 @@ export class LibraryService {
   ensureBuiltins(user: string): { shelf: string; favourites: string } {
     const find = (kind: "shelf" | "favourites") =>
       this.repo
-        .collections()
-        .filter((row) => !row.deleted && row.owner === user)
+        .ownedCollections(user)
+        .filter((row) => !row.deleted)
         .map((row) => JSON.parse(row.body) as LibraryCollection)
         .find((collection) => collection.builtin === kind)?.id;
     const shelf = find("shelf"),

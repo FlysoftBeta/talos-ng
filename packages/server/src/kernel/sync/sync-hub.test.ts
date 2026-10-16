@@ -51,6 +51,150 @@ function row(id: string, rev: number, type = "setting", deleted = false): Row {
 }
 
 describe("SyncHub", () => {
+  it("off-thread snapshots subscribe only when no commit raced them", async () => {
+    const f = fixture();
+    f.rows.push(row("a", 1));
+    const deferred = () => {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      return { gate, release };
+    };
+    // A clean snapshot behaves exactly like a local pull.
+    const clean = await f.hub.pullFrom(
+      async (user, request) => f.hub.snapshot(user, request),
+      "u",
+      { cursors: {} },
+      f.connection,
+    );
+    expect(clean).toEqual(f.hub.pull("u", { cursors: {} }));
+    // A commit while the snapshot is in flight cannot reach the subscription
+    // installed afterwards: the scope stays incomplete and a re-pull is asked.
+    const raced = deferred();
+    const pending = f.hub.pullFrom(
+      async (user, request) => {
+        const snapshot = f.hub.snapshot(user, request);
+        await raced.gate;
+        return snapshot;
+      },
+      "u",
+      { cursors: { "me:u": 1 } },
+      f.connection,
+    );
+    f.rows.push(row("b", 2));
+    f.rev(2);
+    f.hub.committed({
+      rev: 2,
+      changes: [{ scope: "me:u", type: "setting", id: "b" }],
+    });
+    raced.release();
+    const dirty = await pending;
+    expect(dirty.repull).toBe(true);
+    expect(dirty.scopes["me:u"]).toEqual({ rows: [], cursor: 1, more: true });
+    f.events.length = 0;
+    f.hub.committed({
+      rev: 2,
+      changes: [{ scope: "me:u", type: "setting", id: "b" }],
+    });
+    expect(f.events).toEqual([]);
+    // The retry is computed locally, so it cannot race again.
+    const retry = await f.hub.pullFrom(
+      () => Promise.reject(new Error("must not be called")),
+      "u",
+      { cursors: { "me:u": 1 } },
+      f.connection,
+    );
+    expect(retry.scopes["me:u"]).toEqual({
+      rows: [row("b", 2)],
+      cursor: 2,
+      more: false,
+    });
+    f.hub.committed({
+      rev: 2,
+      changes: [{ scope: "me:u", type: "setting", id: "b" }],
+    });
+    expect(f.events).toHaveLength(1);
+    // A disconnect during the snapshot never installs a subscription.
+    const closing = deferred();
+    const abandoned = f.hub.pullFrom(
+      async (user, request) => {
+        await closing.gate;
+        return f.hub.snapshot(user, request);
+      },
+      "u",
+      { cursors: {} },
+      { id: "gone", emit: () => f.events.push({} as SyncResponse) },
+    );
+    f.hub.unsubscribe("gone");
+    closing.release();
+    await expect(abandoned).rejects.toMatchObject({ code: "E_CONFLICT" });
+    f.events.length = 0;
+    f.hub.committed({
+      rev: 2,
+      changes: [{ scope: "me:u", type: "setting", id: "b" }],
+    });
+    expect(f.events).toHaveLength(1);
+  });
+  it("revoked access during an off-thread snapshot drops the scope", async () => {
+    const f = fixture();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const pending = f.hub.pullFrom(
+      async (user, request) => {
+        const snapshot = f.hub.snapshot(user, request);
+        await gate;
+        return snapshot;
+      },
+      "u",
+      { cursors: { "me:u": 0 } },
+      f.connection,
+    );
+    f.access(false);
+    f.hub.refreshAccess();
+    release();
+    expect(await pending).toEqual({
+      scopes: {},
+      gone: ["me:u"],
+      added: [],
+      repull: true,
+    });
+  });
+  it("skips access re-evaluation for access-neutral change sets", () => {
+    const f = fixture();
+    const neutral = new SyncHub({ revision: () => 1 });
+    let lists = 0;
+    neutral.registerProvider({
+      match: (scope) => scope === "me:u",
+      access: () => true,
+      list: () => {
+        lists++;
+        return ["me:u"];
+      },
+      select: () => [],
+    });
+    neutral.registerEntity("setting", {
+      accessNeutral: true,
+      serialize: (r) => r,
+      read: () => row("a", 1),
+    });
+    neutral.registerEntity("profile", {
+      serialize: (r) => r,
+      read: () => row("p", 1, "profile"),
+    });
+    neutral.pull("u", { cursors: {} }, f.connection);
+    lists = 0;
+    neutral.committed({
+      rev: 1,
+      changes: [{ scope: "me:u", type: "setting", id: "a" }],
+    });
+    expect(lists).toBe(0);
+    expect(f.events.pop()?.scopes["me:u"]?.rows).toEqual([row("a", 1)]);
+    neutral.committed({
+      rev: 1,
+      changes: [{ scope: "me:u", type: "profile", id: "p" }],
+    });
+    neutral.committed({ rev: 1, changes: [] });
+    expect(lists).toBe(2);
+  });
   it("lists added and gone scopes without exposing another user", () => {
     const f = fixture();
     expect(f.hub.pull("u", { cursors: { forbidden: 0 } })).toEqual({

@@ -12,8 +12,10 @@ import { registerMeApi } from "../modules/me/index.ts";
 import { registerTasksApi } from "../modules/tasks/index.ts";
 import { registerLearningApi } from "../modules/learning/index.ts";
 import { contract, CONTRACT_VERSION } from "@talos/contract";
+import type { ResultOf } from "@talos/contract";
 import type { Kernel } from "./create-application.ts";
 import type { LibraryAccess } from "../modules/library/index.ts";
+import type { SyncRequest, SyncSnapshot } from "../kernel/sync/sync-hub.ts";
 export function registerApi(
   application: Pick<
     Kernel,
@@ -40,6 +42,7 @@ export function registerApi(
   libraryAccess: LibraryAccess,
   build: string,
   now: () => number,
+  syncReplicas?: (user: string, request: SyncRequest) => Promise<SyncSnapshot>,
 ): void {
   const {
     host,
@@ -89,14 +92,21 @@ export function registerApi(
     now: now(),
   }));
   host.register(contract.sys.time, () => ({ now: now() }));
-  host.register(contract.sync.pull, (ctx, args) => {
+  host.register(contract.sync.pull, async (ctx, args) => {
     library.ensureBuiltins(ctx.user!);
     community.initializeUser(ctx.user!);
     chatService.ensureStates(ctx.user!);
-    uow.write((write) => ai.billing.project(ctx.user!, write));
-    return contract.sync.pull.result.parse(
-      syncHub.pull(ctx.user!, args, ctx.connection),
-    );
+    // A pull must not open an empty unit of work: every commit bumps the
+    // revision and fans out to every subscription.
+    if (!ai.billing.projected(ctx.user!))
+      uow.write((write) => ai.billing.project(ctx.user!, write));
+    // These writers committed above, so a replica snapshot already holds them.
+    // The link host validates the result against the contract once.
+    return (
+      syncReplicas
+        ? await syncHub.pullFrom(syncReplicas, ctx.user!, args, ctx.connection)
+        : syncHub.pull(ctx.user!, args, ctx.connection)
+    ) as ResultOf<typeof contract.sync.pull>;
   });
   host.register(contract.upload.begin, (ctx, args) =>
     uploads.begin(ctx.user!, args),

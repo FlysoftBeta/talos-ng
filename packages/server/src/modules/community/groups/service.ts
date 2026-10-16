@@ -15,6 +15,7 @@ export interface GroupsContext {
     CommunityRepo,
     | "get"
     | "all"
+    | "accessible"
     | "member"
     | "handle"
     | "put"
@@ -42,10 +43,9 @@ export class Groups {
     return row && !row.deleted ? publicConversation(row) : undefined;
   }
   conversations(user: string): CommunityConversation[] {
-    return this.context.repo
-      .all()
-      .filter((row) => !row.deleted && this.canAccess(user, row.id))
-      .map(publicConversation);
+    // Same rule as canAccess, evaluated in one indexed query instead of per row.
+    if (!this.context.options.user(user)) return [];
+    return this.context.repo.accessible(user).map(publicConversation);
   }
   groups(user: string): string[] {
     return this.conversations(user)
