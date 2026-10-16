@@ -269,6 +269,34 @@ describe("initial shared-scope pagination", () => {
     },
   );
 
+  it("repulls invalidated history before accepting a later delta", async () => {
+    const f = await fixture();
+    f.handle(async () => response([row("retained", 5)], 10));
+    await f.engine.connect();
+    await f.db.table<StoredRow>("rows").delete([scope, "setting", "retained"]);
+    await f.db.table<StoredScope>("scopes").put({ scope, cursor: 0 });
+    f.handle(async (_name, args) => {
+      expect((args as { cursors: Record<string, number> }).cursors[scope]).toBe(
+        0,
+      );
+      return response([row("retained", 5), row("new", 20)], 20);
+    });
+    await expect(
+      f.engine.delta(response([row("new", 20)], 20)),
+    ).rejects.toMatchObject({ code: "E_CONFLICT" });
+    expect((await f.db.table<StoredScope>("scopes").get(scope))?.cursor).toBe(
+      0,
+    );
+    f.fire();
+    await until(f.engine, (s) => s.rows.length === 2 && s.phase === "live");
+    expect(
+      f.engine
+        .getSnapshot()
+        .rows.map((r) => r.id)
+        .sort(),
+    ).toEqual(["new", "retained"]);
+  });
+
   it("still rejects a genuinely backwards response chain", async () => {
     const f = await fixture();
     let requests = 0;

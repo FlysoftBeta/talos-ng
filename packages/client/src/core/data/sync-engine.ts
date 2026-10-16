@@ -468,8 +468,17 @@ export class SyncEngine {
                   // the request base. Never overwrite that change with buffered pages.
                   if (bases && currentCursor !== (bases[scope] ?? 0))
                     throw new SyncCursorChanged();
+                  // Eviction invalidates the scope by resetting its cursor. A
+                  // delta cannot certify the missing history, even between pulls.
+                  if (
+                    !bases &&
+                    wasAdmitted &&
+                    currentCursor === 0 &&
+                    chain[chain.length - 1]!.cursor > 0
+                  )
+                    throw new SyncCursorChanged();
                   if (!wasAdmitted && bases) {
-                    for (const row of current.values())
+                    for (const row of existing)
                       if (row.scope === scope) {
                         rows.delete([scope, row.type, row.id]);
                         current.delete(key(row));
