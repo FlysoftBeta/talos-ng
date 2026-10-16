@@ -145,6 +145,11 @@ dirty, blocks cursor advancement and outbox flushing, and schedules a fresh pull
 500 ms–30 s exponential backoff. Malformed delta events trigger the same authoritative
 repair. Authentication, lock and version failures pause instead of retrying indefinitely.
 
+Scope purges atomically persist per-user cleanup markers alongside row removal. Module
+cleanup retries after failed callbacks or restarts, even when the server no longer reports
+the scope as gone. A new grant cancels stale cleanup; callbacks and lease updates remain
+fenced to the owning session.
+
 Retention content (documents, conversations, audio the user keeps offline) is downloaded by
 background schedulers using resumable ranged fetches into the file store (see
 `client-store.md`); the eviction order is in that document.
