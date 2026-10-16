@@ -40,12 +40,15 @@ available for questions — decide, and record notable decisions.
 - One task = one prompt file `docs/tasks/<id>-<name>.md` (in git) + one git worktree
   `../talos-ng-wt/<name>` on branch `m/<name>`. Codex prompt = `docs/tasks/_common.md` + task
   file on stdin of `codex exec`. Results/plans/audits live next to the prompt. The
-  orchestrator merges, re-runs the gates on `main`, prunes the worktree. Helpers never merge
-  or push, and commit after every step. After each completed unit with green gates the
-  orchestrator pushes `main` to `origin` (GitHub).
-- Gates on `main`: `pnpm check` · `pnpm e2e` · `pnpm e2e:legacy` (real Chromium 70) ·
-  `pnpm package`. Run one e2e feature with `node tools/e2e/run.mjs <feature> [--legacy]`
-  (use the single-feature run while iterating, the full gates once at the end).
+  orchestrator merges, pushes `main` to `origin` (GitHub), monitors that exact commit's CI,
+  and prunes the worktree. Helpers never merge or push, and commit after every step.
+- Verification defaults to **push, then inspect CI** (owner instruction, 2026-10-16).
+  CI runs `pnpm check` and the three-target package matrix. Fix failures and push again
+  until the relevant jobs pass; do not call an in-progress run successful.
+  Do not require local full `pnpm check`, E2E suites or packaging before pushing.
+  Use local checks only when a quick reproduction or targeted verification is useful,
+  for example `node tools/e2e/run.mjs <feature> [--legacy]`. Preserve regression tests;
+  this changes where full verification runs, not the quality requirements.
 - Gate runs leave the tree clean: screenshots and measurements are ignored artifacts under
   `.tmp/e2e` (`packages/client/screenshots/` is ignored too). Never commit generated
   binaries (screenshots, packages, build output); there is no tracked reference screenshot

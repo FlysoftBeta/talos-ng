@@ -152,6 +152,8 @@ the captured request base: another tab may advance it, while eviction may reset 
 change aborts the transaction and restarts the pull, at most twice immediately before normal
 backoff. Progress counts the current attempt. This preserves strict page-chain validation
 without treating another account's cached cursor as the first page's lower bound.
+A delta targeting an admitted scope whose cursor was reset to zero also requests a full
+pull before advancing: incremental delivery cannot certify the evicted history.
 
 Scope purges atomically persist per-user cleanup markers alongside row removal. Module
 cleanup retries after failed callbacks or restarts, even when the server no longer reports

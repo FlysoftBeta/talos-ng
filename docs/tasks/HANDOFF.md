@@ -1,3 +1,27 @@
+# Initial-login cursor repair — 2026-10-16
+
+- Deployed build `16810b2` failed first paginated sync when a scope had a cached cursor but was
+  not admitted to the current user. The request started at zero; apply incorrectly used
+  the other cached cursor. Reproduced the exact PIN-screen error in real Chromium 70
+  using the old production code before changing the browser assertion.
+- New admission replaces inherited rows/windows using a full snapshot. Atomic apply
+  detects request-base changes from other tabs or cache eviction, retries twice immediately
+  then backs off. Invalidated scopes must repull before accepting deltas; truly backwards
+  response chains remain rejected. Progress resets per attempt (D-118).
+- Five new engine regressions cover new admission, another tab, eviction during a pull,
+  eviction before a delta, and invalid server chains. Full tests: 177 files, 1,840 passed,
+  one optional test skipped. Typechecks, lint and build/static compatibility pass.
+- Real-browser hardening now seeds an unadmitted cached cursor, requires pagination,
+  and verifies all 250 settings persist before login completes. It fails on old code with
+  `Pull cursor moved backwards` and passes on the repaired Chromium 70 build.
+- Three-target package, full modern browser and full real Chromium 70 suites pass,
+  including the new login regression, performance budgets and packaged update/rollback,
+  SQLite/object restore and HTTPS/WSS. Existing browser data is repaired through sync;
+  no reset or migration is needed.
+- Owner changed verification workflow after these runs: push first and monitor CI by
+  default; no mandatory full local checks. Use targeted local checks only when useful for
+  quick feedback (D-119; AGENTS.md, CHARTER.md and _common.md updated).
+
 # Sync recovery and personal offline retention — 2026-10-16
 
 - Fixed oversized legal sync revisions with bounded continuation transfers, recovery after

@@ -69,12 +69,15 @@ decision in `docs/tasks/DECISIONS.md`.
 
 - Git: work on `main`; commit early and often with meaningful messages. Remote `origin`
   (https://github.com/FlysoftBeta/talos-ng.git): push `main` to `origin` after each completed
-  unit once the gates are green (owner rule, session 8). Only the orchestrator pushes.
-- Every module ships with tests; `pnpm` (or the chosen runner) `typecheck`, `lint`, `test`,
-  `build` must be green at each milestone. Real verification over claims: run the server, drive
-  the UI in a browser (Playwright), test offline behaviour for real, test the PDF pipeline with
-  real PDFs. A Chrome 70-compat check of the built bundle is mandatory (syntax + API lint at
-  minimum; a real old Chromium if obtainable).
+  unit, then monitor the exact commit's CI and repair failures. Only the orchestrator pushes.
+- Owner instruction (2026-10-16) supersedes earlier local-gate prerequisites: default to
+  pushing and inspecting CI `check` and packaging results. Do not run full local checks,
+  E2E suites or packaging as a mandatory pre-push step. Local verification is optional
+  when useful for quick reproduction or targeted feedback; keep it scoped to the change.
+- Every module ships with regression tests. CI must pass typecheck, lint, tests, build,
+  Chrome 70 static compatibility checks and the package matrix. Use real browsers or PDF
+  fixtures locally when needed to diagnose or quickly verify behaviour that unit tests
+  cannot establish. Report the actual verification evidence and outstanding CI results.
 - Windows amd64 must work: no POSIX-only assumptions, native deps need win32-x64 prebuilds,
   bundle the poppler binaries for both platforms, provide packaging/launch scripts.
 - Archive convention: finished process documents (completed task prompts and results,
@@ -90,7 +93,7 @@ decision in `docs/tasks/DECISIONS.md`.
 
 1. Read this file + HANDOFF.md (+ ROADMAP.md). 2. Advance as many milestones as you safely can.
 3. When your context is getting heavy (or a natural milestone boundary is reached after a lot
-of work), stop: make sure the tree is committed and green, update HANDOFF.md/ROADMAP.md, and
+of work), stop: make sure changes are committed and pushed, record the exact CI status, update HANDOFF.md/ROADMAP.md, and
 return a ≤15-line report: what was done, what is next, Codex quota status, and `STATUS: DONE`
 only if the whole roadmap including final polish, migration tooling and full verification is
 finished — otherwise `STATUS: CONTINUE`. Report honestly: failing or unverified things are

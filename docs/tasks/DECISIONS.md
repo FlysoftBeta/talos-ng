@@ -560,3 +560,10 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   the pull, with two immediate retries then normal backoff. Keep backwards-chain validation
   and reset progress per attempt. Login regression seeds an unadmitted cached cursor before
   a real paginated pull; the old build fails with the deployed error on Chromium 70.
+
+- **D-119 — Verify in CI after pushing by default.** Per explicit owner instruction on
+  2026-10-16, commit and push first, then monitor the exact commit's CI `check` and package
+  jobs and repair failures. Full local check/E2E/package runs are not pre-push requirements.
+  Local verification is optional for quick reproduction or targeted feedback; regression
+  tests and accurate verification reporting remain required. This supersedes earlier
+  worktree and main-branch local-gate prerequisites.

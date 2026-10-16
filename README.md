@@ -13,17 +13,19 @@ self-hosted Node server. Complete rewrite of the legacy `classapp-next` app. Sta
 - `docs/`: [`product/`](docs/product/README.md) (what the product does), `impl/` (how it is built, plus operational
   guides), `tasks/` (process: charter, handoff, decisions, audits, task prompts and results).
 
-Gates: `pnpm check`, `pnpm e2e`, `pnpm e2e:legacy`, `pnpm package`. The UI is functional but
-slated for a from-scratch redesign (see [`docs/tasks/HANDOFF.md`](docs/tasks/HANDOFF.md)).
+Default verification: push the commit and inspect its CI `check` and three-platform
+package jobs; repair failures and push again. Full local checks are not a pre-push
+requirement. Use targeted local tests or browser scenarios when useful for quick feedback.
+The UI is functional but slated for a from-scratch redesign (see
+[`docs/tasks/HANDOFF.md`](docs/tasks/HANDOFF.md)).
 
 Use Node **24.18+ (24.x)** and Corepack's pinned **pnpm 12.11.2**:
 
 ```text
 pnpm install
-pnpm check
 ```
 
-`check` runs `typecheck`, `lint` (including `format:check`), `test`, and `build`.
+CI runs `pnpm check`, which runs `typecheck`, `lint` (including `format:check`), `test`, and `build`.
 `pnpm format` applies Prettier; `pnpm test:coverage` produces optional V8 coverage.
 Library builds check types; source exports require no intermediate build artifacts.
 TypeScript 7 runs checks; the TypeScript 6 API is retained solely for ESLint until

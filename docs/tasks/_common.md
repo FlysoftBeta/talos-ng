@@ -20,8 +20,10 @@
 - Must work on **Windows and Linux** (paths via `node:path`, no shell-outs to POSIX tools, no
   reliance on file modes/symlinks, handle `EBUSY`/`EPERM`), and browser-side code must run on
   **Chrome 70** (see `docs/impl/chrome70-compat.md`; ES2018 lib; no Blob persisted anywhere).
-- Gate: `pnpm check` (typecheck + lint + test + build) green at the repo root of your worktree.
-  Run `pnpm install` first (network is available).
+- Default full verification runs in CI after the orchestrator pushes. Do not run a full
+  local `pnpm check`, E2E suite or package build as a prerequisite. Run only useful quick,
+  targeted checks for your change and report what was actually verified. Install missing
+  dependencies only when needed. Add regression tests even when CI will execute them.
 - Commit on your branch in meaningful commits. Never push. Do not merge to `main`.
 - Final message (≤ 25 lines): public API summary, test count, deviations from the spec with
   reasons, shared files touched, anything the integrator must know.
