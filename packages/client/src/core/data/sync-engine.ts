@@ -663,14 +663,12 @@ export class SyncEngine {
                           .add(config.seqOf(row))
                           .toJSON();
                     });
-                    return tx
-                      .table<StoredScope, string>("scopes")
-                      .put({
-                        scope,
-                        cursor: saved?.cursor ?? 0,
-                        complete: saved?.complete,
-                        windows,
-                      });
+                    return tx.table<StoredScope, string>("scopes").put({
+                      scope,
+                      cursor: saved?.cursor ?? 0,
+                      complete: saved?.complete,
+                      windows,
+                    });
                   });
               });
           }),
