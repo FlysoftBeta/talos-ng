@@ -304,6 +304,18 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
       (row) =>
         row.type === "libraryCollection" && row.data.title === "共享书单",
     ).id;
+    // Personal policy is queued; deleting its collection before acceptance creates
+    // a legitimate failed operation that must remain visible in the outbox.
+    await eventually(
+      async () =>
+        (await wire.call("sync.pull", { cursors: {} })).data.scopes[
+          `me:${wire.user.id}`
+        ].rows.find(
+          (row) => row.type === "libraryRetention" && row.id === collection,
+        )?.data.value?.v,
+      (value) => value === 7,
+      "personal collection retention acknowledged before collection deletion",
+    );
     await click(cdp, "最近");
     await click(cdp, "我的书架");
     for (const title of ["中文 PDF", "五百页 PDF"]) {
@@ -349,8 +361,30 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     await cdp.wait("!document.querySelector('[role=dialog]')");
     await click(cdp, "最近");
     await click(cdp, "五百页 PDF");
+    const uncachedPack = (
+      await wire.call("library.doc.describe", { doc: large.doc })
+    ).data.pack.id;
     await cdp.offline(true);
     await server.stop();
+    // Viewing or a temporary collection policy can cache the whole small fixture
+    // pack, including unvisited pages. Evict only this unretained PDF's bytes so
+    // the following missing-content assertion has a deterministic precondition.
+    await cdp.evaluate(`new Promise(function(resolve,reject){
+      var r=indexedDB.open('talos-app');
+      r.onerror=function(){reject(r.error)};
+      r.onsuccess=function(){
+        var db=r.result, rid=${JSON.stringify(uncachedPack)};
+        var tx=db.transaction(['file_heads','file_chunks','file_owners','file_leases'],'readwrite');
+        tx.oncomplete=function(){db.close();resolve(true)};
+        tx.onabort=function(){db.close();reject(tx.error)};
+        tx.objectStore('file_heads').delete(rid);
+        tx.objectStore('file_leases').delete(rid);
+        var chunks=tx.objectStore('file_chunks').openCursor(IDBKeyRange.bound([rid,0],[rid,Number.MAX_SAFE_INTEGER]));
+        chunks.onsuccess=function(){var cursor=chunks.result;if(cursor){cursor.delete();cursor.continue()}};
+        var owners=tx.objectStore('file_owners').index('rid').openCursor(IDBKeyRange.only(rid));
+        owners.onsuccess=function(){var cursor=owners.result;if(cursor){cursor.delete();cursor.continue()}};
+      }
+    })`);
     await cdp.navigate(server.url + "/");
     await unlock(cdp);
     await cdp.wait(`${text}.indexOf('离线未缓存')>=0`);
