@@ -134,3 +134,30 @@ retry machine.
 Retention content (documents, conversations, audio the user keeps offline) is downloaded by
 background schedulers using resumable ranged fetches into the file store (see
 `client-store.md`); the eviction order is in that document.
+
+### Large sync pages and push recovery
+
+The wire budget covers the serialized response, including scope metadata and JSON
+escaping, with room below the link header limit for its envelope. Whole revision
+groups remain indivisible logical pages. If a legal group or single corpus row
+exceeds that budget, `sync.pull` returns empty scopes plus
+`transfer: {token, chunk, more}`. Concatenate the JSON string chunks and validate
+the reconstructed normal result before applying any row or cursor. Request each
+next fragment with `continuation: token`; tokens rotate after consumption, are
+bound to the user and connection, and expire after 60 seconds of inactivity.
+A new ordinary pull replaces an abandoned transfer; disconnection clears it.
+Revocation invalidates a transfer. An expired, consumed or revoked continuation
+returns `E_CONFLICT`: discard the incomplete chain and restart at durable cursors.
+
+The server suspends that connection's incremental subscription until the final
+fragment. If relevant writes or newly accessible scopes appeared during transfer,
+the final fragment also has `repull: true`: mark the reconstructed scope pages
+`more: true` and continue pulling from their cursors. Otherwise, the server activates
+completed scopes immediately. This also lets metadata-only transfers converge when
+there are thousands of scopes. Oversized or failed push deltas likewise
+suspend incremental delivery and send `{scopes:{},gone:[],added:[],repull:true}`.
+The client pulls from durable cursors before resuming live delivery; later small
+deltas cannot silently advance beyond a missing large transaction.
+
+The request cursor map still occupies one link header. Fragmented responses do not
+remove that existing request-size ceiling for extreme numbers of scope IDs.

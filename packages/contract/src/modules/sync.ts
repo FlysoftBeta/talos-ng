@@ -2,6 +2,8 @@ import { z } from "zod";
 import { defineEvent, defineMethod } from "../protocol/definitions.ts";
 import { revSchema, jsonSchema } from "../protocol/scalars.ts";
 export const MAX_SYNC_ROWS = 1000;
+/** Leaves space for the link reply/event envelope under MAX_HEADER_BYTES. */
+export const MAX_SYNC_BYTES = 160 * 1024;
 export const DEFAULT_SYNC_ROWS = 200;
 export const WINDOW_RESET_THRESHOLD = 2000;
 export const OP_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
@@ -28,6 +30,15 @@ export const syncResultSchema = z
     scopes: z.record(scopePullSchema),
     gone: z.array(z.string()),
     added: z.array(z.string()),
+    transfer: z
+      .object({
+        token: z.string().min(1).max(128),
+        chunk: z.string(),
+        more: z.boolean(),
+      })
+      .strict()
+      .optional(),
+    repull: z.boolean().optional(),
   })
   .strict();
 export const sync = Object.freeze({
@@ -36,6 +47,7 @@ export const sync = Object.freeze({
     args: z
       .object({
         cursors: z.record(revSchema),
+        continuation: z.string().min(1).max(128).optional(),
         limit: z.number().int().min(1).max(MAX_SYNC_ROWS).optional(),
       })
       .strict(),

@@ -176,7 +176,7 @@ describe("SyncHub", () => {
       changes: [{ scope: "me:u", type: "setting", id: "a" }],
     });
     expect(f.events).toHaveLength(1);
-    expect(f.errors).toHaveLength(1);
+    expect(f.errors).toHaveLength(2);
     f.hub.unsubscribe("c");
     f.hub.clear();
     f.hub.committed({ rev: 1, changes: [] });
@@ -345,13 +345,15 @@ describe("SyncHub", () => {
       rev: 1,
       changes: [{ scope: "me:u", type: "setting", id: "a" }],
     });
-    expect(f.events).toHaveLength(0);
+    expect(f.events).toEqual([
+      { scopes: {}, gone: [], added: [], repull: true },
+    ]);
     expect(f.errors).toEqual([expect.objectContaining({ code: "E_INTERNAL" })]);
     f.hub.committed({
       rev: 2,
       changes: [{ scope: "me:u", type: "setting", id: "a" }],
     });
-    expect(f.events).toHaveLength(0);
+    expect(f.events).toHaveLength(1);
     expect(f.errors).toHaveLength(2);
   });
   it("changing the bound user never retains the old subscription", () => {
@@ -421,4 +423,221 @@ it("bounds sync wire bytes across scopes without splitting revisions or losing r
   expect(seen.a).toEqual(rows.map((r) => r.id));
   expect(seen.b).toEqual(rows.map((r) => r.id));
   expect(cursors).toEqual({ a: 8, b: 8 });
+});
+
+it("fragments escaped Unicode rows and catches commits during transfer before subscribing", () => {
+  const f = fixture();
+  const large = { ...row("large", 1), data: '😀汉"\\\n'.repeat(60000) };
+  f.rows.push(large);
+  let result = f.hub.pull("u", { cursors: {} }, f.connection);
+  expect(result.transfer).toBeDefined();
+  const chunks: string[] = [];
+  f.rev(2);
+  f.rows.push(row("during", 2));
+  f.hub.committed({
+    rev: 2,
+    changes: [{ scope: "me:u", type: "setting", id: "during" }],
+  });
+  expect(f.events).toHaveLength(0);
+  for (;;) {
+    expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(
+      160 * 1024,
+    );
+    chunks.push(result.transfer!.chunk);
+    if (!result.transfer!.more) break;
+    result = f.hub.pull(
+      "u",
+      { cursors: {}, continuation: result.transfer!.token },
+      f.connection,
+    );
+  }
+  expect(result.repull).toBe(true);
+  const assembled = JSON.parse(chunks.join("")) as SyncResponse;
+  expect(assembled.scopes["me:u"]).toEqual({
+    rows: [large],
+    cursor: 1,
+    more: false,
+  });
+  const tail = f.hub.pull("u", { cursors: { "me:u": 1 } }, f.connection);
+  expect(tail.scopes["me:u"]).toEqual({
+    rows: [row("during", 2)],
+    cursor: 2,
+    more: false,
+  });
+  f.hub.committed({
+    rev: 2,
+    changes: [{ scope: "me:u", type: "setting", id: "during" }],
+  });
+  expect(f.events).toEqual([tail]);
+});
+
+it("binds continuation to the user and connection and invalidates replay, revocation and disconnect", () => {
+  const f = fixture();
+  f.rows.push({ ...row("large", 1), data: "x".repeat(600000) });
+  const start = () =>
+    f.hub.pull("u", { cursors: {} }, f.connection).transfer!.token;
+  let token = start();
+  const resume = (continuation: string) =>
+    f.hub.pull("u", { cursors: {}, continuation }, f.connection);
+  expect(() =>
+    f.hub.pull("other", { cursors: {}, continuation: token }, f.connection),
+  ).toThrow();
+  expect(() =>
+    f.hub.pull(
+      "u",
+      { cursors: {}, continuation: token },
+      { ...f.connection, id: "other" },
+    ),
+  ).toThrow();
+  token = start();
+  resume(token);
+  expect(() => resume(token)).toThrow(
+    expect.objectContaining({ code: "E_CONFLICT" }),
+  );
+  token = start();
+  f.access(false);
+  expect(() => resume(token)).toThrow(
+    expect.objectContaining({ code: "E_CONFLICT" }),
+  );
+  f.access(true);
+  token = start();
+  f.hub.unsubscribe(f.connection.id);
+  expect(() => resume(token)).toThrow(
+    expect.objectContaining({ code: "E_CONFLICT" }),
+  );
+});
+
+it("expires abandoned transfers and a new pull restarts from its requested cursor", () => {
+  let now = 0;
+  const hub = new SyncHub({ revision: () => 1, now: () => now });
+  const large = { ...row("large", 1), data: "x".repeat(300000) };
+  hub.registerEntity("setting", { serialize: (r) => r, read: () => large });
+  hub.registerProvider({
+    match: () => true,
+    access: () => true,
+    list: () => ["scope"],
+    select: () => [large],
+  });
+  const token = hub.pull("u", { cursors: {} }).transfer!.token;
+  now = 60000;
+  expect(() => hub.pull("u", { cursors: {}, continuation: token })).toThrow(
+    expect.objectContaining({ code: "E_CONFLICT" }),
+  );
+  expect(hub.pull("u", { cursors: {} }).transfer?.token).not.toBe(token);
+});
+
+it("oversized pushes request a pull and suppress later cursor advances until catch-up", () => {
+  const f = fixture();
+  f.hub.pull("u", { cursors: {} }, f.connection);
+  f.rev(2);
+  f.rows.push({ ...row("large", 2), data: "x".repeat(300000) });
+  f.hub.committed({
+    rev: 2,
+    changes: [{ scope: "me:u", type: "setting", id: "large" }],
+  });
+  expect(f.events).toEqual([{ scopes: {}, gone: [], added: [], repull: true }]);
+  f.rev(3);
+  f.rows.push(row("small", 3));
+  f.hub.committed({
+    rev: 3,
+    changes: [{ scope: "me:u", type: "setting", id: "small" }],
+  });
+  expect(f.events).toHaveLength(1);
+  expect(f.errors).toEqual([]);
+  expect(
+    f.hub.pull("u", { cursors: { "me:u": 1 } }, f.connection).transfer,
+  ).toBeDefined();
+});
+
+it("finishes metadata-only transfers with thousands of scopes and subscribes after the last fragment", () => {
+  const scopes = Array.from(
+    { length: 4000 },
+    (_, i) => `coll:${String(i).padStart(26, "0")}`,
+  );
+  const events: SyncResponse[] = [];
+  let revision = 1;
+  const hub = new SyncHub({ revision: () => revision });
+  hub.registerProvider({
+    match: () => true,
+    access: () => true,
+    list: () => scopes,
+    select: () => [],
+  });
+  hub.registerEntity("setting", {
+    serialize: (r) => r,
+    read: () => row("later", revision),
+  });
+  const connection = {
+    id: "many",
+    emit: (_topic: string, data: unknown) => events.push(data as SyncResponse),
+  };
+  let page = hub.pull("u", { cursors: {} }, connection);
+  const chunks: string[] = [];
+  let count = 0;
+  for (;;) {
+    expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThanOrEqual(
+      160 * 1024,
+    );
+    chunks.push(page.transfer!.chunk);
+    if (!page.transfer!.more) break;
+    expect(++count).toBeLessThan(20);
+    // Pull preparation may bump the global revision without changing rows.
+    hub.committed({ rev: ++revision, changes: [] });
+    page = hub.pull(
+      "u",
+      { cursors: {}, continuation: page.transfer!.token },
+      connection,
+    );
+  }
+  expect(page.repull).toBeUndefined();
+  const assembled = JSON.parse(chunks.join("")) as SyncResponse;
+  expect(Object.keys(assembled.scopes)).toHaveLength(4000);
+  expect(Object.values(assembled.scopes).every((scope) => !scope.more)).toBe(
+    true,
+  );
+  hub.committed({
+    rev: revision,
+    changes: [{ scope: scopes[0]!, type: "setting", id: "later" }],
+  });
+  expect(events[0]?.scopes[scopes[0]!]!.rows).toEqual([row("later", revision)]);
+});
+
+it("repairs a transient push failure before allowing a later small delta to advance", () => {
+  const f = fixture();
+  let fail = true;
+  const connection = {
+    id: "transient",
+    emit: (_topic: string, data: unknown) => {
+      if (fail) {
+        fail = false;
+        throw new Error("carrier rejected event");
+      }
+      f.events.push(data as SyncResponse);
+    },
+  };
+  f.hub.pull("u", { cursors: {} }, connection);
+  f.rev(2);
+  f.rows.push(row("missed", 2));
+  f.hub.committed({
+    rev: 2,
+    changes: [{ scope: "me:u", type: "setting", id: "missed" }],
+  });
+  expect(f.events).toEqual([{ scopes: {}, gone: [], added: [], repull: true }]);
+  f.rev(3);
+  f.rows.push(row("later", 3));
+  f.hub.committed({
+    rev: 3,
+    changes: [{ scope: "me:u", type: "setting", id: "later" }],
+  });
+  expect(f.events).toHaveLength(1);
+  const pulled = f.hub.pull("u", { cursors: { "me:u": 1 } }, connection);
+  expect(pulled.scopes["me:u"]!.rows).toEqual([
+    row("missed", 2),
+    row("later", 3),
+  ]);
+  f.hub.committed({
+    rev: 3,
+    changes: [{ scope: "me:u", type: "setting", id: "later" }],
+  });
+  expect(f.events[1]?.scopes["me:u"]?.rows).toEqual([row("later", 3)]);
 });
