@@ -24,6 +24,22 @@ export interface FilesControllerPorts {
 
 export class FilesController {
   constructor(private readonly ports: FilesControllerPorts) {}
+  private sessionFence(key: string): { user: string; assertActive(): void } {
+    const user = this.ports.saved?.user.id;
+    if (!user) throw new AppError("E_UNAUTHENTICATED", "请先登录");
+    const generation = this.ports.generation;
+    const assertActive = (): void => {
+      if (
+        this.ports.closed ||
+        this.ports.generation !== generation ||
+        this.ports.saved?.user.id !== user
+      )
+        throw new AppError("E_CANCELLED", "旧会话请求已取消");
+      this.assertLocalScope(key);
+    };
+    assertActive();
+    return { user, assertActive };
+  }
   async readFile(rid: string): Promise<Uint8Array | undefined> {
     if (!this.ports.files || !this.ports.saved) return undefined;
     const user = this.ports.saved.user.id;
@@ -70,19 +86,9 @@ export class FilesController {
     if (!this.ports.files || !this.ports.saved)
       throw new AppError("E_UNAUTHENTICATED", "请先登录");
     const target = this.ports.environment.downloadUrl(url);
-    const user = this.ports.saved.user.id;
-    const generation = this.ports.generation;
-    const assertActive = (): void => {
-      if (
-        generation !== this.ports.generation ||
-        this.ports.closed ||
-        this.ports.saved?.user.id !== user
-      )
-        throw new AppError("E_CANCELLED", "旧会话请求已取消");
-      this.assertLocalScope(owner);
-    };
-    assertActive();
+    const { user, assertActive } = this.sessionFence(owner);
     await this.ports.eviction?.makeRoom(size);
+    assertActive();
     const writer = await this.ports.files.begin(rid, size);
     try {
       await fetchFileRanges({
@@ -110,16 +116,14 @@ export class FilesController {
   async saveFile(rid: string, bytes: Uint8Array, owner: string): Promise<void> {
     if (!this.ports.files || !this.ports.saved)
       throw new AppError("E_UNAUTHENTICATED", "请先登录");
-    const user = this.ports.saved.user.id;
-    this.assertLocalScope(owner);
+    const { user, assertActive } = this.sessionFence(owner);
     await this.ports.eviction?.makeRoom(bytes.length);
+    assertActive();
     await this.ports.files.put(rid, bytes);
-    if (this.ports.saved?.user.id !== user)
-      throw new AppError("E_CANCELLED", "旧会话请求已取消");
-    this.assertLocalScope(owner);
+    assertActive();
     await this.ports.files.retain(`${user}:${owner}`, rid);
     try {
-      this.assertLocalScope(owner);
+      assertActive();
     } catch (error) {
       await this.ports.files.releaseOwner(`${user}:${owner}`);
       throw error;
@@ -128,11 +132,10 @@ export class FilesController {
   async retainFile(rid: string, owner: string): Promise<void> {
     if (!this.ports.files || !this.ports.saved)
       throw new AppError("E_UNAUTHENTICATED", "请先登录");
-    const user = this.ports.saved.user.id;
-    this.assertLocalScope(owner);
+    const { user, assertActive } = this.sessionFence(owner);
     await this.ports.files.retain(`${user}:${owner}`, rid);
     try {
-      this.assertLocalScope(owner);
+      assertActive();
     } catch (error) {
       await this.ports.files.releaseOwner(`${user}:${owner}`);
       throw error;
@@ -156,19 +159,35 @@ export class FilesController {
   async setLocal<T>(key: string, value: T): Promise<void> {
     if (!this.ports.db || !this.ports.saved)
       throw new AppError("E_UNAUTHENTICATED", "请先登录");
-    this.assertLocalScope(key);
-    const storageKey = `feature:${this.ports.saved.user.id}:${key}`;
+    const { user, assertActive } = this.sessionFence(key);
+    const storageKey = `feature:${user}:${key}`;
     await this.ports.eviction?.makeRoom(JSON.stringify(value)?.length * 2 || 0);
+    assertActive();
     await this.ports.db.table<T, string>("kv").put(value, storageKey);
-    await this.ports.eviction?.track(storageKey, value);
     try {
-      this.assertLocalScope(key);
+      assertActive();
+      await this.ports.eviction?.track(storageKey, value);
+      assertActive();
     } catch (error) {
       await this.ports.db.table("kv").delete(storageKey);
       throw error;
     }
   }
   assertLocalScope(key: string): void {
+    const retained = /^(library|media):([^:]+):retained$/.exec(key);
+    if (retained) {
+      const type = retained[1] === "library" ? "libraryDoc" : "mediaTrack";
+      const visible = this.ports.engine
+        ?.getSnapshot()
+        .rows.some(
+          (row) =>
+            row.type === type &&
+            row.id === retained[2] &&
+            !row.deleted &&
+            this.ports.hasScope(row.scope),
+        );
+      if (!visible) throw new AppError("E_DENIED", "内容访问权限已失效");
+    }
     const match = /^((?:conv|coll):[^:]+):/.exec(key);
     if (match && !this.ports.hasScope(match[1]!))
       throw new AppError("E_DENIED", "内容访问权限已失效");

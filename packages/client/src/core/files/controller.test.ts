@@ -147,13 +147,47 @@ describe("saving, retaining and revocation races", () => {
   });
 
   it("releases the lease when scope access is revoked right after the write", async () => {
-    let calls = 0;
-    const t = setup({ hasScope: () => ++calls < 3 });
+    let allowed = true;
+    const t = setup({ hasScope: () => allowed });
+    t.files.store.retain.mockImplementationOnce(async (owner, rid) => {
+      t.files.owners.set(rid, new Set([owner]));
+      allowed = false;
+    });
     await expect(
       t.controller.saveFile("r", new Uint8Array([1]), "conv:c1:doc"),
     ).rejects.toMatchObject({ code: "E_DENIED" });
     expect(t.files.store.releaseOwner).toHaveBeenCalledWith("u1:conv:c1:doc");
     expect(t.files.owners.get("r")?.size ?? 0).toBe(0);
+  });
+
+  it.each(["save", "retain"] as const)(
+    "removes only the old user's lease when %s crosses an account switch",
+    async (operation) => {
+      const t = setup();
+      t.files.owners.set("r", new Set(["u2:doc"]));
+      t.files.store.retain.mockImplementationOnce(async (owner, rid) => {
+        t.files.owners.get(rid)!.add(owner);
+        (t.ports as { saved: unknown }).saved = { user: { id: "u2" } };
+      });
+      await expect(
+        operation === "save"
+          ? t.controller.saveFile("r", new Uint8Array([1]), "doc")
+          : t.controller.retainFile("r", "doc"),
+      ).rejects.toMatchObject({ code: "E_CANCELLED" });
+      expect(t.files.owners.get("r")).toEqual(new Set(["u2:doc"]));
+    },
+  );
+
+  it("does not write bytes when room-making crosses a session change", async () => {
+    const t = setup();
+    t.ports.eviction!.makeRoom = vi.fn(async () => {
+      t.ports.generation++;
+    });
+    await expect(
+      t.controller.saveFile("r", new Uint8Array([1]), "doc"),
+    ).rejects.toMatchObject({ code: "E_CANCELLED" });
+    expect(t.files.store.put).not.toHaveBeenCalled();
+    expect(t.files.store.retain).not.toHaveBeenCalled();
   });
 
   it("rejects a save finished by a different user without leasing", async () => {
@@ -235,13 +269,64 @@ describe("feature key/value scope", () => {
   });
 
   it("removes a written value when its scope is revoked during the write", async () => {
-    let calls = 0;
-    const t = setup({ hasScope: () => ++calls < 2 });
+    let allowed = true;
+    const t = setup({ hasScope: () => allowed });
+    t.ports.db!.table = (() => ({
+      put: async (value: unknown, key: string) => {
+        t.kv.set(key, value);
+        allowed = false;
+      },
+      delete: async (key: string) => {
+        t.kv.delete(key);
+      },
+    })) as never;
     await expect(
       t.controller.setLocal("conv:c:draft", "x"),
     ).rejects.toMatchObject({ code: "E_DENIED" });
     expect(t.kv.has("feature:u1:conv:c:draft")).toBe(false);
   });
+
+  it("does not persist retention metadata after a session change while making room", async () => {
+    const t = setup();
+    t.ports.eviction!.makeRoom = vi.fn(async () => {
+      t.ports.generation++;
+    });
+    await expect(
+      t.controller.setLocal("media:retained", [{ track: "t" }]),
+    ).rejects.toMatchObject({ code: "E_CANCELLED" });
+    expect(t.kv.size).toBe(0);
+  });
+
+  it.each(["library", "media"])(
+    "checks current access for personal %s retention owners",
+    (area) => {
+      const rows = [
+        {
+          scope: "coll:one",
+          type: area === "library" ? "libraryDoc" : "mediaTrack",
+          id: "item",
+          deleted: false,
+        },
+      ];
+      let admitted = true;
+      const t = setup({
+        engine: { getSnapshot: () => ({ rows }) } as never,
+        hasScope: () => admitted,
+      });
+      expect(() =>
+        t.controller.assertLocalScope(`${area}:item:retained`),
+      ).not.toThrow();
+      admitted = false;
+      expect(() =>
+        t.controller.assertLocalScope(`${area}:item:retained`),
+      ).toThrow(expect.objectContaining({ code: "E_DENIED" }));
+      admitted = true;
+      rows[0]!.deleted = true;
+      expect(() =>
+        t.controller.assertLocalScope(`${area}:item:retained`),
+      ).toThrow(expect.objectContaining({ code: "E_DENIED" }));
+    },
+  );
 
   it("denies reads and writes for revoked conversation or collection scopes", async () => {
     const t = setup({ hasScope: (s: string) => s !== "coll:gone" });

@@ -23,14 +23,25 @@ export async function fetchFileRanges(options: {
       cache: "no-store",
       credentials: "same-origin",
     });
-    assertActive();
-    if (
-      response.status !== 206 ||
-      response.headers.get("Content-Range") !==
-        `bytes ${start}-${end - 1}/${size}`
-    ) {
-      await response.body?.cancel();
-      throw new AppError("E_PROTOCOL", "服务器未返回请求的下载范围");
+    try {
+      assertActive();
+      if (response.status === 401 || response.status === 403)
+        throw new AppError("E_DENIED", "下载授权已失效，请重新获取下载链接");
+      if (response.status === 404 || response.status === 410)
+        throw new AppError("E_NOT_FOUND", "下载内容已不存在");
+      if (response.status === 429)
+        throw new AppError("E_RATE_LIMITED", "下载请求过于频繁，请稍后重试");
+      if (response.status >= 500)
+        throw new AppError("E_UNAVAILABLE", "下载服务暂时不可用，请稍后重试");
+      if (
+        response.status !== 206 ||
+        response.headers.get("Content-Range") !==
+          `bytes ${start}-${end - 1}/${size}`
+      )
+        throw new AppError("E_PROTOCOL", "服务器未返回请求的下载范围");
+    } catch (error) {
+      await response.body?.cancel().catch(() => undefined);
+      throw error;
     }
     const reader = response.body?.getReader();
     if (!reader) throw new AppError("E_PROTOCOL", "下载响应没有内容");

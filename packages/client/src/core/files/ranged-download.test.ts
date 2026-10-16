@@ -65,22 +65,52 @@ describe("ranged file download", () => {
     expect(Math.max(...output.chunks)).toBe(1024 * 1024);
     expect(output.committed).toBe(true);
   });
-  it.each([200, 403, 416])(
-    "rejects HTTP %s without appending",
-    async (status) => {
-      const output = writer();
-      await expect(
-        fetchFileRanges({
-          url: "/dl/ticket",
-          size: 12,
-          writer: output,
-          fetch: delivery(12, { status }),
-          assertActive() {},
+  it.each([
+    [200, "E_PROTOCOL"],
+    [401, "E_DENIED"],
+    [403, "E_DENIED"],
+    [404, "E_NOT_FOUND"],
+    [410, "E_NOT_FOUND"],
+    [416, "E_PROTOCOL"],
+    [429, "E_RATE_LIMITED"],
+    [503, "E_UNAVAILABLE"],
+  ] as const)("classifies HTTP %s without appending", async (status, code) => {
+    const output = writer();
+    await expect(
+      fetchFileRanges({
+        url: "/dl/ticket",
+        size: 12,
+        writer: output,
+        fetch: delivery(12, { status }),
+        assertActive() {},
+      }),
+    ).rejects.toMatchObject({ code });
+    expect(output.written).toBe(0);
+  });
+  it("cancels the unread response after a session change without masking cancellation", async () => {
+    const output = writer();
+    let checks = 0;
+    let cancelled = false;
+    await expect(
+      fetchFileRanges({
+        url: "/dl/ticket",
+        size: 12,
+        writer: output,
+        fetch: delivery(12, {
+          cancel: () => {
+            cancelled = true;
+            throw new Error("stream closed");
+          },
         }),
-      ).rejects.toMatchObject({ code: "E_PROTOCOL" });
-      expect(output.written).toBe(0);
-    },
-  );
+        assertActive() {
+          if (++checks === 2) throw new AppError("E_CANCELLED", "expired");
+        },
+      }),
+    ).rejects.toMatchObject({ code: "E_CANCELLED" });
+    expect(cancelled).toBe(true);
+    expect(output.written).toBe(0);
+    expect(output.committed).toBe(false);
+  });
   it.each([-1, 1])("rejects wrong response length (%s)", async (extra) => {
     const output = writer();
     await expect(
