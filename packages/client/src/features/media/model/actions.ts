@@ -231,17 +231,21 @@ export function watchDeviceCache(
 
 /** Which body the list screen shows for its current tab and request state. */
 export type MediaListBody =
-  "playlists" | "loading" | "error" | "tracks" | "empty";
+  "playlists" | "loading" | "error" | "tracks" | "empty" | "offline";
 export function listBody(input: {
   tab: MediaTab;
   busy: boolean;
   error: string;
   tracks: number;
+  connection?: string;
 }): MediaListBody {
   if (input.tab === "playlist") return "playlists";
   if (input.tab === "search" && input.busy) return "loading";
   if (input.error) return "error";
-  return input.tracks ? "tracks" : "empty";
+  if (input.tracks) return "tracks";
+  return input.tab === "search"
+    ? "empty"
+    : emptyState(input.connection ?? "connected");
 }
 export const emptyTitle = (tab: MediaTab): string =>
   tab === "favorite"
@@ -249,5 +253,11 @@ export const emptyTitle = (tab: MediaTab): string =>
     : tab === "search"
       ? "没有找到曲目"
       : "还没有播放记录";
-export const emptyState = (connection: string): "offline" | "empty" =>
-  connection === "offline" ? "offline" : "empty";
+export const emptyState = (
+  connection: string,
+): "offline" | "empty" | "loading" =>
+  connection === "syncing" || connection === "connecting"
+    ? "loading"
+    : connection === "offline"
+      ? "offline"
+      : "empty";

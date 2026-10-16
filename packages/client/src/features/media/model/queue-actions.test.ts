@@ -11,6 +11,7 @@ import {
   addToPlaylist,
   createPlaylist,
   deletePlaylist,
+  emptyState,
   listBody,
   removeFromPlaylist,
   retentionChoices,
@@ -189,4 +190,55 @@ describe("media actions", () => {
     watchDeviceCache({ hasFile }, undefined, (c) => none.push(c));
     expect(none).toEqual([false]);
   });
+});
+
+it("distinguishes unsynced empty music from cached tracks and completed search results", () => {
+  for (const connection of ["connecting", "syncing"]) {
+    expect(emptyState(connection)).toBe("loading");
+    expect(
+      listBody({
+        tab: "recent",
+        busy: false,
+        error: "",
+        tracks: 0,
+        connection,
+      }),
+    ).toBe("loading");
+    expect(
+      listBody({
+        tab: "favorite",
+        busy: false,
+        error: "",
+        tracks: 1,
+        connection,
+      }),
+    ).toBe("tracks");
+    expect(
+      listBody({
+        tab: "search",
+        busy: false,
+        error: "",
+        tracks: 0,
+        connection,
+      }),
+    ).toBe("empty");
+  }
+  expect(
+    listBody({
+      tab: "recent",
+      busy: false,
+      error: "",
+      tracks: 0,
+      connection: "offline",
+    }),
+  ).toBe("offline");
+  expect(
+    listBody({
+      tab: "recent",
+      busy: false,
+      error: "",
+      tracks: 0,
+      connection: "connected",
+    }),
+  ).toBe("empty");
 });

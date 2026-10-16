@@ -17,7 +17,7 @@ export function QueueSheetView({
   onClose,
 }: {
   rows: readonly QueueRow[];
-  emptyState: "offline" | "empty";
+  emptyState: "offline" | "empty" | "loading";
   onPlay(id: string): void;
   onMove(index: number, delta: -1 | 1): void;
   onRemove(index: number): void;
@@ -87,9 +87,9 @@ export function QueueSheetView({
           <StatePanel
             compact
             state={emptyState}
-            title="队列为空"
+            title={emptyState === "loading" ? "正在同步播放队列" : "队列为空"}
             hint={
-              emptyState === "offline" ? undefined : "在曲目菜单中选择加入队列"
+              emptyState === "empty" ? "在曲目菜单中选择加入队列" : undefined
             }
           />
         )}

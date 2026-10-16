@@ -72,7 +72,7 @@ export function MediaListView({
   onSource(id: MediaSourceId): void;
   playlists: readonly PlaylistRowView[];
   /** Shown when there are no playlists. */
-  playlistsState: "offline" | "empty";
+  playlistsState: "offline" | "empty" | "loading";
   createReason: string | undefined;
   onCreate(): void;
   onOpenPlaylist(id: string): void;
@@ -162,8 +162,8 @@ export function MediaListView({
           <StatePanel
             compact
             state={playlistsState}
-            title="还没有歌单"
-            hint={playlistsState === "offline" ? undefined : "点 + 新建歌单"}
+            title={playlistsState === "loading" ? "正在同步歌单" : "还没有歌单"}
+            hint={playlistsState === "empty" ? "点 + 新建歌单" : undefined}
           />
         )}
       </PaneBody>
