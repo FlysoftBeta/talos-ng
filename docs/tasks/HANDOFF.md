@@ -1,3 +1,28 @@
+# Sync recovery and personal offline retention — 2026-10-16
+
+- Fixed oversized legal sync revisions with bounded continuation transfers, recovery after
+  lost/oversized push, and serialized pull/delta application. Retries preserve acknowledged
+  writes, isolate object queues, honor text-upload dependencies, and fence old sessions.
+  Revoked-scope cache cleanup persists until completed; re-grants cancel stale cleanup.
+- Books, songs, booklists and playlists have independent per-user offline policies on the
+  personal sync scope (D-116/117). Own active policies combine by longest deadline;
+  shared collection settings cannot force another user's downloads. Access and membership
+  changes stop retention. Prior policy configuration is discarded; only initial schema
+  and the legacy importer changed, with no current-app schema migration.
+- File downloads fence user changes, classify HTTP errors, resume partial ranges and time
+  out after 30 seconds without progress. Idempotent logout replay cannot revoke a newer
+  login token. Regression coverage includes these error, retry and isolation paths.
+- Integrated `pnpm check`: exit 0, 177 files, 1,835 passed and one optional test skipped;
+  all build/static compatibility checks pass. Three-target `pnpm package` exits 0.
+- `pnpm e2e:legacy` exits 0 on actual Chromium 70, with all feature suites.
+- `pnpm e2e` exits 0, including performance budgets and packaged Linux A → B →
+  broken-C rollback, WELCOME/SW installation, SQLite/object restore and HTTPS/WSS.
+  Native Windows execution remains unverified. This host required the bundled PDF
+  renderer's libjpeg.so.8 dependency via a local test-only library path.
+- Browser tests explicitly await personal collection policy acceptance before deleting
+  its target and clear only the unretained fixture PDF before asserting offline absence;
+  viewing or temporary collection retention may otherwise cache the entire small pack.
+
 # CI check repair — 2026-10-15
 
 - GitHub run 38755754989 failed on client test-only Array.at typings. The integrated
