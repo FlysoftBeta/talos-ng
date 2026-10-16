@@ -1,6 +1,11 @@
+import { randomUUID } from "node:crypto";
 import { AppError, utf8Encode } from "@talos/base";
 import { selectDelta } from "@talos/sync";
-import { DEFAULT_SYNC_ROWS, WINDOW_RESET_THRESHOLD } from "@talos/contract";
+import {
+  DEFAULT_SYNC_ROWS,
+  MAX_SYNC_BYTES,
+  WINDOW_RESET_THRESHOLD,
+} from "@talos/contract";
 import type { Row, ScopePull } from "@talos/sync";
 
 /** Providers return a coherent revision-ordered snapshot, including tombstones. */
@@ -22,11 +27,14 @@ export interface SyncConnection {
 export interface SyncRequest {
   cursors: Readonly<Record<string, number>>;
   limit?: number;
+  continuation?: string;
 }
 export interface SyncResponse {
   scopes: Record<string, ScopePull>;
   gone: string[];
   added: string[];
+  transfer?: { token: string; chunk: string; more: boolean };
+  repull?: boolean;
 }
 export interface SyncChangeSet {
   rev: number;
@@ -34,6 +42,7 @@ export interface SyncChangeSet {
 }
 export interface SyncHubOptions {
   revision(): number;
+  now?(): number;
   pageSize?: number;
   windowResetThreshold?: number;
   reportError?(error: unknown): void;
@@ -45,11 +54,25 @@ interface Subscription {
   complete: Set<string>;
 }
 
-/** Pull is authoritative; push failures are isolated and repaired on reconnect. */
+/** Pull is authoritative; failed pushes suspend live delivery until repaired. */
 export class SyncHub {
   private readonly providers = new Set<ScopeProvider>();
   private readonly entities = new Map<string, EntitySerializer>();
   private readonly subscriptions = new Map<string, Subscription>();
+  private readonly transfers = new Map<
+    string,
+    {
+      user: string;
+      token: string;
+      json: string;
+      offset: number;
+      expires: number;
+      scopes: Set<string>;
+      dirty: boolean;
+      subscription?: Subscription;
+      complete: Set<string>;
+    }
+  >();
   private readonly pageSize: number;
   private readonly resetThreshold: number;
 
@@ -82,6 +105,19 @@ export class SyncHub {
     request: SyncRequest,
     connection?: SyncConnection,
   ): SyncResponse {
+    if (connection) {
+      const previous = this.subscriptions.get(connection.id);
+      if (previous && previous.user !== user) this.unsubscribe(connection.id);
+    }
+    const transferKey = connection
+      ? `connection:${connection.id}`
+      : `user:${user}`;
+    const now = (this.options.now ?? Date.now)();
+    for (const [key, transfer] of this.transfers)
+      if (transfer.expires <= now) this.transfers.delete(key);
+    if (request.continuation)
+      return this.continueTransfer(user, transferKey, request.continuation);
+    this.transfers.delete(transferKey);
     const limit = request.limit ?? this.pageSize;
     this.positive(limit, "每页记录数");
     const revision = this.options.revision();
@@ -115,7 +151,7 @@ export class SyncHub {
         if (!accessible.has(scope)) subscription.complete.delete(scope);
       }
     }
-    let remainingBytes = 160 * 1024;
+    let remainingBytes = MAX_SYNC_BYTES;
     for (const scope of accessible) {
       const cursor = request.cursors[scope] ?? 0;
       const { rows, reset } = this.select(user, scope, cursor, limit, revision);
@@ -134,9 +170,9 @@ export class SyncHub {
         const bytes = utf8Encode(
           JSON.stringify(wireRows.slice(end, next)),
         ).length;
-        if (bytes > 160 * 1024)
-          throw new AppError("E_TOO_LARGE", "单次同步变更过大，请联系管理员");
-        if (bytes > remainingBytes) break;
+        // A large revision must remain atomic. Transfer its serialized page in
+        // fragments rather than rejecting legal rows or splitting the cursor.
+        if (bytes > remainingBytes && remainingBytes !== MAX_SYNC_BYTES) break;
         remainingBytes -= bytes;
         end = next;
       }
@@ -160,6 +196,27 @@ export class SyncHub {
         else subscription.complete.add(scope);
       }
     }
+    if (utf8Encode(JSON.stringify(response)).length > MAX_SYNC_BYTES) {
+      // Hold completion until the final fragment. Only actual intervening
+      // changes require catch-up; large metadata-only snapshots must converge.
+      const complete = new Set(subscription?.complete);
+      if (subscription) {
+        subscription.complete.clear();
+        this.subscriptions.set(subscription.connection.id, subscription);
+      }
+      this.transfers.set(transferKey, {
+        user,
+        token: randomUUID(),
+        json: JSON.stringify(response),
+        offset: 0,
+        expires: now + 60_000,
+        scopes: accessible,
+        dirty: false,
+        subscription,
+        complete,
+      });
+      return this.continueTransfer(user, transferKey);
+    }
     // A failed pull must not publish a partial subscription.
     if (subscription)
       this.subscriptions.set(subscription.connection.id, subscription);
@@ -175,6 +232,9 @@ export class SyncHub {
       this.report(new AppError("E_INTERNAL", "同步变更版本异常，请稍后重试"));
       return;
     }
+    for (const transfer of this.transfers.values())
+      if (changeSet.changes.some((change) => transfer.scopes.has(change.scope)))
+        transfer.dirty = true;
     for (const subscription of this.subscriptions.values()) {
       try {
         const accessible = this.scopes(subscription.user);
@@ -219,6 +279,7 @@ export class SyncHub {
         this.emit(subscription, response);
       } catch (error) {
         this.report(error);
+        this.requirePull(subscription);
       }
     }
   }
@@ -233,15 +294,90 @@ export class SyncHub {
         this.emit(subscription, response);
       } catch (error) {
         this.report(error);
+        this.requirePull(subscription);
       }
     }
   }
 
   unsubscribe(connectionId: string): void {
     this.subscriptions.delete(connectionId);
+    this.transfers.delete(`connection:${connectionId}`);
   }
   clear(): void {
     this.subscriptions.clear();
+    this.transfers.clear();
+  }
+
+  private continueTransfer(
+    user: string,
+    key: string,
+    token?: string,
+  ): SyncResponse {
+    const transfer = this.transfers.get(key);
+    if (
+      !transfer ||
+      transfer.user !== user ||
+      (token && token !== transfer.token)
+    )
+      throw new AppError("E_CONFLICT", "同步分页已失效，请重新同步");
+    const accessible = this.scopes(user);
+    if ([...transfer.scopes].some((scope) => !accessible.has(scope))) {
+      this.transfers.delete(key);
+      throw new AppError("E_CONFLICT", "同步权限已变更，请重新同步");
+    }
+    if (accessible.size !== transfer.scopes.size) transfer.dirty = true;
+    // A consumed continuation cannot silently skip a fragment if retried.
+    if (token) transfer.token = randomUUID();
+    transfer.expires = (this.options.now ?? Date.now)() + 60_000;
+    const response = (length: number): SyncResponse => ({
+      scopes: {},
+      gone: [],
+      added: [],
+      ...(transfer.dirty && transfer.offset + length === transfer.json.length
+        ? { repull: true }
+        : {}),
+      transfer: {
+        token: transfer.token,
+        chunk: transfer.json.slice(transfer.offset, transfer.offset + length),
+        more: transfer.offset + length < transfer.json.length,
+      },
+    });
+    // Count the full JSON envelope, including escaping and multi-byte text.
+    let lo = 0,
+      hi = Math.min(MAX_SYNC_BYTES, transfer.json.length - transfer.offset);
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (utf8Encode(JSON.stringify(response(mid))).length <= MAX_SYNC_BYTES)
+        lo = mid;
+      else hi = mid - 1;
+    }
+    const result = response(lo);
+    transfer.offset += lo;
+    if (!result.transfer!.more) {
+      this.transfers.delete(key);
+      if (!transfer.dirty && transfer.subscription)
+        transfer.subscription.complete = transfer.complete;
+    }
+    return result;
+  }
+
+  private requirePull(subscription: Subscription): void {
+    // Never allow a later small delta to skip a failed/oversized earlier delta.
+    subscription.complete.clear();
+    const transfer = this.transfers.get(
+      `connection:${subscription.connection.id}`,
+    );
+    if (transfer) transfer.dirty = true;
+    try {
+      subscription.connection.emit("sync.delta", {
+        scopes: {},
+        gone: [],
+        added: [],
+        repull: true,
+      });
+    } catch (error) {
+      this.report(error);
+    }
   }
 
   private select(
@@ -432,6 +568,10 @@ export class SyncHub {
       response.added.length ||
       Object.keys(response.scopes).length
     ) {
+      if (utf8Encode(JSON.stringify(response)).length > MAX_SYNC_BYTES) {
+        this.requirePull(subscription);
+        return;
+      }
       subscription.connection.emit("sync.delta", response);
     }
   }
