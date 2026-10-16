@@ -55,6 +55,8 @@ export interface PlaybackInput {
   active: boolean;
   tracks: readonly MediaTrack[];
   state: MediaUserState | null;
+  /** Complete cached rows establish the queue even when no personal state exists yet. */
+  queueReady: boolean;
 }
 export interface PlaybackState {
   current: MediaTrack | null;
@@ -103,6 +105,7 @@ export class PlaybackController {
     active: true,
     tracks: [],
     state: null,
+    queueReady: false,
   };
   private wasActive: boolean | undefined;
   private state: PlaybackState = {
@@ -159,6 +162,12 @@ export class PlaybackController {
 
   // Queue
   private replaceQueue(tracks: readonly string[]): void {
+    // The decoded queue omits missing tracks; never persist that partial projection.
+    if (!this.input.queueReady) {
+      this.patch({ error: "播放队列尚未同步，请完成同步后重试" });
+      return;
+    }
+    this.patch({ error: "" });
     const operation = this.port.operation();
     this.queue.replace(tracks, operation);
     void this.port

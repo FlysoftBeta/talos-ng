@@ -56,6 +56,7 @@ function setup(init: Partial<PlaybackInput> = {}) {
     active: true,
     tracks,
     state: null,
+    queueReady: true,
     ...init,
   };
   controller.setInput(input);
@@ -342,6 +343,66 @@ describe("playback transport edge cases", () => {
     expect(t.controller.getState().duration).toBe(0);
     t.controller.outputFailed();
     expect(t.controller.getState().error).toBe("音频播放中断");
+  });
+
+  it("preserves an unseen queue during partial sync without blocking direct playback", async () => {
+    const t = setup({ queueReady: false });
+    t.command.mockResolvedValue(granted());
+    t.controller.enqueue("a");
+    t.controller.moveQueued(0, 1);
+    t.controller.removeQueued(0);
+    t.controller.clearQueue();
+    expect(t.command).not.toHaveBeenCalled();
+    expect(t.controller.queueTracks).toEqual([]);
+    expect(t.controller.getState().error).toContain("尚未同步");
+    await t.controller.play(t.tracks[0]!);
+    expect(t.controller.getState().playing).toBe(true);
+    t.controller.setInput({
+      ...t.input,
+      queueReady: true,
+      state: {
+        queue: ["b"],
+        queueStamp: { t: { ms: 0, counter: 0 }, op: "server" },
+      } as never,
+    });
+    t.controller.enqueue("a");
+    expect(t.controller.queueTracks).toEqual(["b", "a"]);
+    expect(t.command).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ tracks: ["b", "a"] }),
+    );
+  });
+
+  it("requires a complete cache even with a partial state row, but permits known empty and offline queues", () => {
+    const t = setup({
+      queueReady: false,
+      state: { queue: ["a"], queueStamp: null } as never,
+    });
+    t.command.mockResolvedValue({});
+    t.controller.enqueue("b");
+    expect(t.command).not.toHaveBeenCalled();
+    expect(t.controller.queueTracks).toEqual(["a"]);
+    t.controller.setInput({ ...t.input, offline: true, queueReady: true });
+    t.controller.enqueue("b");
+    expect(t.controller.queueTracks).toEqual(["a", "b"]);
+    t.controller.setInput({
+      ...t.input,
+      user: "other",
+      state: null,
+      queueReady: false,
+    });
+    t.command.mockClear();
+    t.controller.enqueue("a");
+    expect(t.command).not.toHaveBeenCalled();
+    t.controller.setInput({
+      ...t.input,
+      user: "other",
+      state: null,
+      queueReady: true,
+    });
+    t.controller.enqueue("a");
+    expect(t.controller.queueTracks).toEqual(["a"]);
+    expect(t.command).toHaveBeenCalledTimes(1);
   });
 
   it("queue edits send the new order with an operation id and surface failures", async () => {

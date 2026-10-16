@@ -65,6 +65,7 @@ export function MediaPlayerProvider({
     active,
     tracks: data.tracks,
     state: data.state,
+    queueReady: snapshot.cacheReady === true,
   });
   useEffect(
     () => controller.inputChanged(),
