@@ -1,0 +1,3 @@
+# Partial sync empty-state corrections
+
+Owner requests authenticated app usage before full synchronization. Correct misleading empty/loading/revoked states for unsynced library/media content, based on audit findings. Restrict changes to relevant feature model/view/connect empty-state presentation and semantic tests. Do not touch background.tsx or retention schedulers owned by partial-login. Read AGENTS, CHARTER, _common. Worktree m/partial-states. Commit, never push. No full local checks; optional targeted tests only; full CI after integration. Time budget 15min. Do not edit HANDOFF/DECISIONS.
