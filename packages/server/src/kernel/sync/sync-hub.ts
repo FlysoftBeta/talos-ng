@@ -26,6 +26,8 @@ export interface SyncConnection {
 }
 export interface SyncRequest {
   cursors: Readonly<Record<string, number>>;
+  /** Scopes the client holds windows in; absent means every scope (legacy). */
+  windowed?: readonly string[];
   limit?: number;
   continuation?: string;
 }
@@ -152,9 +154,17 @@ export class SyncHub {
       }
     }
     let remainingBytes = MAX_SYNC_BYTES;
+    const windowed = request.windowed && new Set(request.windowed);
     for (const scope of accessible) {
       const cursor = request.cursors[scope] ?? 0;
-      const { rows, reset } = this.select(user, scope, cursor, limit, revision);
+      const { rows, reset } = this.select(
+        user,
+        scope,
+        cursor,
+        limit,
+        revision,
+        !windowed || windowed.has(scope),
+      );
       const selected = selectDelta(rows, cursor, limit);
       const wireRows = selected.rows.map((row) =>
         this.serialize(row, revision),
@@ -386,6 +396,7 @@ export class SyncHub {
     cursor: number,
     limit: number,
     revision: number,
+    includeWindowed: boolean,
   ): { rows: Row[]; reset: string[] } {
     const retained = new Map<string, Row[]>();
     const counts = new Map<string, number>();
@@ -395,6 +406,10 @@ export class SyncHub {
       for (const batch of this.batches(provider, scope, cursor, revision)) {
         const touched = new Set<string>();
         for (const row of batch) {
+          // Without a held window the client keeps none of these rows; it loads
+          // windowed history through explicit pages.
+          if (!includeWindowed && this.entities.get(row.type)?.windowed)
+            continue;
           const count = (counts.get(row.type) ?? 0) + 1;
           counts.set(row.type, count);
           if (

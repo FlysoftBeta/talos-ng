@@ -142,6 +142,18 @@ session. Revision checks stop stale push/pull data regressing state. Navigator `
 only a negative hint; going offline interrupts the carrier and leaves reconnect to the link
 retry machine.
 
+A pull commits each scope as soon as its own page chain is complete, while other scopes
+keep paging, so conversations, documents and settings that already arrived are usable
+(and open) before the whole pull finishes. Each scope chain remains atomic, the request
+base advances with each commit, and revocations reported by the pull stay with the final
+commit (a later page may regrant the scope). Until the final commit a durable
+`partialSync` marker keeps `cacheReady` false, also across a reload, because scopes then
+sit at different revisions. A pull also lists the scopes holding windows (`windowed`);
+the server omits windowed rows of every other scope, which the client would discard
+anyway, so a large conversation's history no longer pages through its first sync. A
+page that opens a window during such a pull restarts it before commit (the omitted rows
+may be newer than the page). Requests without `windowed` receive every row.
+
 Full pull chains and deltas share an application gate: a newer delta cannot advance a
 cursor past buffered historical rows. Revocations purge immediately and carry per-scope
 epochs that prevent an older pull or queued delta from restoring access. Generation fences

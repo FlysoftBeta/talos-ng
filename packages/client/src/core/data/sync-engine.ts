@@ -22,6 +22,12 @@ import type { TypedCall } from "./link.ts";
 import type { ModuleRegistry } from "./modules.ts";
 import { methodRegistry } from "@talos/contract";
 
+function holdsWindow(scope: StoredScope | undefined): boolean {
+  return Object.values(scope?.windows ?? {}).some(
+    (intervals) => intervals.length > 0,
+  );
+}
+
 class SyncCursorChanged extends AppError {
   constructor() {
     super("E_CONFLICT", "同步进度已变更，正在重新同步");
@@ -113,13 +119,15 @@ export class SyncEngine {
   }
   private async refresh(): Promise<void> {
     const { db, user, modules } = this.options;
-    const [rows, outbox, lastSync, admitted, scopes] = await Promise.all([
-      db.table<StoredRow>("rows").range(),
-      db.table<readonly OutboxItem[], string>("outbox").get(user),
-      db.table<number, string>("kv").get(`lastSync:${user}`),
-      db.table<readonly string[], string>("kv").get(`scopes:${user}`),
-      db.table<StoredScope>("scopes").range(),
-    ]);
+    const [rows, outbox, lastSync, admitted, scopes, partial] =
+      await Promise.all([
+        db.table<StoredRow>("rows").range(),
+        db.table<readonly OutboxItem[], string>("outbox").get(user),
+        db.table<number, string>("kv").get(`lastSync:${user}`),
+        db.table<readonly string[], string>("kv").get(`scopes:${user}`),
+        db.table<StoredScope>("scopes").range(),
+        db.table<boolean, string>("kv").get(`partialSync:${user}`),
+      ]);
     // Every engine owns a per-account set of admitted scopes; other users' me rows never project.
     const visible = rows.filter((row) => (admitted ?? []).includes(row.scope));
     this.publish({
@@ -129,6 +137,7 @@ export class SyncEngine {
       lastSync,
       cacheReady:
         lastSync !== undefined &&
+        partial !== true &&
         (admitted ?? []).every((scope) =>
           scopes.some(
             (saved) =>
@@ -236,15 +245,25 @@ export class SyncEngine {
               .get(`scopes:${user}`)) ?? [];
           const scopes = await db.table<StoredScope>("scopes").range();
           const cursors: Record<string, number> = {};
+          // Scopes without a held window need none of their windowed rows, which
+          // are most of a large conversation's history; omitting them lets a
+          // conversation's metadata finish (and open) on the first page.
+          const windowed: string[] = [];
           for (const scope of scopes)
-            if (admitted.includes(scope.scope))
+            if (admitted.includes(scope.scope)) {
               cursors[scope.scope] = scope.cursor;
+              if (holdsWindow(scope)) windowed.push(scope.scope);
+            }
           const bases = { ...cursors };
           const pages = new Map<string, ScopePull[]>();
           const gone = new Set<string>();
           let more: boolean;
           do {
-            const response = await this.pullResponse(cursors, generation);
+            const response = await this.pullResponse(
+              cursors,
+              windowed,
+              generation,
+            );
             if (!response) return;
             if (generation !== this.generation) return;
             more = response.repull === true;
@@ -271,7 +290,42 @@ export class SyncEngine {
                 progress: this.snapshot.progress + page.rows.length,
               });
             }
+            if (!more) break;
+            // Scopes whose chain is already complete become usable while other
+            // scopes keep paging. Each commit is still atomic per scope chain, and
+            // the request base moves with it so later pages continue that chain.
+            const ready = new Map<string, ScopePull[]>();
+            for (const [scope, chain] of pages)
+              if (
+                !gone.has(scope) &&
+                !chain[chain.length - 1]!.more &&
+                chain.some((page) => page.rows.length || page.reset?.length)
+              )
+                ready.set(scope, chain);
+            // Revocations found by a pull stay with the final commit: a later page
+            // may regrant the scope, which must not run its cleanup in between.
+            if (!ready.size) continue;
+            try {
+              await this.applyPages(
+                ready,
+                [],
+                generation,
+                revocations,
+                bases,
+                "partial",
+                windowed,
+              );
+            } catch (error) {
+              if (error instanceof SyncCursorChanged && attempt < 2) break;
+              throw error;
+            }
+            if (generation !== this.generation) return;
+            for (const [scope, chain] of ready) {
+              bases[scope] = chain[chain.length - 1]!.cursor;
+              pages.delete(scope);
+            }
           } while (more);
+          if (more) continue;
           try {
             await this.applyPages(
               pages,
@@ -279,6 +333,8 @@ export class SyncEngine {
               generation,
               revocations,
               bases,
+              "pull",
+              windowed,
             );
           } catch (error) {
             if (error instanceof SyncCursorChanged && attempt < 2) continue;
@@ -304,9 +360,13 @@ export class SyncEngine {
   }
   private async pullResponse(
     cursors: Record<string, number>,
+    windowed: readonly string[],
     generation: number,
   ): Promise<ResultOf<typeof contract.sync.pull> | undefined> {
-    let response = await this.options.call(contract.sync.pull, { cursors });
+    let response = await this.options.call(contract.sync.pull, {
+      cursors,
+      windowed: [...windowed],
+    });
     const chunks: string[] = [];
     while (response.transfer) {
       if (generation !== this.generation) return;
@@ -328,6 +388,7 @@ export class SyncEngine {
       }
       response = await this.options.call(contract.sync.pull, {
         cursors,
+        windowed: [...windowed],
         continuation: transfer.token,
       });
       if (!response.transfer)
@@ -431,6 +492,8 @@ export class SyncEngine {
     generation: number,
     revocations: ReadonlyMap<string, number>,
     bases?: Readonly<Record<string, number>>,
+    stage: "pull" | "partial" | "delta" = bases ? "pull" : "delta",
+    windowed?: readonly string[],
   ): Promise<void> {
     await this.writes.run(async () => {
       if (generation !== this.generation) return;
@@ -478,6 +541,15 @@ export class SyncEngine {
                   // Both advances from another tab and eviction resets invalidate
                   // the request base. Never overwrite that change with buffered pages.
                   if (bases && currentCursor !== (bases[scope] ?? 0))
+                    throw new SyncCursorChanged();
+                  // A page fetched during the pull opened a window the request
+                  // declared absent, so its omitted rows may be newer than the page.
+                  if (
+                    windowed &&
+                    wasAdmitted &&
+                    !windowed.includes(scope) &&
+                    holdsWindow(saved.find((item) => item.scope === scope))
+                  )
                     throw new SyncCursorChanged();
                   // Eviction invalidates the scope by resetting its cursor. A
                   // delta cannot certify the missing history, even between pulls.
@@ -588,9 +660,13 @@ export class SyncEngine {
                   [...admitted],
                   `scopes:${user}`,
                 );
-                return tx
-                  .table<number, string>("kv")
-                  .put(this.now(), `lastSync:${user}`);
+                // Until the whole pull commits, scopes sit at different revisions.
+                // The durable marker keeps the cache "not ready" across a reload.
+                const kv = tx.table<unknown, string>("kv");
+                if (stage === "partial")
+                  return kv.put(true, `partialSync:${user}`);
+                if (stage === "pull") kv.delete(`partialSync:${user}`);
+                return kv.put(this.now(), `lastSync:${user}`);
               }),
           ),
         );

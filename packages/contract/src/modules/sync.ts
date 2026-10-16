@@ -47,6 +47,11 @@ export const sync = Object.freeze({
     args: z
       .object({
         cursors: z.record(revSchema),
+        /**
+         * Scopes holding windowed rows. When present, windowed rows of every other
+         * scope are omitted: a client without a window would discard them anyway.
+         */
+        windowed: z.array(z.string().min(1)).optional(),
         continuation: z.string().min(1).max(128).optional(),
         limit: z.number().int().min(1).max(MAX_SYNC_ROWS).optional(),
       })

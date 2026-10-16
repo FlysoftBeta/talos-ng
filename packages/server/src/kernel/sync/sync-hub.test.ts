@@ -142,6 +142,28 @@ describe("SyncHub", () => {
     const second = f.hub.pull("u", { cursors: { "me:u": 6 } }).scopes["me:u"]!;
     expect(second).toEqual({ rows: [row("c", 7)], cursor: 9, more: false });
   });
+  it("omits windowed rows of scopes the client holds no window in", () => {
+    const f = fixture();
+    f.rev(4);
+    f.rows.push(row("p1", 1, "post"), row("p2", 2, "post"), row("s", 3));
+    f.rows.push(row("p3", 4, "post"));
+    // Without a declared window the client would discard every post: they are
+    // skipped without a reset and without holding the cursor below them.
+    expect(
+      f.hub.pull("u", { cursors: {}, windowed: [] }).scopes["me:u"],
+    ).toEqual({ rows: [row("s", 3)], cursor: 4, more: false });
+    expect(
+      f.hub
+        .pull("u", { cursors: { "me:u": 1 }, windowed: ["me:u"] })
+        .scopes["me:u"]!.rows.map((item) => item.id),
+    ).toEqual(["p2", "s"]);
+    // Older clients that do not declare windows keep receiving every row.
+    expect(
+      f.hub
+        .pull("u", { cursors: { "me:u": 1 } })
+        .scopes["me:u"]!.rows.map((item) => item.id),
+    ).toEqual(["p2", "s"]);
+  });
   it("combines module providers sharing a scope before revision paging", () => {
     const f = fixture();
     f.rev(3);

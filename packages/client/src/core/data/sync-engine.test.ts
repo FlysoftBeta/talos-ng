@@ -507,7 +507,7 @@ describe("durable outbox", () => {
 });
 
 describe("scope synchronization", () => {
-  it("buffers multi-scope pages atomically even when completed scopes repeat", async () => {
+  it("commits completed scopes while another scope pages, and the rest atomically", async () => {
     const f = await fixture();
     let page = 0;
     f.handle(async () =>
@@ -529,12 +529,68 @@ describe("scope synchronization", () => {
             added: [],
           },
     );
-    const states: number[] = [];
-    f.engine.subscribe(() => states.push(f.engine.getSnapshot().rows.length));
+    const states: { rows: number; ready: boolean }[] = [];
+    f.engine.subscribe(() =>
+      states.push({
+        rows: f.engine.getSnapshot().rows.length,
+        ready: f.engine.getSnapshot().cacheReady,
+      }),
+    );
     await f.engine.connect();
     expect(f.engine.getSnapshot().rows).toHaveLength(3);
-    expect(states.every((count) => count === 0 || count === 3)).toBe(true);
-    expect(f.calls[1]!.args).toEqual({ cursors: { [scope]: 1, sys: 1 } });
+    // The completed public scope is usable before the paged one finishes; the
+    // paged scope's pages never appear separately, and the cache is not ready yet.
+    expect(states.map((state) => state.rows)).toContain(1);
+    expect(states.map((state) => state.rows)).not.toContain(2);
+    expect(
+      states.filter((state) => state.rows === 1).every((s) => !s.ready),
+    ).toBe(true);
+    expect(f.engine.getSnapshot().cacheReady).toBe(true);
+    expect(f.calls[1]!.args).toEqual({
+      cursors: { [scope]: 1, sys: 1 },
+      windowed: [],
+    });
+    expect(
+      (await f.db.table<StoredScope, string>("scopes").get("sys"))?.cursor,
+    ).toBe(2);
+  });
+  it("keeps a reloaded cache not ready after a pull stopped between scope commits", async () => {
+    const f = await fixture();
+    let page = 0;
+    f.handle(async () => {
+      if (++page === 1)
+        return {
+          scopes: {
+            [scope]: { rows: [row("first", 1)], cursor: 1, more: true },
+            sys: { rows: [row("public", 1)], cursor: 1, more: false },
+          },
+          gone: [],
+          added: [scope, "sys"],
+        };
+      throw new AppError("E_DISCONNECTED", "断开");
+    });
+    await expect(f.engine.connect()).rejects.toMatchObject({
+      code: "E_DISCONNECTED",
+    });
+    const restarted = f.make();
+    await restarted.hydrate();
+    expect(restarted.getSnapshot().rows.map((r) => r.id)).toEqual(["public"]);
+    expect(restarted.getSnapshot().scopes).toEqual(["sys"]);
+    expect(restarted.getSnapshot().cacheReady).toBe(false);
+    f.handle(async () => ({
+      scopes: {
+        [scope]: { rows: [row("first", 1)], cursor: 1, more: false },
+        sys: { rows: [], cursor: 1, more: false },
+      },
+      gone: [],
+      added: [scope],
+    }));
+    await restarted.connect();
+    expect(f.calls[f.calls.length - 1]!.args).toEqual({
+      cursors: { sys: 1 },
+      windowed: [],
+    });
+    expect(restarted.getSnapshot().cacheReady).toBe(true);
   });
   it("failed paginated pull commits neither partial rows nor cursor", async () => {
     const f = await fixture();
@@ -650,7 +706,7 @@ describe("scope synchronization", () => {
     expect(bob.getSnapshot().rows).toEqual([]);
     expect(bob.getSnapshot().outbox).toEqual([]);
     await bob.connect();
-    expect(f.calls[0]!.args).toEqual({ cursors: {} });
+    expect(f.calls[0]!.args).toEqual({ cursors: {}, windowed: [] });
     const alice = f.make();
     await alice.hydrate();
     expect(
@@ -758,6 +814,22 @@ describe("window page admission", () => {
     rev,
     deleted: false,
     data: { seq },
+  });
+  it("declares held windows and repulls when a page opens one during the pull", async () => {
+    const s = await fixture(windowModules);
+    await s.engine.delta(response([], 1));
+    let pulls = 0;
+    s.handle(async () => {
+      // The reader opens the conversation while the first pull is on the wire.
+      if (++pulls === 1) await s.engine.loadRows(scope, [post(1)]);
+      return response(pulls === 1 ? [] : [post(1, 2)], 2);
+    });
+    await s.engine.pull();
+    expect(s.calls.map((call) => call.args)).toEqual([
+      { cursors: { [scope]: 1 }, windowed: [] },
+      { cursors: { [scope]: 1 }, windowed: [scope] },
+    ]);
+    expect(s.engine.getSnapshot().rows[0]).toMatchObject({ id: "1", rev: 2 });
   });
   it("persists disjoint pages, extends every window, and ignores uncached gap edits", async () => {
     const s = await fixture(windowModules);
@@ -1036,7 +1108,7 @@ it("a failed delta cannot let the next push advance past unapplied history", asy
       .rows.map((r) => r.id)
       .sort(),
   ).toEqual(["base", "later", "missing"]);
-  expect(f.calls[1]?.args).toEqual({ cursors: { [scope]: 1 } });
+  expect(f.calls[1]?.args).toEqual({ cursors: { [scope]: 1 }, windowed: [] });
 });
 
 it("buffers all transfer fragments before applying and honors rotating continuation tokens", async () => {
@@ -1069,10 +1141,10 @@ it("buffers all transfer fragments before applying and honors rotating continuat
   });
   await f.engine.connect();
   expect(f.calls.map((call) => call.args)).toEqual([
-    { cursors: {} },
-    { cursors: {}, continuation: "part0" },
-    { cursors: {}, continuation: "part1" },
-    { cursors: { [scope]: 4 } },
+    { cursors: {}, windowed: [] },
+    { cursors: {}, windowed: [], continuation: "part0" },
+    { cursors: {}, windowed: [], continuation: "part1" },
+    { cursors: { [scope]: 4 }, windowed: [] },
   ]);
   expect(sizes.every((size) => size === 0 || size === 2)).toBe(true);
   expect(
@@ -1101,7 +1173,7 @@ it("restarts an expired fragmented response from durable cursors and handles rep
   expect(await f.db.table("scopes").range()).toEqual([]);
   f.fire();
   await until(f.engine, (s) => s.phase === "live");
-  expect(f.calls[2]?.args).toEqual({ cursors: {} });
+  expect(f.calls[2]?.args).toEqual({ cursors: {}, windowed: [] });
   await f.engine.delta({ ...empty(), repull: true });
   expect(f.engine.getSnapshot().rows[0]?.rev).toBe(4);
 });
