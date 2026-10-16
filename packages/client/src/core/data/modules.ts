@@ -8,6 +8,14 @@ export interface ProjectionContext {
 export interface ClientModule {
   readonly id: string;
   readonly operationTitles?: Readonly<Record<string, string>>;
+  /** Outstanding prerequisite operations needed before this queued intent can run. */
+  readonly dependencies?: (
+    method: string,
+    args: unknown,
+    outbox: readonly OutboxItem[],
+  ) => readonly string[];
+  /** Operations sharing a key retain FIFO barriers, including failed writes. */
+  readonly orderKey?: (method: string, args: unknown) => string;
   readonly rowTypes: readonly string[];
   readonly windowed?: Readonly<Record<string, { seqOf(row: Row): number }>>;
   readonly reducers: Readonly<
@@ -46,6 +54,24 @@ export class ModuleRegistry {
       {},
       ...this.modules.map((module) => module.windowed ?? {}),
     ) as Record<string, { seqOf(row: Row): number }>;
+  }
+  dependencies(
+    method: string,
+    args: unknown,
+    outbox: readonly OutboxItem[],
+  ): readonly string[] {
+    return (
+      this.modules
+        .find((entry) => entry.reducers[method])
+        ?.dependencies?.(method, args, outbox) ?? []
+    );
+  }
+  orderKey(method: string, args: unknown): string {
+    const module = this.modules.find((entry) => entry.reducers[method]);
+    return JSON.stringify([
+      module?.id ?? method,
+      module?.orderKey?.(method, args) ?? "",
+    ]);
   }
   operationTitle(method: string): string {
     return (

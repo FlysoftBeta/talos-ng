@@ -62,7 +62,14 @@ export class SessionSyncController {
       call: async (method, args, options) => {
         const generation = this.ports.generation;
         try {
-          return await this.ports.call(method, args, options);
+          const result = await this.ports.call(method, args, options);
+          if (
+            this.ports.engine !== engine ||
+            this.ports.closed ||
+            generation !== this.ports.generation
+          )
+            throw new AppError("E_CANCELLED", "旧会话请求已取消");
+          return result;
         } catch (error) {
           if (
             this.ports.engine !== engine ||

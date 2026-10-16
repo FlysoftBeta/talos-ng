@@ -1,5 +1,5 @@
 import { AppError, Emitter, Semaphore } from "@talos/base";
-import { contract } from "@talos/contract";
+import { contract, syncResultSchema } from "@talos/contract";
 import type { ResultOf } from "@talos/contract";
 import {
   IntervalSet,
@@ -47,7 +47,6 @@ export interface EngineOptions {
   onError?: (error: unknown) => void;
   onGone?: (scopes: readonly string[]) => Promise<void>;
 }
-const sendOptions = { maxInFlight: 1, orderKey: (): string => "fifo" };
 export class SyncEngine {
   private snapshot: SyncSnapshot = {
     phase: "offline",
@@ -66,9 +65,19 @@ export class SyncEngine {
   private flushing?: Promise<void>;
   private retryTimer?: unknown;
   private retryBlocked = false;
+  private pullRetryTimer?: unknown;
+  private pullFailures = 0;
+  private needsPull = false;
+  private readonly revocations = new Map<string, number>();
+  private readonly sendOptions;
   private readonly now: () => number;
   private readonly timers: NonNullable<EngineOptions["timers"]>;
   constructor(private readonly options: EngineOptions) {
+    this.sendOptions = {
+      maxInFlight: 1,
+      orderKey: (method: string, args: unknown) =>
+        options.modules.orderKey(method, args),
+    };
     this.now = options.now ?? Date.now;
     this.timers = options.timers;
   }
@@ -107,16 +116,39 @@ export class SyncEngine {
       lastSync,
     });
   }
-  private async change(event: OutboxEvent): Promise<void> {
+  private async change(event: OutboxEvent, generation?: number): Promise<void> {
     await this.writes.run(async () => {
+      if (generation !== undefined && generation !== this.generation) return;
       const { db, user } = this.options;
       await db.tx(["outbox"], "readwrite", (tx) => {
         const table = tx.table<readonly OutboxItem[], string>("outbox");
-        return table
-          .get(user)
-          .then((items) =>
-            table.put(reduceOutbox(items ?? [], event, sendOptions), user),
+        return table.get(user).then((items) => {
+          if (generation !== undefined && generation !== this.generation)
+            return;
+          const nextEvent =
+            event.type === "enqueue"
+              ? {
+                  ...event,
+                  item: {
+                    ...event.item,
+                    dependsOn: [
+                      ...new Set([
+                        ...(event.item.dependsOn ?? []),
+                        ...this.options.modules.dependencies(
+                          event.item.method,
+                          event.item.args,
+                          items ?? [],
+                        ),
+                      ]),
+                    ],
+                  },
+                }
+              : event;
+          return table.put(
+            reduceOutbox(items ?? [], nextEvent, this.sendOptions),
+            user,
           );
+        });
       });
       await this.refresh();
     });
@@ -148,6 +180,8 @@ export class SyncEngine {
     ++this.generation;
     this.timers.clear(this.retryTimer);
     this.retryBlocked = false;
+    this.timers.clear(this.pullRetryTimer);
+    this.pullRetryTimer = undefined;
     this.publish({ phase: "offline" });
     // In-flight callbacks settle through their generation fence before the next flush.
   }
@@ -163,62 +197,198 @@ export class SyncEngine {
     await this.flush();
   }
   async pull(): Promise<void> {
-    await this.pulls.run(async () => {
-      const { db, call, user } = this.options;
-      const generation = this.generation;
-      const admitted =
-        (await db
-          .table<readonly string[], string>("kv")
-          .get(`scopes:${user}`)) ?? [];
-      const scopes = await db.table<StoredScope>("scopes").range();
-      const cursors: Record<string, number> = {};
-      for (const scope of scopes)
-        if (admitted.includes(scope.scope)) cursors[scope.scope] = scope.cursor;
-      const pages = new Map<string, ScopePull[]>();
-      const gone = new Set<string>();
-      let more: boolean;
-      do {
-        const response = await call(contract.sync.pull, { cursors });
+    const generation = this.generation;
+    try {
+      await this.pulls.run(async () => {
         if (generation !== this.generation) return;
-        more = false;
-        for (const scope of response.gone) {
-          gone.add(scope);
-          delete cursors[scope];
-          pages.delete(scope);
+        this.needsPull = true;
+        const revocations = new Map(this.revocations);
+        const { db, user } = this.options;
+        const admitted =
+          (await db
+            .table<readonly string[], string>("kv")
+            .get(`scopes:${user}`)) ?? [];
+        const scopes = await db.table<StoredScope>("scopes").range();
+        const cursors: Record<string, number> = {};
+        for (const scope of scopes)
+          if (admitted.includes(scope.scope))
+            cursors[scope.scope] = scope.cursor;
+        const pages = new Map<string, ScopePull[]>();
+        const gone = new Set<string>();
+        let more: boolean;
+        do {
+          const response = await this.pullResponse(cursors, generation);
+          if (!response) return;
+          if (generation !== this.generation) return;
+          more = response.repull === true;
+          for (const scope of response.gone) {
+            gone.add(scope);
+            delete cursors[scope];
+            pages.delete(scope);
+          }
+          for (const [scope, page] of Object.entries(response.scopes)) {
+            const list = pages.get(scope) ?? [];
+            // Another scope can require more pages after this scope completed.
+            // Continue its buffered history without dropping newer rows or resets.
+            if (list.length)
+              list[list.length - 1] = { ...list[list.length - 1]!, more: true };
+            list.push(page);
+            pages.set(scope, list);
+            cursors[scope] = page.cursor;
+            more = more || page.more;
+            this.publish({
+              progress: this.snapshot.progress + page.rows.length,
+            });
+          }
+        } while (more);
+        await this.applyPages(pages, [...gone], generation, revocations);
+        if (generation === this.generation) this.needsPull = false;
+      });
+      if (generation === this.generation) {
+        this.timers.clear(this.pullRetryTimer);
+        this.pullRetryTimer = undefined;
+        this.pullFailures = 0;
+        if (this.online) {
+          this.publish({ phase: "live" });
+          this.flushInBackground();
         }
-        for (const [scope, page] of Object.entries(response.scopes)) {
-          const list = pages.get(scope) ?? [];
-          // Another scope can require more pages after this scope completed.
-          // Continue its buffered history without dropping newer rows or resets.
-          if (list.length)
-            list[list.length - 1] = { ...list[list.length - 1]!, more: true };
-          list.push(page);
-          pages.set(scope, list);
-          cursors[scope] = page.cursor;
-          more = more || page.more;
-          this.publish({ progress: this.snapshot.progress + page.rows.length });
+      }
+    } catch (error) {
+      this.recoverPull(error, generation);
+      throw error;
+    }
+  }
+  private async pullResponse(
+    cursors: Record<string, number>,
+    generation: number,
+  ): Promise<ResultOf<typeof contract.sync.pull> | undefined> {
+    let response = await this.options.call(contract.sync.pull, { cursors });
+    const chunks: string[] = [];
+    while (response.transfer) {
+      if (generation !== this.generation) return;
+      const transfer = response.transfer;
+      chunks.push(transfer.chunk);
+      if (!transfer.more) {
+        try {
+          const decoded = syncResultSchema.parse(JSON.parse(chunks.join("")));
+          if (decoded.transfer || decoded.repull)
+            throw new Error("Nested transfer");
+          if (response.repull) {
+            for (const page of Object.values(decoded.scopes)) page.more = true;
+            return { ...decoded, repull: true };
+          }
+          return decoded;
+        } catch {
+          throw new AppError("E_PROTOCOL", "同步分片数据无效");
         }
-      } while (more);
-      await this.applyPages(pages, [...gone]);
-    });
+      }
+      response = await this.options.call(contract.sync.pull, {
+        cursors,
+        continuation: transfer.token,
+      });
+      if (!response.transfer)
+        throw new AppError("E_PROTOCOL", "同步分片不完整");
+    }
+    return response;
+  }
+  private recoverPull(error: unknown, generation: number): void {
+    if (!this.online || generation !== this.generation) return;
+    if (this.pausesSync(error)) {
+      this.disconnect();
+      this.options.onError?.(error);
+      return;
+    }
+    this.publish({ phase: "syncing" });
+    if (this.pullRetryTimer !== undefined) return;
+    const delay = Math.min(30_000, 500 * 2 ** Math.min(this.pullFailures++, 6));
+    this.pullRetryTimer = this.timers.set(() => {
+      this.pullRetryTimer = undefined;
+      if (!this.online || generation !== this.generation) return;
+      void this.pull()
+        .then(async () => {
+          if (!this.online || generation !== this.generation) return;
+          this.publish({ phase: "live" });
+          await this.flush();
+        })
+        .catch((cause: unknown) => this.options.onError?.(cause));
+    }, delay);
+  }
+  private pausesSync(error: unknown): boolean {
+    return (
+      error instanceof AppError &&
+      (error.code === "E_VERSION" ||
+        error.code === "E_UNAUTHENTICATED" ||
+        error.code === "E_LOCKED" ||
+        (error.code === "E_DENIED" &&
+          !!(error.data as { reason?: string } | undefined)?.reason))
+    );
   }
   async delta(response: ResultOf<typeof contract.sync.pull>): Promise<void> {
-    const pages = new Map<string, ScopePull[]>();
-    for (const [scope, page] of Object.entries(response.scopes)) {
-      if (page.more) {
+    const generation = this.generation;
+    for (const scope of response.gone)
+      this.revocations.set(scope, (this.revocations.get(scope) ?? 0) + 1);
+    const revocations = new Map(this.revocations);
+    // A delta must not advance a durable cursor past buffered historical rows or resets.
+    // Hold the same gate through the entire paginated pull and its atomic commit.
+    try {
+      // Revocation does not wait for a slow pull. Its epoch prevents that pull, or
+      // any already queued delta, from readmitting the removed scope afterward.
+      if (response.gone.length) {
+        await this.applyPages(
+          new Map(),
+          response.gone,
+          generation,
+          revocations,
+        );
+        if (
+          !Object.keys(response.scopes).length &&
+          !response.added.length &&
+          !response.repull
+        )
+          return;
+      }
+      if (
+        response.repull ||
+        Object.values(response.scopes).some((page) => page.more)
+      ) {
         await this.pull();
         return;
       }
-      pages.set(scope, [page]);
+      let recover = false;
+      await this.pulls.run(async () => {
+        if (generation !== this.generation) return;
+        if (this.needsPull) {
+          recover = true;
+          return;
+        }
+        this.needsPull = true;
+        const pages = new Map<string, ScopePull[]>();
+        for (const [scope, page] of Object.entries(response.scopes))
+          pages.set(scope, [page]);
+        await this.applyPages(pages, [], generation, revocations);
+        if (generation === this.generation) this.needsPull = false;
+      });
+      if (
+        (recover || response.added.length) &&
+        this.online &&
+        generation === this.generation
+      )
+        await this.pull();
+      if (this.online && generation === this.generation)
+        this.flushInBackground();
+    } catch (error) {
+      this.recoverPull(error, generation);
+      throw error;
     }
-    await this.applyPages(pages, response.gone);
-    if (response.added.length && this.online) await this.pull();
   }
   private async applyPages(
     pages: Map<string, ScopePull[]>,
     gone: readonly string[],
+    generation: number,
+    revocations: ReadonlyMap<string, number>,
   ): Promise<void> {
     await this.writes.run(async () => {
+      if (generation !== this.generation) return;
       const { db, user } = this.options;
       await db.tx(["rows", "scopes", "kv"], "readwrite", (tx) => {
         const rows = tx.table<StoredRow>("rows");
@@ -229,6 +399,7 @@ export class SyncEngine {
               .table<readonly string[], string>("kv")
               .get(`scopes:${user}`)
               .then((allowed) => {
+                if (generation !== this.generation) return;
                 const admitted = new Set(allowed ?? []);
                 const key = (
                   row: Pick<StoredRow, "scope" | "type" | "id">,
@@ -245,14 +416,19 @@ export class SyncEngine {
                       rows.delete([scope, row.type, row.id]);
                 }
                 for (const [scope, chain] of pages) {
-                  if (gone.includes(scope)) continue;
+                  if (
+                    gone.includes(scope) ||
+                    (this.revocations.get(scope) ?? 0) !==
+                      (revocations.get(scope) ?? 0)
+                  )
+                    continue;
                   admitted.add(scope);
                   const cursor = cursors.get(scope) ?? 0;
-                  // A pushed newer revision can overtake a completed pull; never regress it.
+                  // Delayed pushes must not regress a completed pull or replay stale resets.
                   if (chain[chain.length - 1]!.cursor < cursor) continue;
                   const operations = planApply(
                     {
-                      cursor: Math.min(cursor, chain[0]!.cursor),
+                      cursor,
                       windows:
                         saved.find((item) => item.scope === scope)?.windows ??
                         {},
@@ -392,13 +568,18 @@ export class SyncEngine {
     void this.flush().catch((error: unknown) => this.options.onError?.(error));
   }
   async flush(): Promise<void> {
-    if (this.retryBlocked) return;
+    if (
+      this.retryBlocked ||
+      this.pullRetryTimer !== undefined ||
+      this.needsPull
+    )
+      return;
     if (this.flushing) {
       await this.flushing;
       if (
         this.online &&
         !this.retryBlocked &&
-        nextToSend(this.snapshot.outbox, sendOptions).length
+        nextToSend(this.snapshot.outbox, this.sendOptions).length
       )
         return this.flush();
       return;
@@ -411,22 +592,37 @@ export class SyncEngine {
     }
   }
   private async runFlush(): Promise<void> {
-    while (this.online) {
-      const item = nextToSend(this.snapshot.outbox, sendOptions)[0];
+    while (
+      this.online &&
+      !this.needsPull &&
+      !this.retryBlocked &&
+      this.pullRetryTimer === undefined
+    ) {
+      const item = nextToSend(this.snapshot.outbox, this.sendOptions)[0];
       if (!item) return;
       const generation = this.generation;
-      await this.change({ type: "sendStarted", op: item.op });
+      await this.change({ type: "sendStarted", op: item.op }, generation);
       if (!this.online || generation !== this.generation) {
         await this.change({ type: "connectionLost" });
         return;
       }
+      let accepted = false;
       try {
         const method = methodRegistry[item.method];
         if (!method) throw new AppError("E_INVALID", "未知的排队操作");
         await this.options.call(method, item.args, { op: item.op });
+        if (!this.online || generation !== this.generation) {
+          await this.change({ type: "connectionLost" });
+          return;
+        }
+        accepted = true;
         // Authoritative pull precedes removal of the optimistic layer, including duplicate acks.
         await this.pull();
-        await this.ack(item.op);
+        if (!this.online || generation !== this.generation) {
+          await this.change({ type: "connectionLost" });
+          return;
+        }
+        await this.change({ type: "acked", op: item.op }, generation);
       } catch (cause) {
         if (generation !== this.generation || !this.online) {
           await this.change({ type: "connectionLost" });
@@ -436,25 +632,36 @@ export class SyncEngine {
           cause instanceof AppError
             ? cause
             : new AppError("E_DISCONNECTED", "连接已断开");
-        if (
-          error.code === "E_UNAUTHENTICATED" ||
-          error.code === "E_LOCKED" ||
-          (error.code === "E_DENIED" &&
-            !!(error.data as { reason?: string } | undefined)?.reason)
-        ) {
+        if (this.pausesSync(error)) {
           this.disconnect();
           await this.change({ type: "connectionLost" });
           this.options.onError?.(error);
           return;
         }
-        const terminal = isTerminalRejection(error.code);
-        await this.change({
-          type: terminal ? "rejected" : "transportFailed",
-          op: item.op,
-          error: error.toJSON(),
-        });
+        // A confirmed write followed by a failed read is still accepted by the server.
+        // Keep its idempotency key/optimistic layer and retry reconciliation, never reject it.
+        const terminal = !accepted && isTerminalRejection(error.code);
+        await this.change(
+          {
+            type: terminal ? "rejected" : "transportFailed",
+            op: item.op,
+            error: error.toJSON(),
+          },
+          generation,
+        );
+        if (generation !== this.generation) {
+          await this.change({ type: "connectionLost" });
+          return;
+        }
         if (terminal) {
-          if (this.online) await this.pull();
+          if (this.online) {
+            try {
+              await this.pull();
+            } catch (error) {
+              this.options.onError?.(error);
+              return;
+            }
+          }
         } else {
           if (this.online) {
             this.timers.clear(this.retryTimer);
@@ -471,7 +678,10 @@ export class SyncEngine {
           return;
         }
       }
-      if (generation !== this.generation) return;
+      if (generation !== this.generation) {
+        await this.change({ type: "connectionLost" });
+        return;
+      }
     }
   }
   close(): void {

@@ -95,6 +95,7 @@ describe("outbox", () => {
         "E_INVALID",
         "E_NOT_FOUND",
         "E_CONFLICT",
+        "E_TOO_LARGE",
       ].includes(code);
       expect(isTerminalRejection(code)).toBe(terminal);
       const items = reduceOutbox(

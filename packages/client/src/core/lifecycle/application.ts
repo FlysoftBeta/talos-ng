@@ -220,7 +220,16 @@ export class ApplicationController {
               this.report(error);
           });
         },
-        this.report,
+        (error) => {
+          // Repair a malformed event before a later valid delta can advance its cursor.
+          const engine = this.engine;
+          const generation = this.generation;
+          void engine?.pull().catch((cause: unknown) => {
+            if (this.engine === engine && generation === this.generation)
+              this.report(cause);
+          });
+          this.report(error);
+        },
       ),
     );
     this.cleanup.push(

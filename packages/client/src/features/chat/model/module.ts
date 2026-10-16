@@ -60,6 +60,22 @@ function updateState(
 }
 export const chatModule = defineClientModule({
   id: "chat",
+  orderKey: (method, args) => {
+    const value = args as { id?: string; conversation?: string } | null;
+    if (method === "chat.text.put") return `text:${value?.id ?? ""}`;
+    return value?.conversation ? `conversation:${value.conversation}` : method;
+  },
+  dependencies: (_method, args, outbox) => {
+    const textId = (args as { textId?: string } | null)?.textId;
+    if (!textId) return [];
+    return outbox
+      .filter(
+        (item) =>
+          item.method === "chat.text.put" &&
+          (item.args as { id?: string } | null)?.id === textId,
+      )
+      .map((item) => item.op);
+  },
   operationTitles: {
     "chat.post.send": "发送消息",
     "chat.text.put": "保存长文本",
