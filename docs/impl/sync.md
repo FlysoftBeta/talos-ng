@@ -46,6 +46,19 @@ Scope providers (`match, access, list, select`) and entity serialisers register 
   previous subscription. Pushes after commit re-read touched rows from the committed state.
 - Memory stays bounded: changes are scanned in batches retaining candidate rows for the first
   page plus the next revision group, per entity type; counts continue to detect window resets.
+- `snapshot(user, request)` computes a request's pages at one revision without touching
+  subscription state; `pull` is snapshot plus bookkeeping. `pullFrom` takes the snapshot
+  from a read replica (`server.md`): commits and access refreshes that land while it is in
+  flight are recorded, the touched scopes are returned with `more` and stay incomplete,
+  scopes that lost access are dropped and the response carries `repull`, so the client pulls
+  again; that retry is computed on the main thread and cannot race. A disconnect or rebind
+  during the snapshot fails the pull instead of installing a subscription.
+- Entity types whose writes can never change scope access (posts, chat and reading states,
+  settings, progress, jobs, AI messages) are registered `accessNeutral`. A change set made
+  only of such rows reuses each subscription's known scopes instead of re-evaluating every
+  provider per connected user, and skips the per-connection re-authentication; admission
+  changes made outside units of work (device policy, device lock or removal) re-authenticate
+  connections themselves.
 
 ## Windowed types
 

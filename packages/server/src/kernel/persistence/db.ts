@@ -112,12 +112,13 @@ export class Db {
       performance.now() - started,
     );
   }
-  tx<T>(fn: () => T): T {
+  /** `label` names the outer transaction in statistics (default: its call site). */
+  tx<T>(fn: () => T, label?: string): T {
     const depth = this.depth++;
     const savepoint = `talos_${depth}`;
     if (depth === 0) {
       this.txStarted = performance.now();
-      this.txShape = this.stats ? transactionSite() : undefined;
+      this.txShape = this.stats ? (label ?? transactionSite()) : undefined;
     }
     try {
       // A read-only replica has no write lock to take; its transactions are
@@ -205,7 +206,10 @@ export class Db {
   }
 }
 
-/** First caller outside the persistence layer, e.g. `modules/chat/posts/service.ts:42`. */
+/**
+ * First caller outside Db/Uow, e.g. `Posts.send @ modules/chat/posts/service.ts:42`
+ * (`server.js:<line>` in the bundled server, where the function name carries it).
+ */
 function transactionSite(): string {
   const holder: { stack?: string } = {};
   const limit = Error.stackTraceLimit;
@@ -223,7 +227,8 @@ function transactionSite(): string {
     if (!site) continue;
     const path = site[1]!.replace(/\\/g, "/");
     const source = /\/src\/(.*)$/.exec(path)?.[1] ?? path.split("/").pop()!;
-    return `transaction @ ${source}:${site[2]}`;
+    const name = /^at (?:async )?([^\s(]+) \(/.exec(line.trim())?.[1];
+    return `${name && name !== "<anonymous>" ? name : "transaction"} @ ${source}:${site[2]}`;
   }
   return "transaction";
 }

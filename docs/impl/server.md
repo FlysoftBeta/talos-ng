@@ -9,10 +9,20 @@ document covers the runtime design. Entry points: `packages/server/src/main.ts`
 
 One Node process bundled into a single `server.js`. SQLite is `better-sqlite3` behind a
 small `Db` adapter file (WAL, foreign keys, `synchronous=NORMAL`, busy timeout, one
-synchronous writer, savepoint-nested transactions, online backup); no worker-thread pool:
-cross-thread RPC would add more failure modes than it removes at this scale. Child processes
-exist only for helper binaries (pdfrender, yt-dlp). Two native N-API addons exist,
-`better-sqlite3` and `sharp` (chat thumbnails); they stay external to the bundle and each
+synchronous writer on the main thread, savepoint-nested transactions, online backup). All
+writes and transactions stay on that single writer. Sync pull pages, the dominant read, are
+computed by **sync replicas**: worker threads that load the same `server.js`, open the
+database read-only and build the module graph over that connection (`createKernel` with
+`replica: true`: verify-only migrations, no start-up writes, no background work), so pages
+come from exactly the providers and serialisers the writer registers. Each task runs in one
+read transaction; the WAL makes every commit made before the task was sent visible to it
+(read-your-writes for the caller's own preceding writes). Subscription and transfer state
+stay on the main thread (`SyncHub.pullFrom`, see `sync.md`). A replica that fails, hangs past
+its timeout or is not yet started makes the pull run locally; crashed replicas restart with
+back-off. Replicas close before the writer's final WAL checkpoint. Development entries are
+TypeScript, so a replica bootstraps the tsx loader before importing the entry. Child
+processes exist only for helper binaries (pdfrender, yt-dlp). Two native N-API addons exist,
+`better-sqlite3` (loaded by the main thread and by each replica worker) and `sharp` (chat thumbnails); they stay external to the bundle and each
 release carries only its own platform's binaries in `node_modules/` (see `packaging.md`).
 WebSocket uses pure-JS `ws`.
 
@@ -29,7 +39,8 @@ eviction, backups) runs from one serialised `maintain` pass.
 ## Kernel services
 
 `config` (file + `TALOS_*` environment, validated at boot, secrets never logged), `db`
-(adapter, migrations, nestable synchronous `tx`, online `backupTo`), `uow`, `rev` (global
+(adapter, migrations, nestable synchronous `tx`, read `snapshot`, online `backupTo`,
+statement timing), `performance` (statement statistics, event-loop delay, replica status), `uow`, `rev` (global
 revision counter), `syncHub` (`sync.md`), `events` (connection registry, per-user/scope
 fan-out), `jobs` (`jobs.md`), `objects` and `uploads` (`objects.md`), `authz`, `audit`,
 `incidents`, `clock`, `log`, and the transport (`link.md`).
@@ -111,6 +122,8 @@ paths resolve beside the config file. Data directory: `data/talos.db` (+WAL), `d
 | `TALOS_HTTPS_CERT/KEY/CA/DOMAIN/REDIRECT` | PEM paths, CA served at `/ca.crt`, domain required for redirect, redirect needs a secure port |
 | `TALOS_AI_MODELS_FILE`, `TALOS_AI_CONFIG` | AI provider configuration (`modules.md`) |
 | `TALOS_BINARIES` | JSON map of helper binary paths (`pdfrender`, `yt-dlp`) |
+| `TALOS_DB_READERS` | sync replica workers, integer 0–32; default `min(4, cpus − 1)`; `0` computes every pull on the main thread |
+| `TALOS_SLOW_QUERY_MS` | slow statement/transaction threshold in ms, default `50` (see `ops-performance.md`) |
 | `TALOS_PDFRENDER`, `TALOS_MEDIA_CACHE` | renderer binary override; yt-dlp download cache at package time |
 
 `pnpm dev` runs the real dev server plus Vite behind a same-origin proxy for `/link`, `/dl`,

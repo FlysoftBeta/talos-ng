@@ -379,19 +379,16 @@ export class SyncHub {
       for (const change of changeSet.changes) flight.touched.add(change.scope);
     }
     const neutral = this.accessNeutral(changeSet);
-    for (const subscription of this.subscriptions.values()) {
-      try {
-        const accessible = neutral
-          ? subscription.known
-          : this.scopes(subscription.user);
-        const response = this.response(accessible, subscription.known);
-        this.updateAccess(subscription, accessible);
-        const seen = new Set<string>();
-        for (const change of changeSet.changes) {
-          if (!subscription.complete.has(change.scope)) continue;
-          const key = JSON.stringify([change.scope, change.type, change.id]);
-          if (seen.has(key)) continue;
-          seen.add(key);
+    // A changed row reads and serialises the same for every subscriber of its
+    // scope; do it once per change set instead of once per connection.
+    const wired = new Map<string, { row: Row } | { error: unknown }>();
+    const wire = (
+      key: string,
+      change: SyncChangeSet["changes"][number],
+    ): Row => {
+      let result = wired.get(key);
+      if (!result) {
+        try {
           const entity = this.entities.get(change.type);
           if (!entity) throw new AppError("E_INTERNAL", `同步数据类型未注册`);
           const row = entity.read(change.scope, change.id);
@@ -407,6 +404,29 @@ export class SyncHub {
               "同步变更与记录不一致，请稍后重试",
             );
           }
+          result = { row: this.serialize(row, changeSet.rev) };
+        } catch (error) {
+          result = { error };
+        }
+        wired.set(key, result);
+      }
+      if ("error" in result) throw result.error;
+      return result.row;
+    };
+    for (const subscription of this.subscriptions.values()) {
+      try {
+        const accessible = neutral
+          ? subscription.known
+          : this.scopes(subscription.user);
+        const response = this.response(accessible, subscription.known);
+        this.updateAccess(subscription, accessible);
+        const seen = new Set<string>();
+        for (const change of changeSet.changes) {
+          if (!subscription.complete.has(change.scope)) continue;
+          const key = JSON.stringify([change.scope, change.type, change.id]);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const row = wire(key, change);
           const scope = response.scopes[change.scope] ?? {
             rows: [],
             cursor: changeSet.rev,
@@ -414,7 +434,7 @@ export class SyncHub {
           };
           response.scopes[change.scope] = {
             ...scope,
-            rows: [...scope.rows, this.serialize(row, changeSet.rev)],
+            rows: [...scope.rows, row],
           };
         }
         for (const [id, scope] of Object.entries(response.scopes))
