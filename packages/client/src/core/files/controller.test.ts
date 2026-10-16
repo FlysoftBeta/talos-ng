@@ -300,12 +300,28 @@ describe("feature key/value scope", () => {
   it.each(["library", "media"])(
     "checks current access for personal %s retention owners",
     (area) => {
+      const item = "01ARZ3NDEKTSV4RRFFQ69G5FA0";
+      const members = [item];
       const rows = [
         {
           scope: "coll:one",
           type: area === "library" ? "libraryDoc" : "mediaTrack",
-          id: "item",
+          id: item,
           deleted: false,
+        },
+        {
+          scope: "coll:one",
+          type: area === "library" ? "libraryCollection" : "mediaPlaylist",
+          id: item,
+          deleted: false,
+          data: {
+            id: item,
+            owner: item,
+            title: "list",
+            ...(area === "library"
+              ? { docs: members, group: null }
+              : { tracks: members, created: 1 }),
+          },
         },
       ];
       let admitted = true;
@@ -314,16 +330,21 @@ describe("feature key/value scope", () => {
         hasScope: () => admitted,
       });
       expect(() =>
-        t.controller.assertLocalScope(`${area}:item:retained`),
+        t.controller.assertLocalScope(`${area}:${item}:retained`),
       ).not.toThrow();
       admitted = false;
       expect(() =>
-        t.controller.assertLocalScope(`${area}:item:retained`),
+        t.controller.assertLocalScope(`${area}:${item}:retained`),
       ).toThrow(expect.objectContaining({ code: "E_DENIED" }));
       admitted = true;
+      members.length = 0;
+      expect(() =>
+        t.controller.assertLocalScope(`${area}:${item}:retained`),
+      ).toThrow(expect.objectContaining({ code: "E_DENIED" }));
+      members.push(item);
       rows[0]!.deleted = true;
       expect(() =>
-        t.controller.assertLocalScope(`${area}:item:retained`),
+        t.controller.assertLocalScope(`${area}:${item}:retained`),
       ).toThrow(expect.objectContaining({ code: "E_DENIED" }));
     },
   );

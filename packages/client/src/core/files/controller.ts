@@ -1,5 +1,5 @@
 import { AppError } from "@talos/base";
-import { mediaPlaylistSchema } from "@talos/contract";
+import { libraryCollectionSchema, mediaPlaylistSchema } from "@talos/contract";
 import type { Database } from "@talos/store";
 import type { SavedSession } from "../auth/session.ts";
 import type { StatusViewModel } from "../status/model.ts";
@@ -177,15 +177,31 @@ export class FilesController {
     const retained = /^(library|media):([^:]+):retained$/.exec(key);
     if (retained) {
       const type = retained[1] === "library" ? "libraryDoc" : "mediaTrack";
-      const visible = this.ports.engine
-        ?.getSnapshot()
-        .rows.some(
-          (row) =>
-            row.type === type &&
-            row.id === retained[2] &&
-            !row.deleted &&
-            this.ports.hasScope(row.scope),
+      const rows = this.ports.engine?.getSnapshot().rows ?? [];
+      const visible = rows.some((row) => {
+        if (
+          row.type !== type ||
+          row.id !== retained[2] ||
+          row.deleted ||
+          !this.ports.hasScope(row.scope)
+        )
+          return false;
+        if (!row.scope.startsWith("coll:"))
+          return row.scope === `me:${this.ports.saved?.user.id}`;
+        const list = rows.find(
+          (candidate) =>
+            candidate.scope === row.scope &&
+            !candidate.deleted &&
+            candidate.type ===
+              (type === "libraryDoc" ? "libraryCollection" : "mediaPlaylist"),
         );
+        if (type === "libraryDoc") {
+          const parsed = libraryCollectionSchema.safeParse(list?.data);
+          return parsed.success && parsed.data.docs.includes(row.id);
+        }
+        const parsed = mediaPlaylistSchema.safeParse(list?.data);
+        return parsed.success && parsed.data.tracks.includes(row.id);
+      });
       if (!visible) throw new AppError("E_DENIED", "内容访问权限已失效");
     }
     const match = /^((?:conv|coll):[^:]+):/.exec(key);
