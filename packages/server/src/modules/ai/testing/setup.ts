@@ -14,6 +14,7 @@ import {
   ProvisioningRepo,
   identityMigrations,
 } from "../../identity/index.ts";
+import { createTasks } from "../../tasks/index.ts";
 import { registerAiApi } from "../api.ts";
 import type { ModelProvider } from "../providers/responses.ts";
 import { AiService } from "../service.ts";
@@ -21,11 +22,15 @@ import { FakeProvider } from "./provider.ts";
 export function setupAi(
   provider: ModelProvider | undefined = new FakeProvider(async () => {}),
 ) {
+  const syncErrors: unknown[] = [];
   let time = Date.UTC(2026, 9, 12);
   const now = () => time,
     id = createUlid({ clock: now }),
     db = new Db(),
-    hub = new SyncHub({ revision: () => uow.revision });
+    hub = new SyncHub({
+      revision: () => uow.revision,
+      reportError: (error) => syncErrors.push(error),
+    });
   const uow = new Uow(db, { committed: (set) => hub.committed(set) }),
     store = createMemoryObjectStore(),
     objects = new ObjectLedger({ db, uow, store, clock: now }),
@@ -70,6 +75,7 @@ export function setupAi(
     id,
     allowed: (u) => authority.can(u, "feature.use", { feature: "ai" }),
   });
+  createTasks({ jobs, syncHub: hub });
   service.registerSync(hub);
   const host = new LinkHost({
     db,
@@ -89,6 +95,7 @@ export function setupAi(
     uploads,
     jobs,
     hub,
+    syncErrors,
     host,
     service,
     users,

@@ -1,5 +1,6 @@
 import { AppError, deferred } from "@talos/base";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { SyncResponse } from "../../kernel/sync/sync-hub.ts";
 import { Jobs } from "../../kernel/jobs/jobs.ts";
 import { windows } from "./billing/service.ts";
 import { AiService } from "./service.ts";
@@ -22,11 +23,11 @@ describe("durable AI runs and accounting", () => {
     const user = s.users[0]!,
       c = s.service.create(user, "测试");
     s.fund();
-    const changes: unknown[] = [];
+    const changes: SyncResponse[] = [];
     s.hub.pull(
       user,
       { cursors: {} },
-      { id: "connection", emit: (_t, d) => changes.push(d) },
+      { id: "connection", emit: (_t, d) => changes.push(d as SyncResponse) },
     );
     const run = s.service.start(user, { conversation: c.id, text: "你好" });
     s.jobs.start();
@@ -37,7 +38,30 @@ describe("durable AI runs and accounting", () => {
     expect(
       s.service.page(user, { conversation: c.id }).messages[1]?.text,
     ).toContain("const answer");
+    expect(s.syncErrors).toEqual([]);
     expect(changes.length).toBeGreaterThan(2);
+    const streamed = changes.flatMap(
+      (change) => change.scopes[`ai:${c.id}`]?.rows ?? [],
+    );
+    expect(streamed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "aiMessage",
+          data: expect.objectContaining({
+            role: "assistant",
+            status: "running",
+          }),
+        }),
+        expect.objectContaining({
+          type: "aiMessage",
+          data: expect.objectContaining({
+            role: "assistant",
+            status: "done",
+            text: expect.stringContaining("const answer"),
+          }),
+        }),
+      ]),
+    );
     expect(s.service.billing.account(user).reserved).toBe(0);
     expect(s.service.billing.account(user).topup).toBe(
       100000000 - record.charged,
