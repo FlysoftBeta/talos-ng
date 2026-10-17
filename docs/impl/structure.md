@@ -126,7 +126,7 @@ Each feature separates what changes with the product from what changes with the 
 
 **Replace list.** Because views depend only on props and types, a redesign replaces the
 `view/` files (and CSS) of a feature without touching models, connect logic or tests of
-behaviour; the connect layer is the only seam to re-wire. Small features (settings, tasks,
+behaviour; the connect layer is the only seam to re-wire. Small features (settings, activity,
 sharing) use `model.ts` + `connect.tsx` + `view.tsx` files instead of directories; the same
 globs cover both spellings.
 

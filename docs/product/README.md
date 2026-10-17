@@ -23,7 +23,7 @@ decisions is process material kept apart from these documents.
 | [learning.md](learning.md) | vocabulary practice, word lists, discipline mode |
 | [media.md](media.md) | music search, queue, playlists, playback |
 | [ai.md](ai.md) | AI conversations, credits, writing workspace |
-| [tasks.md](tasks.md) | the task list and the status centre |
+| [activity.md](activity.md) | the activity centre: sync, queued changes, transfers and background tasks |
 | [settings.md](settings.md) | the settings sheet, diagnostics, local reset |
 | [admin.md](admin.md) | the online administration workbench |
 | [ops.md](ops.md) | updates, backups, HTTPS, host tools, document capture |

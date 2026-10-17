@@ -631,3 +631,12 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   server contract and scope for little value; rows already synced (favourites, queue,
   retention `lastUsed`) are unchanged. Music and reading panels list recent plus frequent
   items; the chat landing page hosts the global panel across all five kinds.
+- **D-126 — One activity centre replaces the task sheet and the status centre.** The rail
+  status pill is the single entry; it opens one sheet (`features/activity`) listing synchronisation
+  scopes, queued writes, transfers and server tasks as one `ActivityItem` model grouped into
+  active, needs attention (retry, cancel, view error) and recently completed (collapsible).
+  The sync engine publishes per-scope progress (`scopeSync`), the outbox counts merged
+  debounced writes, and `status.downloads`/`setDownload` became `status.transfers`/`setTransfer`
+  with direction, error and optional retry/cancel callbacks. The 任务 rail item, the `tasks`
+  overlay kind and `StatusCenter` are gone. A rejected queued write keeps its label 放弃
+  (it drops user data), unlike 取消 for tasks and transfers.

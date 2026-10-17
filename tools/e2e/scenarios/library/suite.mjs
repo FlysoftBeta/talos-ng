@@ -142,7 +142,7 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     const large = await upload(wire, libraryPdf(500), "五百页 PDF", "500.pdf");
     await ready(wire, small.doc);
     await ready(wire, large.doc);
-    await click(cdp, "任务");
+    await click(cdp, "状态");
     await cdp.wait(`${text}.indexOf('完成')>=0`);
     await captures(cdp, name, "tasks");
     await close(cdp);

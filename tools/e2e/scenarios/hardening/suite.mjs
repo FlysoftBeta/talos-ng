@@ -195,7 +195,7 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
       "音乐",
       "AI",
       "管理",
-      "任务",
+      "状态",
     ]) {
       console.log("Offline matrix", label);
       await click(cdp, label);
@@ -210,7 +210,7 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
         音乐: '[data-testid="media.content"]',
         AI: '[data-testid="ai.list"]',
         管理: "[aria-label=管理栏目]",
-        任务: "[role=dialog]",
+        状态: "[role=dialog]",
       }[label];
       await cdp.wait(`!!document.querySelector(${JSON.stringify(readyArea)})`);
       await frame(cdp);
@@ -225,7 +225,7 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
           `${legacy ? "chrome70" : "current"}-hardening-offline-${label}.png`,
         ),
       );
-      if (label === "管理" || label === "任务") await close(cdp);
+      if (label === "管理" || label === "状态") await close(cdp);
     }
     const session = await readDb(cdp, "session", "active"),
       device = await readDb(cdp, "session", "device");

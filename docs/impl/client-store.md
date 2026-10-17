@@ -101,7 +101,7 @@ reconstructible mirrors and windowed history.
   access, expired retention. Drafts, sessions, the outbox and in-window retention are
   protected; mirrors are not removed while user intent is pending for them.
 - A quota abort evicts and retries the whole transaction once; exhaustion publishes
-  `存储空间不足` in the status centre.
+  `存储空间不足` in the activity centre.
 - Retained documents/audio/conversations download through resumable ranged `/dl/` fetches
   into FileStore writers, in a serialised background queue that resumes after reconnect and
   runs independently of any viewer; cancellation or revocation is re-checked after each
