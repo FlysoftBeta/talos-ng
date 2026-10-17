@@ -27,6 +27,7 @@ describe("navigation reducer", () => {
     let state = navReducer(createNav(), {
       type: "pushPage",
       page: { kind: "page", id: "页面" },
+      area: "chat",
     });
     state = navReducer(state, {
       type: "openOverlay",
@@ -57,7 +58,7 @@ describe("navigation reducer", () => {
     const page = { kind: "page" as const, id: "x" };
     const overlay = { kind: "detail" as const, id: "y" };
     const state = navReducer(
-      navReducer(createNav(), { type: "pushPage", page }),
+      navReducer(createNav(), { type: "pushPage", page, area: "chat" }),
       { type: "openOverlay", overlay },
     );
     page.id = "changed";

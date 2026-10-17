@@ -705,7 +705,7 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   replay on auto end, then the queue, then the context (wrapping under repeat, reshuffled when
   shuffled). Previous restarts after 3 s. No wire or schema change.
 
-- **D-135 — Recent is a top-level area, not the chat landing page.** The global frecency
+- **D-135 — Recent is a top-level area, not the chat landing page; it is the app's landing area.** The global frecency
   list (D-121) lives in its own rail area `recent` (list pane, ranked mixed list of
   conversations, books, booklists, songs and playlists, up to 30 by score cut-off, empty
   state without history); the floating launcher lists it like every area. The chat landing

@@ -157,7 +157,8 @@ Scenarios locate these by role and name; the names are product text.
   in the DOM is the topmost.
 - Buttons are found by accessible name (or visible text) - e.g. `发送`, `设置`, `创建邀请`,
   `确认`, `放弃`, `重试`, rail entries named by area (`对话`, `阅读`, `最近`, `学习`, `音乐`, `AI`,
-  `管理`, `任务`); the current area has `aria-current`.
+  `管理`, `任务`); the current area has `aria-current`. A signed-in session lands on `最近`, so scenarios
+  open the area under test through the rail first (`openArea` in `tools/e2e/harness/ui.mjs`).
 - Choice groups: `role=group` with an `aria-label` (`主题`, `自律模式`, `数字键盘`) containing
   buttons with `aria-pressed`.
 - Pickers: a `button[aria-haspopup=listbox]` named by its label, opening `role=listbox` with

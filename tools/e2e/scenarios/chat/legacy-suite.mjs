@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { SCREENSHOTS } from "../../harness/artifacts.mjs";
 import { eventually } from "../../harness/wait.mjs";
+import { openArea } from "../../harness/ui.mjs";
 import { connectChat } from "../../harness/chat-wire.mjs";
 
 async function button(cdp, label) {
@@ -74,6 +75,7 @@ export async function chatLegacySuite(browser, server) {
       (v) => !!v.active,
       "chat offline shell installed",
     );
+    await openArea(cdp, "对话");
     await button(cdp, "兼容性对话");
     await cdp.wait("!!document.querySelector('[data-seq=\"251\"]')");
     assert.ok(

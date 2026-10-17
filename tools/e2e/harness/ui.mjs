@@ -19,6 +19,13 @@ async function click(cdp, label) {
     `(function(){var buttons=Array.prototype.slice.call(document.querySelectorAll('button'));var button=buttons.find(function(b){return b.getAttribute('aria-label')===${JSON.stringify(label)} || b.textContent.trim()===${JSON.stringify(label)};});if(!button)throw new Error('Missing button '+${JSON.stringify(label)});button.scrollIntoView({block:'nearest',inline:'nearest'});button.click();})()`,
   );
 }
+/** Rail navigation: the app lands on 最近, so scenarios open the area they test explicitly. */
+async function openArea(cdp, label) {
+  await click(cdp, label);
+  await cdp.wait(
+    `!!Array.prototype.slice.call(document.querySelectorAll('button[aria-current]')).find(function(b){return b.getAttribute('aria-label')===${JSON.stringify(label)} || b.textContent.trim()===${JSON.stringify(label)};})`,
+  );
+}
 async function reveal(cdp, touch = false) {
   if (
     !(await cdp.evaluate(
@@ -127,6 +134,7 @@ export {
   app,
   locked,
   click,
+  openArea,
   pin,
   reveal,
   select,

@@ -47,6 +47,13 @@ async function connected(page) {
     document.body.textContent.includes("已连接"),
   );
 }
+/** The app lands on 最近; chat scenarios open 对话 through the rail first. */
+async function openChat(page) {
+  await page.getByRole("button", { name: "对话", exact: true }).click();
+  await page
+    .locator('button[aria-current="page"][aria-label="对话"]')
+    .waitFor();
+}
 async function close(page) {
   await page
     .getByRole("dialog")
@@ -182,6 +189,8 @@ export async function chatSuite(browser, server) {
     await connected(b);
     root = await connectChat(server.url, "123456");
     demo = await connectChat(server.url, "654321");
+    await openChat(a);
+    await openChat(b);
     await capture(a, root, "welcome");
     await a.getByRole("button", { name: "添加对话" }).click();
     await a.getByRole("menuitem", { name: "创建群组", exact: true }).click();

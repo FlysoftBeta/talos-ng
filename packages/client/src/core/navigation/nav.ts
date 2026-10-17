@@ -36,7 +36,7 @@ export type NavIntent =
 
 export function createNav(): Nav {
   return {
-    area: "chat",
+    area: "recent",
     areas: {
       chat: { stack: [{ kind: "home" }] },
       recent: { stack: [{ kind: "home" }] },
