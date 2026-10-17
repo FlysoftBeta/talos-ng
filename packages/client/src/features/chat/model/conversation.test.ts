@@ -43,6 +43,7 @@ const result = (seqs: number[], hasAfter = false) => ({
   latest: 10,
   hasBefore: true,
   hasAfter,
+  rev: 10,
 });
 function fixture() {
   vi.resetAllMocks();

@@ -2,8 +2,15 @@ import { describe, expect, it, vi } from "vitest";
 import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
 import { FileStore } from "@talos/store";
 import { sha256Hex } from "@talos/base";
+import { cursorOf, holes } from "@talos/sync";
+import type { Row } from "@talos/sync";
+import type { StoredScope } from "../data/db.ts";
 import { openAppDb } from "../../platform/storage/database.ts";
 import { EvictionManager } from "./eviction.ts";
+
+const windowed = {
+  post: { seqOf: (row: Row) => (row.data as { seq?: number }).seq ?? 0 },
+};
 
 const DAY = 86_400_000;
 async function fixture(name: string) {
@@ -27,6 +34,7 @@ async function fixture(name: string) {
     db.table("rows").put({ deleted: false, rev: 1, ...r });
   const manager = (usage: number, extra: object = {}) =>
     new EvictionManager(db, {
+      windowed,
       now: () => now,
       estimate: async () => ({ usage, quota: 400 }),
       exhausted: vi.fn(),
@@ -242,16 +250,22 @@ describe("eviction safety", () => {
     f.db.close();
   });
 
-  it("evicts mirrored posts only with an empty outbox, resetting the scope cursor", async () => {
+  it("evicts windowed posts only with an empty outbox, leaving an explicit hole", async () => {
     const f = await fixture("mirror");
     await f.row({
       scope: "conv:c",
       type: "post",
       id: "old",
-      data: { created: 1 },
+      data: { created: 1, seq: 3 },
     });
     await f.row({ scope: "conv:c", type: "chatState", id: "keep", data: {} });
-    await f.db.table("scopes").put({ scope: "conv:c", cursor: 9 });
+    await f.db.table("scopes").put({
+      scope: "conv:c",
+      coverage: {
+        revs: [[0, 9]],
+        types: { post: { revs: [[1, 9]], known: [[1, 5, 9]] } },
+      },
+    });
     await f.db.table("outbox").put([{ op: "pending" }], "u");
     await f.manager(10_000).makeRoom(0);
     expect(
@@ -266,10 +280,9 @@ describe("eviction safety", () => {
     expect(
       await f.db.table("rows").get(["conv:c", "chatState", "keep"]),
     ).toBeTruthy();
-    expect(await f.db.table("scopes").get("conv:c")).toEqual({
-      scope: "conv:c",
-      cursor: 0,
-    });
+    const saved = await f.db.table<StoredScope>("scopes").get("conv:c");
+    expect(cursorOf(saved!.coverage)).toBe(9);
+    expect(holes(saved!.coverage, "post", 1, 5)).toEqual([[3, 3]]);
     expect(evicted).toHaveBeenCalledOnce();
     f.db.close();
   });

@@ -4,6 +4,7 @@ import { AppError, deferred } from "@talos/base";
 import { contract } from "@talos/contract";
 import type { ArgsOf, CallOptions, Method, ResultOf } from "@talos/contract";
 import type { Database } from "@talos/store";
+import { cursorOf, isComplete } from "@talos/sync";
 import type { OutboxItem } from "@talos/sync";
 import { openAppDb } from "../../platform/storage/database.ts";
 import type { StoredRow, StoredScope } from "./db.ts";
@@ -38,6 +39,15 @@ const response = (
   gone: [],
   added: [],
 });
+/** A stored scope whose mirrored rows are complete through `top`. */
+const stored = (id: string, top: number): StoredScope => ({
+  scope: id,
+  coverage: { revs: [[0, top]], types: {} },
+});
+async function cursor(db: Database, id = scope): Promise<number | undefined> {
+  const saved = await db.table<StoredScope, string>("scopes").get(id);
+  return saved && cursorOf(saved.coverage);
+}
 const modules = new ModuleRegistry([
   defineClientModule({
     id: "test",
@@ -190,9 +200,13 @@ describe("initial shared-scope pagination", () => {
   it("hydrates a new account from zero despite another account's cached cursor", async () => {
     const f = await fixture();
     const shared = "coll:shared";
-    await f.db
-      .table<StoredScope>("scopes")
-      .put({ scope: shared, cursor: 50, windows: { post: [[1, 3]] } });
+    await f.db.table<StoredScope>("scopes").put({
+      scope: shared,
+      coverage: {
+        revs: [[0, 50]],
+        types: { post: { revs: [[1, 50]], known: [[1, 3, 50]] } },
+      },
+    });
     await f.db
       .table<StoredRow>("rows")
       .put({ ...row("removed", 40), scope: shared });
@@ -225,100 +239,63 @@ describe("initial shared-scope pagination", () => {
         .rows.map((r) => r.id)
         .sort(),
     ).toEqual(["early", "late"]);
-    expect((await f.db.table<StoredScope>("scopes").get(shared))?.cursor).toBe(
-      60,
-    );
+    expect(await cursor(f.db, shared)).toBe(60);
     expect(f.engine.getSnapshot().phase).toBe("live");
     expect(
-      (await f.db.table<StoredScope>("scopes").get(shared))?.windows,
-    ).toBeUndefined();
+      (await f.db.table<StoredScope>("scopes").get(shared))?.coverage.types,
+    ).toEqual({});
   });
 
-  it.each([0, 20])(
-    "restarts a buffered pull when another writer changes its base to %i",
-    async (changedCursor) => {
-      const f = await fixture();
-      await f.db
-        .table<readonly string[], string>("kv")
-        .put([scope], "scopes:alice");
-      await f.db.table<StoredScope>("scopes").put({ scope, cursor: 10 });
-      await f.db.table<StoredRow>("rows").put({ ...row("retained", 5), scope });
-      let requests = 0;
-      f.handle(async (_name, args) => {
-        const cursor = (args as { cursors: Record<string, number> }).cursors[
-          scope
-        ];
-        requests++;
-        if (requests === 1) {
-          expect(cursor).toBe(10);
-          return response([row("early", 15)], 15, { more: true });
-        }
-        if (requests === 2) {
-          expect(cursor).toBe(15);
-          // A second tab advances, or eviction invalidates, shared persistent state.
-          await f.db
-            .table<StoredScope>("scopes")
-            .put({ scope, cursor: changedCursor });
-          if (changedCursor === 0)
-            await f.db
-              .table<StoredRow>("rows")
-              .delete([scope, "setting", "retained"]);
-          else
-            await f.db
-              .table<StoredRow>("rows")
-              .put({ ...row("early", 15), scope });
-          return response([row("late", 30)], 30);
-        }
-        expect(requests).toBe(3);
-        expect(cursor).toBe(changedCursor);
-        return response(
-          changedCursor === 0
-            ? [row("retained", 5), row("early", 15), row("late", 30)]
-            : [row("late", 30)],
-          30,
-        );
-      });
-      await f.engine.connect();
-      expect(requests).toBe(3);
-      expect(
-        f.engine
-          .getSnapshot()
-          .rows.map((r) => r.id)
-          .sort(),
-      ).toEqual(["early", "late", "retained"]);
-      expect((await f.db.table<StoredScope>("scopes").get(scope))?.cursor).toBe(
-        30,
-      );
-      expect(f.engine.getSnapshot().phase).toBe("live");
-    },
-  );
-
-  it("repulls invalidated history before accepting a later delta", async () => {
+  it("merges a buffered pull over another tab's commit without restarting it", async () => {
     const f = await fixture();
-    f.handle(async () => response([row("retained", 5)], 10));
+    await f.db
+      .table<readonly string[], string>("kv")
+      .put([scope], "scopes:alice");
+    await f.db.table<StoredScope>("scopes").put(stored(scope, 10));
+    await f.db.table<StoredRow>("rows").put({ ...row("retained", 5), scope });
+    let requests = 0;
+    f.handle(async (_name, args) => {
+      const base = (args as { cursors: Record<string, number> }).cursors[scope];
+      if (++requests === 1) {
+        expect(base).toBe(10);
+        return response([row("early", 15)], 15, { more: true });
+      }
+      // A second tab commits a newer pull of the same scope meanwhile.
+      await f.db.table<StoredScope>("scopes").put(stored(scope, 40));
+      await f.db
+        .table<StoredRow>("rows")
+        .put({ ...row("early", 35, "newer"), scope });
+      return response([row("late", 30)], 30);
+    });
     await f.engine.connect();
-    await f.db.table<StoredRow>("rows").delete([scope, "setting", "retained"]);
-    await f.db.table<StoredScope>("scopes").put({ scope, cursor: 0 });
+    expect(requests).toBe(2);
+    const rows = f.engine.getSnapshot().rows;
+    expect(rows.map((r) => r.id).sort()).toEqual(["early", "late", "retained"]);
+    expect(rows.find((r) => r.id === "early")?.data).toBe("newer");
+    expect(await cursor(f.db)).toBe(40);
+    expect(f.engine.getSnapshot().phase).toBe("live");
+  });
+
+  it("merges a push whose stream position is unknown without advancing the cursor", async () => {
+    const f = await fixture();
+    await f.db
+      .table<readonly string[], string>("kv")
+      .put([scope], "scopes:alice");
+    await f.db.table<StoredScope>("scopes").put(stored(scope, 10));
+    await f.engine.delta(response([row("new", 20)], 20));
+    expect(f.engine.getSnapshot().rows.map((r) => r.id)).toEqual(["new"]);
+    expect(await cursor(f.db)).toBe(10);
     f.handle(async (_name, args) => {
       expect((args as { cursors: Record<string, number> }).cursors[scope]).toBe(
-        0,
+        10,
       );
-      return response([row("retained", 5), row("new", 20)], 20);
+      return response([row("between", 15), row("new", 20)], 20);
     });
-    await expect(
-      f.engine.delta(response([row("new", 20)], 20)),
-    ).rejects.toMatchObject({ code: "E_CONFLICT" });
-    expect((await f.db.table<StoredScope>("scopes").get(scope))?.cursor).toBe(
-      0,
-    );
-    f.fire();
-    await until(f.engine, (s) => s.rows.length === 2 && s.phase === "live");
-    expect(
-      f.engine
-        .getSnapshot()
-        .rows.map((r) => r.id)
-        .sort(),
-    ).toEqual(["new", "retained"]);
+    await f.engine.connect();
+    expect(await cursor(f.db)).toBe(20);
+    // Pushes now continue the pulled stream and prove their revisions.
+    await f.engine.delta(response([row("next", 21)], 21));
+    expect(await cursor(f.db)).toBe(21);
   });
 
   it("still rejects a genuinely backwards response chain", async () => {
@@ -579,9 +556,7 @@ describe("scope synchronization", () => {
       cursors: { [scope]: 1, sys: 1 },
       windowed: [],
     });
-    expect(
-      (await f.db.table<StoredScope, string>("scopes").get("sys"))?.cursor,
-    ).toBe(2);
+    expect(await cursor(f.db, "sys")).toBe(2);
   });
   it("keeps a reloaded cache not ready after a pull stopped between scope commits", async () => {
     const f = await fixture();
@@ -670,26 +645,6 @@ describe("scope synchronization", () => {
       f.engine.getSnapshot().rows.find((r) => r.id === "gone")!.deleted,
     ).toBe(true);
   });
-  it("resets only named types and keeps newer rows within the reset chain", async () => {
-    const f = await fixture();
-    await f.engine.delta(
-      response([row("old", 1), row("profile", 1, "name", "profile")], 1),
-    );
-    await f.engine.delta(
-      response([row("new", 4, "newer"), row("new", 2, "older")], 4, {
-        reset: ["setting"],
-      }),
-    );
-    expect(
-      f.engine
-        .getSnapshot()
-        .rows.map((r) => r.id)
-        .sort(),
-    ).toEqual(["new", "profile"]);
-    expect(f.engine.getSnapshot().rows.find((r) => r.id === "new")!.data).toBe(
-      "newer",
-    );
-  });
   it("gone purges scope data, cursor, and account visibility", async () => {
     const f = await fixture();
     await f.engine.delta(response([row("one", 1)], 1));
@@ -714,17 +669,11 @@ describe("scope synchronization", () => {
   });
   it("stale deltas cannot regress scope cursor or overwrite newer rows", async () => {
     const f = await fixture();
-    await f.engine.delta(response([row("one", 9)], 9));
-    await f.engine.delta(
-      response([row("one", 2, "old")], 2, { reset: ["setting"] }),
-    );
+    f.handle(async () => response([row("one", 9)], 9));
+    await f.engine.connect();
+    await f.engine.delta(response([row("one", 2, "old")], 2));
     expect(f.engine.getSnapshot().rows[0]!.rev).toBe(9);
-    expect(
-      await f.db.table<StoredScope, string>("scopes").get(scope),
-    ).toMatchObject({
-      scope,
-      cursor: 9,
-    });
+    expect(await cursor(f.db)).toBe(9);
   });
   it("isolates accounts' hydrated projections, cursor requests, and outboxes", async () => {
     const f = await fixture();
@@ -796,12 +745,9 @@ it("newer pushed revision overtaking a buffered pull cannot be regressed by its 
   finalPage.resolve(response([row("one", 2, "old-pull")], 2));
   await Promise.all([pulling, delta]);
   expect(f.engine.getSnapshot().rows[0]!.data).toBe("pushed");
-  expect(
-    await f.db.table<StoredScope, string>("scopes").get(scope),
-  ).toMatchObject({
-    scope,
-    cursor: 9,
-  });
+  // The push arrived before this connection's stream had a position for the
+  // scope: its row is kept, but only the pull's revisions are proven.
+  expect(await cursor(f.db)).toBe(2);
 });
 it("failed operation metadata persists across restart and can be discarded offline", async () => {
   const f = await fixture();
@@ -844,73 +790,92 @@ describe("window page admission", () => {
     deleted: false,
     data: { seq },
   });
-  it("declares held windows and repulls when a page opens one during the pull", async () => {
+  const page = (
+    rows: ReturnType<typeof post>[],
+    lo: number,
+    hi: number,
+    rev: number,
+  ) => ({ kind: "page" as const, type: "post", rows, lo, hi, rev });
+  const holes = (s: { engine: SyncEngine }, lo = 1, hi = 20) =>
+    s.engine.holes(scope, "post", lo, hi);
+  it("declares held windows, and pulls once a page opens a window pushes do not carry", async () => {
     const s = await fixture(windowModules);
-    await s.engine.delta(response([], 1));
+    s.handle(async () => response([], 1));
+    await s.engine.connect();
     let pulls = 0;
     s.handle(async () => {
-      // The reader opens the conversation while the first pull is on the wire.
-      if (++pulls === 1) await s.engine.loadRows(scope, [post(1)]);
-      return response(pulls === 1 ? [] : [post(1, 2)], 2);
+      pulls++;
+      return response([post(2, 2)], 2, { windowed: true });
     });
-    await s.engine.pull();
+    await s.engine.loadRows(scope, page([post(1)], 1, 1, 1));
+    await until(
+      s.engine,
+      () => pulls === 1 && s.engine.getSnapshot().rows.length === 2,
+    );
     expect(s.calls.map((call) => call.args)).toEqual([
-      { cursors: { [scope]: 1 }, windowed: [] },
+      { cursors: {}, windowed: [] },
       { cursors: { [scope]: 1 }, windowed: [scope] },
     ]);
-    expect(s.engine.getSnapshot().rows[0]).toMatchObject({ id: "1", rev: 2 });
+    expect(holes(s, 1, 2)).toEqual([]);
+    // Pushes now carry posts: the window stays current without another pull.
+    await s.engine.delta(response([post(3, 3)], 3, { windowed: true }));
+    expect(holes(s, 1, 3)).toEqual([]);
+    expect(pulls).toBe(1);
   });
-  it("persists disjoint pages, extends every window, and ignores uncached gap edits", async () => {
+  it("keeps every delivered post and reports what it cannot vouch for as holes", async () => {
     const s = await fixture(windowModules);
-    await s.engine.delta(response([], 1));
-    await s.engine.loadRows(scope, [post(1), post(2), post(10)]);
+    s.handle(async () => response([], 1));
+    await s.engine.connect();
+    s.handle(async () => response([], 2, { windowed: true }));
+    await s.engine.loadRows(scope, page([post(1), post(2)], 1, 2, 2));
+    await s.engine.loadRows(scope, page([post(10, 2)], 10, 10, 2));
+    await s.engine.pull();
     await s.engine.delta(
-      response([post(3, 20), post(7, 21), post(11, 22)], 22),
+      response([post(3, 20), post(7, 21), post(11, 22)], 22, {
+        windowed: true,
+      }),
     );
     expect(
       s.engine
         .getSnapshot()
         .rows.map((r) => r.id)
         .sort(),
-    ).toEqual(["1", "10", "11", "2", "3"]);
-    expect(
-      (await s.db.table<StoredScope, string>("scopes").get(scope))?.windows,
-    ).toEqual({
-      post: [
-        [1, 3],
-        [10, 11],
-      ],
-    });
+    ).toEqual(["1", "10", "11", "2", "3", "7"]);
+    expect(holes(s, 1, 11)).toEqual([
+      [4, 6],
+      [8, 9],
+    ]);
     const restarted = s.make();
     await restarted.hydrate();
-    expect(restarted.getSnapshot().rows).toHaveLength(5);
+    expect(restarted.getSnapshot().rows).toHaveLength(6);
+    expect(restarted.holes(scope, "post", 1, 11)).toEqual(holes(s, 1, 11));
   });
-  it("resets window intervals and prevents fetched pages from restoring revoked scopes", async () => {
+  it("turns a reset into holes and keeps fetched pages from restoring revoked scopes", async () => {
     const s = await fixture(windowModules);
-    await s.engine.delta(response([], 1));
-    await s.engine.loadRows(scope, [post(1)]);
-    await s.engine.delta(response([], 2, { reset: ["post"] }));
-    expect(s.engine.getSnapshot().rows).toEqual([]);
-    expect(
-      (await s.db.table<StoredScope, string>("scopes").get(scope))?.windows,
-    ).toEqual({ post: [] });
+    s.handle(async () => response([], 1, { windowed: true }));
+    await s.engine.connect();
+    await s.engine.loadRows(scope, page([post(1)], 1, 1, 1));
+    await s.engine.pull();
+    await s.engine.delta(response([], 2, { windowed: true, reset: ["post"] }));
+    expect(s.engine.getSnapshot().rows).toHaveLength(1);
+    expect(holes(s, 1, 1)).toEqual([[1, 1]]);
     await s.engine.delta({ scopes: {}, added: [], gone: [scope] });
-    await expect(s.engine.loadRows(scope, [post(1)])).rejects.toMatchObject({
-      code: "E_DENIED",
-    });
+    await expect(
+      s.engine.loadRows(scope, page([post(1)], 1, 1, 3)),
+    ).rejects.toMatchObject({ code: "E_DENIED" });
     expect(s.engine.getSnapshot().rows).toEqual([]);
   });
   it("keeps redacted tombstone sequence slots across restart and never resurrects facts", async () => {
     const s = await fixture(windowModules);
     await s.engine.delta(response([], 1));
-    await s.engine.loadRows(scope, [post(1)]);
+    await s.engine.loadRows(scope, page([post(1)], 1, 1, 1));
     await s.engine.delta(response([{ ...post(1, 2), deleted: true }], 2));
     expect(s.engine.getSnapshot().rows[0]).toMatchObject({
       deleted: true,
       data: { seq: 1 },
       rev: 2,
     });
-    await s.engine.loadRows(scope, [post(1, 3)]);
+    await s.engine.loadRows(scope, { kind: "rows", rows: [post(1, 3)] });
     await s.engine.delta(response([post(1, 4)], 4));
     expect(s.engine.getSnapshot().rows[0]).toMatchObject({
       deleted: true,
@@ -926,70 +891,62 @@ describe("window page admission", () => {
   });
   it("does not replace a newer delta with a stale page or advance its scope cursor", async () => {
     const s = await fixture(windowModules);
-    await s.engine.delta(response([], 1));
-    await s.engine.loadRows(scope, [post(1)]);
-    await s.engine.delta(response([post(1, 9)], 9));
-    await s.engine.loadRows(scope, [post(1, 2)]);
+    s.handle(async () => response([], 1, { windowed: true }));
+    await s.engine.connect();
+    await s.engine.loadRows(scope, page([post(1)], 1, 1, 1));
+    await s.engine.pull();
+    await s.engine.delta(response([post(1, 9)], 9, { windowed: true }));
+    await s.engine.loadRows(scope, page([post(1, 2)], 1, 1, 2));
     expect(s.engine.getSnapshot().rows[0]?.rev).toBe(9);
-    expect(
-      (await s.db.table<StoredScope, string>("scopes").get(scope))?.cursor,
-    ).toBe(9);
+    expect(await cursor(s.db)).toBe(9);
+    expect(holes(s, 1, 1)).toEqual([]);
   });
 });
 
-it.each([false, true])(
-  "retains distinct history when a completed scope is overtaken during another scope's pagination (reset=%s)",
-  async (reset) => {
-    const f = await fixture();
-    await f.engine.delta(response([row("obsolete", 1)], 1));
-    const final = deferred<unknown>();
-    const reachedFinal = deferred<void>();
-    let page = 0;
-    f.handle(async () => {
-      if (++page === 1)
-        return {
-          scopes: {
-            [scope]: {
-              rows: [row("historical", 2)],
-              cursor: 2,
-              more: false,
-              ...(reset ? { reset: ["setting"] } : {}),
-            },
-            sys: { rows: [row("public", 1)], cursor: 1, more: true },
+it("retains distinct history when a completed scope is overtaken during another scope's pagination", async () => {
+  const f = await fixture();
+  await f.engine.delta(response([row("obsolete", 1)], 1));
+  const final = deferred<unknown>();
+  const reachedFinal = deferred<void>();
+  let page = 0;
+  f.handle(async () => {
+    if (++page === 1)
+      return {
+        scopes: {
+          [scope]: {
+            rows: [row("historical", 2)],
+            cursor: 2,
+            more: false,
           },
-          gone: [],
-          added: [],
-        };
-      reachedFinal.resolve();
-      return final.promise;
-    });
-    const pulling = f.engine.connect();
-    await reachedFinal.promise;
-    const pushed = f.engine.delta(response([row("live", 9)], 9));
-    final.resolve({
-      scopes: {
-        [scope]: { rows: [], cursor: 2, more: false },
-        sys: { rows: [], cursor: 2, more: false },
-      },
-      gone: [],
-      added: [],
-    });
-    await Promise.all([pulling, pushed]);
-    expect(
-      f.engine
-        .getSnapshot()
-        .rows.map((r) => r.id)
-        .sort(),
-    ).toEqual(
-      reset
-        ? ["historical", "live", "public"]
-        : ["historical", "live", "obsolete", "public"],
-    );
-    expect(
-      (await f.db.table<StoredScope, string>("scopes").get(scope))?.cursor,
-    ).toBe(9);
-  },
-);
+          sys: { rows: [row("public", 1)], cursor: 1, more: true },
+        },
+        gone: [],
+        added: [],
+      };
+    reachedFinal.resolve();
+    return final.promise;
+  });
+  const pulling = f.engine.connect();
+  await reachedFinal.promise;
+  const pushed = f.engine.delta(response([row("live", 9)], 9));
+  final.resolve({
+    scopes: {
+      [scope]: { rows: [], cursor: 2, more: false },
+      sys: { rows: [], cursor: 2, more: false },
+    },
+    gone: [],
+    added: [],
+  });
+  await Promise.all([pulling, pushed]);
+  expect(
+    f.engine
+      .getSnapshot()
+      .rows.map((r) => r.id)
+      .sort(),
+  ).toEqual(["historical", "live", "obsolete", "public"]);
+  // The push followed the scope's completed first page, so it proves 3..9.
+  expect(await cursor(f.db)).toBe(9);
+});
 
 it("revocation queued during a pull cannot be undone by its buffered rows", async () => {
   const f = await fixture();
@@ -1131,6 +1088,10 @@ it("a failed delta cannot let the next push advance past unapplied history", asy
   const failed = expect(invalid).rejects.toBeInstanceOf(AppError);
   const later = f.engine.delta(response([row("later", 3)], 3));
   await Promise.all([failed, later]);
+  // The unmerged revision 2 stays a hole: the cursor cannot pass it.
+  expect(await cursor(f.db)).toBe(1);
+  f.fire();
+  await until(f.engine, (state) => state.rows.length === 3);
   expect(
     f.engine
       .getSnapshot()
@@ -1138,6 +1099,7 @@ it("a failed delta cannot let the next push advance past unapplied history", asy
       .sort(),
   ).toEqual(["base", "later", "missing"]);
   expect(f.calls[1]?.args).toEqual({ cursors: { [scope]: 1 }, windowed: [] });
+  expect(await cursor(f.db)).toBe(3);
 });
 
 it("buffers all transfer fragments before applying and honors rotating continuation tokens", async () => {
@@ -1390,14 +1352,12 @@ it("applies a fresh scope grant after an earlier page revoked it in the same cha
   await f.engine.pull();
   expect(f.engine.getSnapshot().rows.map((row) => row.id)).toEqual(["fresh"]);
   expect(f.engine.getSnapshot().scopes).toContain(scope);
-  expect(
-    (await f.db.table<StoredScope, string>("scopes").get(scope))?.cursor,
-  ).toBe(10);
+  expect(await cursor(f.db)).toBe(10);
   expect(cleanups).toBe(0);
   expect(await f.db.table("kv").get("cleanupScopes:alice")).toEqual([]);
 });
 
-it("certifies empty scopes at cursor zero, preserves completeness across restart and invalidates it on eviction", async () => {
+it("certifies empty scopes at cursor zero and preserves completeness across restart", async () => {
   const f = await fixture();
   f.handle(async () => response([], 0));
   expect(f.engine.getSnapshot().cacheReady).toBe(false);
@@ -1406,12 +1366,9 @@ it("certifies empty scopes at cursor zero, preserves completeness across restart
   const restored = f.make();
   await restored.hydrate();
   expect(restored.getSnapshot().cacheReady).toBe(true);
-  // Eviction deliberately replaces the scope and drops its completeness certificate.
-  await f.db.table<StoredScope>("scopes").put({ scope, cursor: 0 });
-  await restored.refreshLocal();
-  expect(restored.getSnapshot().cacheReady).toBe(false);
-  await restored.connect();
-  expect(restored.getSnapshot().cacheReady).toBe(true);
+  const saved = await f.db.table<StoredScope, string>("scopes").get(scope);
+  expect(isComplete(saved!.coverage)).toBe(true);
+  expect(cursorOf(saved!.coverage)).toBe(0);
 });
 
 describe("outbound batching and debounce", () => {

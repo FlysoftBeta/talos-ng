@@ -72,16 +72,24 @@ export async function page(
     limit: 10,
     ...(before ? { before } : {}),
   });
-  await r.loadRows(
-    `ai:${id}`,
-    result.messages.map((m) => ({
+  const first = result.messages[0]?.seq;
+  await r.loadRows(`ai:${id}`, {
+    kind: "page",
+    type: "aiMessage",
+    rows: result.messages.map((m) => ({
       type: "aiMessage",
       id: m.id,
       rev: m.rev,
       deleted: false,
       data: m,
     })),
-  );
+    lo: first ?? 1,
+    hi:
+      first === undefined
+        ? 0
+        : result.messages[result.messages.length - 1]!.seq,
+    rev: result.rev,
+  });
   return result.more;
 }
 export async function uploadImage<F extends AiPickedFile>(

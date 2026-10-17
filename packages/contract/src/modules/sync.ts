@@ -25,6 +25,8 @@ export const scopePullSchema = z
     cursor: revSchema,
     more: z.boolean(),
     reset: z.array(z.string()).optional(),
+    /** Windowed rows are included; otherwise the server omitted them. */
+    windowed: z.boolean().optional(),
   })
   .strict();
 export const syncResultSchema = z

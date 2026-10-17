@@ -2,41 +2,50 @@ import { AppError, Emitter, Semaphore } from "@talos/base";
 import { MAX_PUSH_OPS, contract, syncResultSchema } from "@talos/contract";
 import type { JsonValue, ResultOf } from "@talos/contract";
 import {
-  IntervalSet,
+  EMPTY_COVERAGE,
+  EMPTY_REPLICA,
+  cursorOf,
+  holdsWindow,
+  holes,
+  isComplete,
   isTerminalRejection,
+  mergeReplica,
   nextToSend,
-  planApply,
   reduceOutbox,
 } from "@talos/sync";
 import type {
+  Coverage,
+  Inbound,
+  IntervalSetJSON,
   OutboxEvent,
   OutboxItem,
+  Replica,
   ScopePull,
-  Row,
-  IntervalSetJSON,
 } from "@talos/sync";
-import type { Database } from "@talos/store";
+import type { Database, LockManagerLike } from "@talos/store";
 import type { StoredRow, StoredScope } from "./db.ts";
+import { ScopeLocks, readReplicas, writeReplica } from "./scope-store.ts";
 
 import type { TypedCall } from "./link.ts";
 import type { ModuleRegistry } from "./modules.ts";
 import { methodRegistry } from "@talos/contract";
 
-function holdsWindow(scope: StoredScope | undefined): boolean {
-  return Object.values(scope?.windows ?? {}).some(
-    (intervals) => intervals.length > 0,
-  );
+/** What features merge themselves: fetched window pages and individually read rows. */
+export type WindowInput = Extract<Inbound, { kind: "page" | "rows" }>;
+
+function chains(
+  pages: ReadonlyMap<string, ScopePull[]>,
+  from: Readonly<Record<string, number>>,
+): Map<string, Inbound[]> {
+  const out = new Map<string, Inbound[]>();
+  for (const [scope, list] of pages)
+    out.set(scope, [{ kind: "chain", from: from[scope] ?? 0, pages: list }]);
+  return out;
 }
 
 /** Operations and argument bytes sent per flush request. */
 const BATCH_OPERATIONS = MAX_PUSH_OPS;
 const BATCH_BYTES = 64 * 1024;
-
-class SyncCursorChanged extends AppError {
-  constructor() {
-    super("E_CONFLICT", "同步进度已变更，正在重新同步");
-  }
-}
 
 export type SyncPhase =
   "offline" | "connecting" | "authenticating" | "syncing" | "live";
@@ -58,6 +67,8 @@ export interface SyncSnapshot {
   scopes: readonly string[];
   /** Empty unless a pull is (or was interrupted while) paging. */
   scopeSync: readonly ScopeSync[];
+  /** Stored coverage of the admitted scopes. */
+  coverage: Readonly<Record<string, Coverage>>;
 }
 export interface EngineOptions {
   db: Database;
@@ -71,6 +82,8 @@ export interface EngineOptions {
   };
   onError?: (error: unknown) => void;
   onGone?: (scopes: readonly string[]) => Promise<void>;
+  /** Cross-tab scope locks; defaults to `navigator.locks` when present. */
+  locks?: LockManagerLike | null;
 }
 export class SyncEngine {
   private snapshot: SyncSnapshot = {
@@ -83,6 +96,7 @@ export class SyncEngine {
     outbox: [],
     scopes: [],
     scopeSync: [],
+    coverage: {},
   };
   private readonly events = new Emitter<void>();
   private readonly writes = new Semaphore(1);
@@ -97,6 +111,11 @@ export class SyncEngine {
   private pullFailures = 0;
   private needsPull = false;
   private readonly revocations = new Map<string, number>();
+  /** Per scope, the revision this connection's push stream continues from. */
+  private readonly served = new Map<string, number>();
+  /** Scopes whose pushes carry windowed rows on this connection. */
+  private readonly pushesWindowed = new Set<string>();
+  private readonly locks: ScopeLocks;
   private readonly sendOptions;
   private readonly now: () => number;
   private readonly timers: NonNullable<EngineOptions["timers"]>;
@@ -112,6 +131,7 @@ export class SyncEngine {
     };
     this.now = options.now ?? Date.now;
     this.timers = options.timers;
+    this.locks = new ScopeLocks(options.locks);
   }
   getSnapshot = (): SyncSnapshot => this.snapshot;
   subscribe = (fn: () => void): (() => void) => this.events.on(fn);
@@ -148,19 +168,21 @@ export class SyncEngine {
       ]);
     // Every engine owns a per-account set of admitted scopes; other users' me rows never project.
     const visible = rows.filter((row) => (admitted ?? []).includes(row.scope));
+    const coverage: Record<string, Coverage> = {};
+    for (const saved of scopes)
+      if ((admitted ?? []).includes(saved.scope))
+        coverage[saved.scope] = saved.coverage;
     this.publish({
       rows: modules.project(visible, outbox ?? [], user),
       outbox: outbox ?? [],
       scopes: admitted ?? [],
+      coverage,
       lastSync,
       cacheReady:
         lastSync !== undefined &&
         partial !== true &&
-        (admitted ?? []).every((scope) =>
-          scopes.some(
-            (saved) =>
-              saved.scope === scope && (saved.complete ?? saved.cursor > 0),
-          ),
+        (admitted ?? []).every(
+          (scope) => !!coverage[scope] && isComplete(coverage[scope]!),
         ),
     });
   }
@@ -244,6 +266,8 @@ export class SyncEngine {
   disconnect(): void {
     this.online = false;
     ++this.generation;
+    this.served.clear();
+    this.pushesWindowed.clear();
     this.timers.clear(this.retryTimer);
     this.retryBlocked = false;
     this.timers.clear(this.pullRetryTimer);
@@ -255,6 +279,8 @@ export class SyncEngine {
   }
   async connect(): Promise<void> {
     const generation = ++this.generation;
+    this.served.clear();
+    this.pushesWindowed.clear();
     this.online = true;
     this.retryBlocked = false;
     this.timers.clear(this.retryTimer);
@@ -270,148 +296,134 @@ export class SyncEngine {
       await this.pulls.run(async () => {
         if (generation !== this.generation) return;
         this.needsPull = true;
-        // Other tabs and cache eviction share the database, not this engine's gate.
-        // Retry a changed request base before exposing a transient conflict to login.
-        for (let attempt = 0; ; attempt++) {
-          if (generation !== this.generation) return;
-          this.publish({ progress: 0 });
-          const revocations = new Map(this.revocations);
-          const { db, user } = this.options;
-          const admitted =
-            (await db
-              .table<readonly string[], string>("kv")
-              .get(`scopes:${user}`)) ?? [];
-          const scopes = await db.table<StoredScope>("scopes").range();
-          const cursors: Record<string, number> = {};
-          // Scopes without a held window need none of their windowed rows, which
-          // are most of a large conversation's history; omitting them lets a
-          // conversation's metadata finish (and open) on the first page.
-          const windowed: string[] = [];
-          for (const scope of scopes)
-            if (admitted.includes(scope.scope)) {
-              cursors[scope.scope] = scope.cursor;
-              if (holdsWindow(scope)) windowed.push(scope.scope);
-            }
-          const bases = { ...cursors };
-          const progress = new Map<string, ScopeSync>();
-          for (const scope of admitted) {
-            const saved = scopes.find((item) => item.scope === scope);
-            progress.set(scope, {
-              scope,
-              state:
-                saved && (saved.complete ?? saved.cursor > 0)
-                  ? "ready"
-                  : "waiting",
-              rows: 0,
-            });
+        this.publish({ progress: 0 });
+        const revocations = new Map(this.revocations);
+        const { db, user } = this.options;
+        const admitted =
+          (await db
+            .table<readonly string[], string>("kv")
+            .get(`scopes:${user}`)) ?? [];
+        const saved = new Map(
+          (await db.table<StoredScope>("scopes").range()).map((item) => [
+            item.scope,
+            item.coverage,
+          ]),
+        );
+        // Each request base is the cursor the stored coverage proves. A chain from
+        // there only adds facts, so other tabs, evictions and window pages that
+        // commit meanwhile never invalidate it.
+        const cursors: Record<string, number> = {};
+        // Scopes without a held window need none of their windowed rows, which
+        // are most of a large conversation's history; omitting them lets a
+        // conversation's metadata finish (and open) on the first page.
+        const windowed: string[] = [];
+        const progress = new Map<string, ScopeSync>();
+        for (const scope of admitted) {
+          const coverage = saved.get(scope);
+          if (coverage) {
+            cursors[scope] = cursorOf(coverage);
+            if (holdsWindow(coverage)) windowed.push(scope);
           }
-          const report = () =>
-            this.publish({ scopeSync: [...progress.values()] });
-          report();
-          const pages = new Map<string, ScopePull[]>();
-          const gone = new Set<string>();
-          let more: boolean;
-          do {
-            const response = await this.pullResponse(
-              cursors,
-              windowed,
-              generation,
-            );
-            if (!response) return;
-            if (generation !== this.generation) return;
-            more = response.repull === true;
-            for (const scope of response.gone) {
-              gone.add(scope);
-              delete cursors[scope];
-              delete bases[scope];
-              pages.delete(scope);
-            }
-            for (const [scope, page] of Object.entries(response.scopes)) {
-              const list = pages.get(scope) ?? [];
-              // Another scope can require more pages after this scope completed.
-              // Continue its buffered history without dropping newer rows or resets.
-              if (list.length)
-                list[list.length - 1] = {
-                  ...list[list.length - 1]!,
-                  more: true,
-                };
-              list.push(page);
-              pages.set(scope, list);
-              cursors[scope] = page.cursor;
-              more = more || page.more;
-              const known = progress.get(scope);
-              if (known?.state !== "ready")
-                progress.set(scope, {
-                  scope,
-                  state: "loading",
-                  rows: (known?.rows ?? 0) + page.rows.length,
-                });
-              this.publish({
-                progress: this.snapshot.progress + page.rows.length,
-              });
-            }
-            report();
-            if (!more) break;
-            // Scopes whose chain is already complete become usable while other
-            // scopes keep paging. Each commit is still atomic per scope chain, and
-            // the request base moves with it so later pages continue that chain.
-            const ready = new Map<string, ScopePull[]>();
-            for (const [scope, chain] of pages)
-              if (
-                !gone.has(scope) &&
-                !chain[chain.length - 1]!.more &&
-                chain.some((page) => page.rows.length || page.reset?.length)
-              )
-                ready.set(scope, chain);
-            // Revocations found by a pull stay with the final commit: a later page
-            // may regrant the scope, which must not run its cleanup in between.
-            if (!ready.size) continue;
-            try {
-              await this.applyPages(
-                ready,
-                [],
-                generation,
-                revocations,
-                bases,
-                "partial",
-                windowed,
-              );
-            } catch (error) {
-              if (error instanceof SyncCursorChanged && attempt < 2) break;
-              throw error;
-            }
-            if (generation !== this.generation) return;
-            for (const [scope, chain] of ready) {
-              bases[scope] = chain[chain.length - 1]!.cursor;
-              pages.delete(scope);
+          progress.set(scope, {
+            scope,
+            state: coverage && isComplete(coverage) ? "ready" : "waiting",
+            rows: 0,
+          });
+        }
+        const from: Record<string, number> = { ...cursors };
+        const report = () =>
+          this.publish({ scopeSync: [...progress.values()] });
+        report();
+        const pages = new Map<string, ScopePull[]>();
+        const gone = new Set<string>();
+        let more: boolean;
+        do {
+          const response = await this.pullResponse(
+            cursors,
+            windowed,
+            generation,
+          );
+          if (!response) return;
+          if (generation !== this.generation) return;
+          more = response.repull === true;
+          for (const scope of response.gone) {
+            gone.add(scope);
+            delete cursors[scope];
+            delete from[scope];
+            pages.delete(scope);
+            this.served.delete(scope);
+          }
+          for (const [scope, page] of Object.entries(response.scopes)) {
+            const list = pages.get(scope) ?? [];
+            // Another scope can require more pages after this scope completed.
+            // Continue its buffered history without dropping newer rows or resets.
+            if (list.length)
+              list[list.length - 1] = {
+                ...list[list.length - 1]!,
+                more: true,
+              };
+            list.push(page);
+            pages.set(scope, list);
+            cursors[scope] = page.cursor;
+            more = more || page.more;
+            // The server pushes a scope's changes from its final page on.
+            if (!page.more) this.subscribed(scope, page);
+            const known = progress.get(scope);
+            if (known?.state !== "ready")
               progress.set(scope, {
                 scope,
-                state: "ready",
-                rows: progress.get(scope)?.rows ?? 0,
+                state: "loading",
+                rows: (known?.rows ?? 0) + page.rows.length,
               });
-            }
-            report();
-          } while (more);
-          if (more) continue;
-          try {
-            await this.applyPages(
-              pages,
-              [...gone],
-              generation,
-              revocations,
-              bases,
-              "pull",
-              windowed,
-            );
-          } catch (error) {
-            if (error instanceof SyncCursorChanged && attempt < 2) continue;
-            throw error;
+            this.publish({
+              progress: this.snapshot.progress + page.rows.length,
+            });
           }
-          if (generation === this.generation) {
-            this.needsPull = false;
-            this.publish({ scopeSync: [] });
+          report();
+          if (!more) break;
+          // Scopes whose chain is already complete become usable while other
+          // scopes keep paging. Each scope chain still merges atomically, and the
+          // next chain of that scope continues from its top.
+          const ready = new Map<string, ScopePull[]>();
+          for (const [scope, chain] of pages)
+            if (
+              !gone.has(scope) &&
+              !chain[chain.length - 1]!.more &&
+              chain.some((page) => page.rows.length || page.reset?.length)
+            )
+              ready.set(scope, chain);
+          // Revocations found by a pull stay with the final commit: a later page
+          // may regrant the scope, which must not run its cleanup in between.
+          if (!ready.size) continue;
+          await this.commit(
+            chains(ready, from),
+            [],
+            generation,
+            revocations,
+            "partial",
+          );
+          if (generation !== this.generation) return;
+          for (const [scope, chain] of ready) {
+            from[scope] = chain[chain.length - 1]!.cursor;
+            pages.delete(scope);
+            progress.set(scope, {
+              scope,
+              state: "ready",
+              rows: progress.get(scope)?.rows ?? 0,
+            });
           }
-          break;
+          report();
+        } while (more);
+        await this.commit(
+          chains(pages, from),
+          [...gone],
+          generation,
+          revocations,
+          "pull",
+        );
+        if (generation === this.generation) {
+          this.needsPull = false;
+          this.publish({ scopeSync: [] });
         }
       });
       if (generation === this.generation) {
@@ -427,6 +439,12 @@ export class SyncEngine {
       this.recoverPull(error, generation);
       throw error;
     }
+  }
+  /** Records where the server's push stream of a scope continues. */
+  private subscribed(scope: string, page: ScopePull): void {
+    this.served.set(scope, page.cursor);
+    if (page.windowed) this.pushesWindowed.add(scope);
+    else this.pushesWindowed.delete(scope);
   }
   private async pullResponse(
     cursors: Record<string, number>,
@@ -500,51 +518,42 @@ export class SyncEngine {
   }
   async delta(response: ResultOf<typeof contract.sync.pull>): Promise<void> {
     const generation = this.generation;
-    for (const scope of response.gone)
+    for (const scope of response.gone) {
       this.revocations.set(scope, (this.revocations.get(scope) ?? 0) + 1);
+      this.served.delete(scope);
+    }
     const revocations = new Map(this.revocations);
-    // A delta must not advance a durable cursor past buffered historical rows or resets.
-    // Hold the same gate through the entire paginated pull and its atomic commit.
+    // Each pushed page continues the scope's stream where the previous page or
+    // pull ended; place it on arrival, before anything awaits. A page whose start
+    // is unknown still merges its rows, but proves no revisions.
+    const inputs = new Map<string, Inbound[]>();
+    let unplaced = false;
+    for (const [scope, page] of Object.entries(response.scopes)) {
+      if (page.more) continue;
+      const from = this.served.get(scope);
+      if (from === undefined) unplaced = true;
+      this.served.set(scope, Math.max(from ?? page.cursor, page.cursor));
+      inputs.set(scope, [
+        { kind: "chain", from: from ?? page.cursor, pages: [page] },
+      ]);
+    }
     try {
       // Revocation does not wait for a slow pull. Its epoch prevents that pull, or
       // any already queued delta, from readmitting the removed scope afterward.
-      if (response.gone.length) {
-        await this.applyPages(
-          new Map(),
+      if (response.gone.length || inputs.size)
+        await this.commit(
+          inputs,
           response.gone,
           generation,
           revocations,
+          "delta",
         );
-        if (
-          !Object.keys(response.scopes).length &&
-          !response.added.length &&
-          !response.repull
-        )
-          return;
-      }
+      // An unplaced page needs a pull to prove its revisions, unless one runs.
       if (
-        response.repull ||
-        Object.values(response.scopes).some((page) => page.more)
-      ) {
-        await this.pull();
-        return;
-      }
-      let recover = false;
-      await this.pulls.run(async () => {
-        if (generation !== this.generation) return;
-        if (this.needsPull) {
-          recover = true;
-          return;
-        }
-        this.needsPull = true;
-        const pages = new Map<string, ScopePull[]>();
-        for (const [scope, page] of Object.entries(response.scopes))
-          pages.set(scope, [page]);
-        await this.applyPages(pages, [], generation, revocations);
-        if (generation === this.generation) this.needsPull = false;
-      });
-      if (
-        (recover || response.added.length) &&
+        ((unplaced && !this.needsPull) ||
+          response.repull ||
+          response.added.length ||
+          Object.values(response.scopes).some((page) => page.more)) &&
         this.online &&
         generation === this.generation
       )
@@ -552,195 +561,79 @@ export class SyncEngine {
       if (this.online && generation === this.generation)
         this.flushInBackground();
     } catch (error) {
+      // A page that did not merge leaves its stream position unknown.
+      if (generation === this.generation)
+        for (const scope of inputs.keys()) this.served.delete(scope);
       this.recoverPull(error, generation);
       throw error;
     }
   }
-  private async applyPages(
-    pages: Map<string, ScopePull[]>,
+  /**
+   * Merges inbound changes into the stored replicas of their scopes, one
+   * transaction under the scopes' locks. `gone` scopes are purged first.
+   */
+  private async commit(
+    inputs: ReadonlyMap<string, readonly Inbound[]>,
     gone: readonly string[],
     generation: number,
     revocations: ReadonlyMap<string, number>,
-    bases?: Readonly<Record<string, number>>,
-    stage: "pull" | "partial" | "delta" = bases ? "pull" : "delta",
-    windowed?: readonly string[],
+    stage: "pull" | "partial" | "delta",
   ): Promise<void> {
     await this.writes.run(async () => {
       if (generation !== this.generation) return;
-      const { db, user } = this.options;
-      await db.tx(["rows", "scopes", "kv"], "readwrite", (tx) => {
-        const rows = tx.table<StoredRow>("rows");
-        const scopes = tx.table<StoredScope, string>("scopes");
-        return rows.range().then((existing) =>
-          scopes.range().then((saved) =>
-            tx
-              .table<readonly string[], string>("kv")
-              .getMany([`scopes:${user}`, `cleanupScopes:${user}`])
-              .then(([allowed, pendingCleanup]) => {
+      const { db, user, modules } = this.options;
+      const touched = [...new Set([...gone, ...inputs.keys()])];
+      await this.locks.run(touched, () =>
+        db.tx(["rows", "scopes", "kv"], "readwrite", (tx) => {
+          const kv = tx.table<unknown, string>("kv");
+          return tx
+            .table<readonly string[], string>("kv")
+            .getMany([`scopes:${user}`, `cleanupScopes:${user}`])
+            .then(([allowed, pendingCleanup]) =>
+              readReplicas(tx, touched, (held) => {
                 if (generation !== this.generation) return;
                 const admitted = new Set(allowed ?? []);
                 const cleanup = new Set(pendingCleanup ?? []);
-                const key = (
-                  row: Pick<StoredRow, "scope" | "type" | "id">,
-                ): string => JSON.stringify([row.scope, row.type, row.id]);
-                const current = new Map(existing.map((row) => [key(row), row]));
-                const cursors = new Map(
-                  saved.map((scope) => [scope.scope, scope.cursor]),
-                );
+                const next = new Map<string, Replica>();
+                const current = (scope: string): Replica =>
+                  next.get(scope) ?? held.get(scope)!.replica;
                 for (const scope of gone) {
                   admitted.delete(scope);
                   cleanup.add(scope);
-                  scopes.delete(scope);
-                  cursors.delete(scope);
-                  for (const row of existing)
-                    if (row.scope === scope) {
-                      rows.delete([scope, row.type, row.id]);
-                      current.delete(key(row));
-                    }
+                  next.set(scope, EMPTY_REPLICA);
                 }
-                for (const [scope, chain] of pages) {
+                for (const [scope, list] of inputs) {
                   if (
                     (this.revocations.get(scope) ?? 0) !==
                     (revocations.get(scope) ?? 0)
                   )
                     continue;
-                  const wasAdmitted = admitted.has(scope);
-                  const currentCursor = wasAdmitted
-                    ? (cursors.get(scope) ?? 0)
-                    : 0;
-                  // Both advances from another tab and eviction resets invalidate
-                  // the request base. Never overwrite that change with buffered pages.
-                  if (bases && currentCursor !== (bases[scope] ?? 0))
-                    throw new SyncCursorChanged();
-                  // A page fetched during the pull opened a window the request
-                  // declared absent, so its omitted rows may be newer than the page.
-                  if (
-                    windowed &&
-                    wasAdmitted &&
-                    !windowed.includes(scope) &&
-                    holdsWindow(saved.find((item) => item.scope === scope))
-                  )
-                    throw new SyncCursorChanged();
-                  // Eviction invalidates the scope by resetting its cursor. A
-                  // delta cannot certify the missing history, even between pulls.
-                  if (
-                    !bases &&
-                    wasAdmitted &&
-                    currentCursor === 0 &&
-                    chain[chain.length - 1]!.cursor > 0
-                  )
-                    throw new SyncCursorChanged();
-                  if (!wasAdmitted && bases) {
-                    for (const row of existing)
-                      if (row.scope === scope) {
-                        rows.delete([scope, row.type, row.id]);
-                        current.delete(key(row));
-                      }
-                    cursors.delete(scope);
-                  }
+                  // First admission: rows another account left behind never project.
+                  if (!admitted.has(scope)) next.set(scope, EMPTY_REPLICA);
                   admitted.add(scope);
-                  // A later page may legitimately regrant a scope removed earlier in this chain.
-                  // Its fresh data must not inherit the removed scope's windows or cleanup job.
+                  // A later page may legitimately regrant a scope removed earlier in
+                  // this chain; its fresh data must not inherit the cleanup job.
                   cleanup.delete(scope);
-                  const savedScope =
-                    gone.includes(scope) || (!wasAdmitted && bases)
-                      ? undefined
-                      : saved.find((item) => item.scope === scope);
-                  const cursor = cursors.get(scope) ?? 0;
-                  // Delayed pushes must not regress a completed pull or replay stale resets.
-                  if (chain[chain.length - 1]!.cursor < cursor) continue;
-                  const operations = planApply(
-                    {
-                      cursor,
-                      windows: savedScope?.windows ?? {},
-                    },
-                    chain,
-                    { windowed: this.options.modules.windowed },
-                  );
-                  const windows: Record<string, IntervalSetJSON> = {
-                    ...savedScope?.windows,
-                  };
-                  for (const operation of operations) {
-                    if (operation.kind === "dropType") {
-                      for (const row of current.values())
-                        if (
-                          row.scope === scope &&
-                          row.type === operation.type
-                        ) {
-                          rows.delete([scope, row.type, row.id]);
-                          current.delete(key(row));
-                        }
-                    } else if (
-                      operation.kind === "put" ||
-                      operation.kind === "delete"
-                    ) {
-                      const row =
-                        operation.kind === "put"
-                          ? operation.row
-                          : {
-                              type: operation.type,
-                              id: operation.id,
-                              rev: operation.rev,
-                              deleted: true,
-                              data: this.options.modules.windowed[
-                                operation.type
-                              ]
-                                ? (chain
-                                    .reduce<Row[]>(
-                                      (rows, page) => rows.concat(page.rows),
-                                      [],
-                                    )
-                                    .find(
-                                      (row) =>
-                                        row.type === operation.type &&
-                                        row.id === operation.id &&
-                                        row.rev === operation.rev,
-                                    )?.data ?? null)
-                                : null,
-                            };
-                      const stored = { ...row, scope };
-                      const old = current.get(key(stored));
-                      if (
-                        (!old || old.rev < row.rev) &&
-                        !(
-                          old?.deleted &&
-                          this.options.modules.windowed[row.type] &&
-                          !row.deleted
-                        )
-                      ) {
-                        rows.put(stored);
-                        current.set(key(stored), stored);
-                      }
-                    } else if (operation.kind === "setWindow")
-                      windows[operation.type] = operation.intervals;
-                    else if (operation.kind === "setCursor")
-                      scopes.put({
-                        scope,
-                        cursor: operation.cursor,
-                        complete: true,
-                        ...(Object.keys(windows).length ? { windows } : {}),
-                      });
-                  }
+                  let replica = current(scope);
+                  for (const input of list)
+                    replica = mergeReplica(replica, input, modules.windowed);
+                  next.set(scope, replica);
                 }
-                tx.table<readonly string[], string>("kv").put(
-                  [...cleanup],
-                  `cleanupScopes:${user}`,
-                );
-                tx.table<readonly string[], string>("kv").put(
-                  [...admitted],
-                  `scopes:${user}`,
-                );
+                for (const [scope, replica] of next)
+                  writeReplica(tx, scope, held.get(scope)!, replica);
+                kv.put([...cleanup], `cleanupScopes:${user}`);
+                kv.put([...admitted], `scopes:${user}`);
                 // Until the whole pull commits, scopes sit at different revisions.
                 // The durable marker keeps the cache "not ready" across a reload.
-                const kv = tx.table<unknown, string>("kv");
-                if (stage === "partial")
-                  return kv.put(true, `partialSync:${user}`);
-                if (stage === "pull") kv.delete(`partialSync:${user}`);
-                return kv.put(this.now(), `lastSync:${user}`);
+                if (stage === "partial") kv.put(true, `partialSync:${user}`);
+                else {
+                  if (stage === "pull") kv.delete(`partialSync:${user}`);
+                  kv.put(this.now(), `lastSync:${user}`);
+                }
               }),
-          ),
-        );
-      });
+            );
+        }),
+      );
       await this.refresh();
       await this.drainGone(generation);
     });
@@ -770,57 +663,44 @@ export class SyncEngine {
       });
     }
   }
-  /** Admit fetched window pages without advancing the scope revision cursor. */
-  async loadRows(scope: string, incoming: readonly Row[]): Promise<void> {
+  /** Merges a fetched window page, or rows read individually, into an admitted scope. */
+  async loadRows(scope: string, input: WindowInput): Promise<void> {
     await this.writes.run(async () => {
       const { db, user, modules } = this.options;
-      await db.tx(["rows", "scopes", "kv"], "readwrite", (tx) =>
-        tx
-          .table<readonly string[], string>("kv")
-          .get(`scopes:${user}`)
-          .then((admitted) => {
-            if (!(admitted ?? []).includes(scope))
-              throw new AppError("E_DENIED", "对话访问权限已失效");
-            return tx
-              .table<StoredScope, string>("scopes")
-              .get(scope)
-              .then((saved) => {
-                const windows: Record<string, IntervalSetJSON> = {
-                  ...saved?.windows,
-                };
-                const rows = tx.table<StoredRow>("rows");
-                return rows
-                  .getMany(incoming.map((row) => [scope, row.type, row.id]))
-                  .then((existing) => {
-                    incoming.forEach((row, i) => {
-                      const previous = existing[i];
-                      if (
-                        (!previous || previous.rev < row.rev) &&
-                        !(
-                          previous?.deleted &&
-                          modules.windowed[row.type] &&
-                          !row.deleted
-                        )
-                      )
-                        rows.put({ ...row, scope });
-                      const config = modules.windowed[row.type];
-                      if (config)
-                        windows[row.type] = new IntervalSet(windows[row.type])
-                          .add(config.seqOf(row))
-                          .toJSON();
-                    });
-                    return tx.table<StoredScope, string>("scopes").put({
-                      scope,
-                      cursor: saved?.cursor ?? 0,
-                      complete: saved?.complete,
-                      windows,
-                    });
-                  });
+      await this.locks.run([scope], () =>
+        db.tx(["rows", "scopes", "kv"], "readwrite", (tx) =>
+          tx
+            .table<readonly string[], string>("kv")
+            .get(`scopes:${user}`)
+            .then((admitted) => {
+              if (!(admitted ?? []).includes(scope))
+                throw new AppError("E_DENIED", "对话访问权限已失效");
+              return readReplicas(tx, [scope], (held) => {
+                const before = held.get(scope)!;
+                writeReplica(
+                  tx,
+                  scope,
+                  before,
+                  mergeReplica(before.replica, input, modules.windowed),
+                );
               });
-          }),
+            }),
+        ),
       );
       await this.refresh();
     });
+    // Pushes carry windowed rows only for scopes that held a window at the last
+    // pull. Until the next pull lists this one, its window can only go stale.
+    if (
+      this.online &&
+      !this.pushesWindowed.has(scope) &&
+      holdsWindow(this.snapshot.coverage[scope])
+    )
+      void this.pull().catch((error: unknown) => this.options.onError?.(error));
+  }
+  /** Sequence numbers in lo..hi of a windowed type that are not known to be current. */
+  holes(scope: string, type: string, lo: number, hi: number): IntervalSetJSON {
+    return holes(this.snapshot.coverage[scope] ?? EMPTY_COVERAGE, type, lo, hi);
   }
   private flushInBackground(): void {
     void this.flush().catch((error: unknown) => this.options.onError?.(error));

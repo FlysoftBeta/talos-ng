@@ -26,7 +26,7 @@ describe("durable AI runs and accounting", () => {
     const changes: SyncResponse[] = [];
     s.hub.pull(
       user,
-      { cursors: {} },
+      { cursors: {}, windowed: [`ai:${c.id}`] },
       { id: "connection", emit: (_t, d) => changes.push(d as SyncResponse) },
     );
     const run = s.service.start(user, { conversation: c.id, text: "你好" });

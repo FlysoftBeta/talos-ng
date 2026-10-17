@@ -74,6 +74,8 @@ interface Subscription {
   connection: SyncConnection;
   known: Set<string>;
   complete: Set<string>;
+  /** Scopes whose windowed rows are pushed (the client held a window when it pulled). */
+  windowed: Set<string>;
 }
 
 /** Pull is authoritative; failed pushes suspend live delivery until repaired. */
@@ -271,6 +273,7 @@ export class SyncHub {
         cursor: page.more ? page.cursor : revision,
         more: page.more,
         ...(reset.length > 0 ? { reset } : {}),
+        ...(windowed.has(scope) ? { windowed: true } : {}),
       };
     }
     return {
@@ -326,6 +329,8 @@ export class SyncHub {
         known: accessible,
         complete:
           previous?.user === user ? new Set(previous.complete) : new Set(),
+        windowed:
+          previous?.user === user ? new Set(previous.windowed) : new Set(),
       };
       for (const scope of subscription.complete) {
         if (!accessible.has(scope)) subscription.complete.delete(scope);
@@ -333,6 +338,8 @@ export class SyncHub {
       for (const [scope, pull] of Object.entries(response.scopes)) {
         if (pull.more || dirty?.has(scope)) subscription.complete.delete(scope);
         else subscription.complete.add(scope);
+        if (pull.windowed) subscription.windowed.add(scope);
+        else subscription.windowed.delete(scope);
       }
     }
     if (snapshot.bytes > MAX_SYNC_BYTES) {
@@ -423,6 +430,10 @@ export class SyncHub {
         const seen = new Set<string>();
         for (const change of changeSet.changes) {
           if (!subscription.complete.has(change.scope)) continue;
+          // Like pulls, pushes carry windowed rows only where the client holds a
+          // window, and say so: the client must never infer coverage it lacks.
+          const windowed = subscription.windowed.has(change.scope);
+          if (!windowed && this.entities.get(change.type)?.windowed) continue;
           const key = JSON.stringify([change.scope, change.type, change.id]);
           if (seen.has(key)) continue;
           seen.add(key);
@@ -431,6 +442,7 @@ export class SyncHub {
             rows: [],
             cursor: changeSet.rev,
             more: false,
+            ...(windowed ? { windowed: true } : {}),
           };
           response.scopes[change.scope] = {
             ...scope,

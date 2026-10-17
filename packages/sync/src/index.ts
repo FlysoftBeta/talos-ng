@@ -15,15 +15,26 @@ export type {
 } from "./registers.ts";
 export { IntervalSet } from "./intervals.ts";
 export type { Interval, IntervalSetJSON } from "./intervals.ts";
-export { planApply, mergePage, selectDelta } from "./delta.ts";
+export { selectDelta } from "./delta.ts";
+export type { Row, ScopePull } from "./delta.ts";
+export {
+  EMPTY_COVERAGE,
+  EMPTY_REPLICA,
+  cursorOf,
+  holdsWindow,
+  holes,
+  isComplete,
+  mergeReplica,
+  rowKey,
+} from "./replica.ts";
 export type {
-  Row,
-  ScopePull,
-  ScopeState,
-  ApplyOperation,
-  ApplyOptions,
-  PageRange,
-} from "./delta.ts";
+  Coverage,
+  Inbound,
+  KnownRange,
+  Replica,
+  TypeCoverage,
+  WindowedTypes,
+} from "./replica.ts";
 export {
   reduceOutbox,
   nextToSend,

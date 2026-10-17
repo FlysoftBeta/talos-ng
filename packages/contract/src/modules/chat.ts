@@ -156,6 +156,8 @@ export const chat = Object.freeze({
           latest: revSchema,
           hasBefore: z.boolean(),
           hasAfter: z.boolean(),
+          /** Server revision the page was read at: it certifies first..last then. */
+          rev: revSchema,
         })
         .strict(),
       auth: "user",

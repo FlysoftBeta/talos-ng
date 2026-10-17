@@ -16,7 +16,7 @@ import type {
 import { contract } from "@talos/contract";
 import type { LinkClient, WelcomeHeader } from "@talos/link";
 import type { Database } from "@talos/store";
-import type { OutboxItem, Row } from "@talos/sync";
+import type { IntervalSetJSON, OutboxItem } from "@talos/sync";
 import type { Admission } from "../auth/admission.ts";
 import { SessionController } from "../auth/controller.ts";
 import type { PinVerifier } from "../auth/pin.ts";
@@ -28,7 +28,7 @@ import type { ModuleRegistry } from "../data/modules.ts";
 import { Repository } from "../data/repository.ts";
 import { SessionSyncController } from "../data/session-sync.ts";
 import { SettingsController } from "../data/settings.ts";
-import type { SyncEngine } from "../data/sync-engine.ts";
+import type { SyncEngine, WindowInput } from "../data/sync-engine.ts";
 import { FilesController } from "../files/controller.ts";
 import type { FileStorage } from "../files/environment.ts";
 import { EvictionManager } from "../files/eviction.ts";
@@ -181,6 +181,7 @@ export class ApplicationController {
         this.status({ storage: "存储空间不足" });
       },
       onEvicted: () => this.engine?.refreshLocal() ?? Promise.resolve(),
+      windowed: this.modules.windowed,
     });
     await this.auth.restore();
     if (this.closed) return;
@@ -368,8 +369,11 @@ export class ApplicationController {
   outbox(): readonly OutboxItem[] {
     return this.sessionSync.outbox();
   }
-  async loadRows(scope: string, rows: readonly Row[]): Promise<void> {
-    return this.sessionSync.loadRows(scope, rows);
+  async loadRows(scope: string, input: WindowInput): Promise<void> {
+    return this.sessionSync.loadRows(scope, input);
+  }
+  holes(scope: string, type: string, lo: number, hi: number): IntervalSetJSON {
+    return this.sessionSync.holes(scope, type, lo, hi);
   }
   async fetchBody<M extends Method>(
     method: M,

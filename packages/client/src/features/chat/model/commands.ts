@@ -7,6 +7,7 @@ import type {
   Method,
   ResultOf,
 } from "@talos/contract";
+import type { Row } from "@talos/sync";
 import type { CommandPort } from "./ports.ts";
 export function message(error: unknown): string {
   return error instanceof AppError ? error.message : "暂时无法完成，请重试";
@@ -85,6 +86,16 @@ export async function sendText(
   );
   return op;
 }
+/** A post as its synchronized row. */
+export function postRow(post: ChatPost): Row {
+  return {
+    type: "post",
+    id: post.id,
+    rev: post.rev,
+    deleted: post.deletedAt !== null,
+    data: post,
+  };
+}
 export async function page(
   runtime: CommandPort,
   conversation: string,
@@ -97,16 +108,15 @@ export async function page(
     limit: 40,
     ...(anchor !== undefined ? { anchor } : {}),
   });
-  await runtime.loadRows(
-    `conv:${conversation}`,
-    result.posts.map((post) => ({
-      type: "post",
-      id: post.id,
-      rev: post.rev,
-      deleted: post.deletedAt !== null,
-      data: post,
-    })),
-  );
+  // The page certifies first..last as of its revision; an empty page certifies nothing.
+  await runtime.loadRows(`conv:${conversation}`, {
+    kind: "page",
+    type: "post",
+    rows: result.posts.map(postRow),
+    lo: result.first || 1,
+    hi: result.first ? result.last : 0,
+    rev: result.rev,
+  });
   return result;
 }
 export async function fullBody(

@@ -45,7 +45,7 @@ describe("IntervalSet", () => {
     expect(new IntervalSet([[1, 9]]).remove(lo, hi).toJSON()).toEqual(expected);
   });
 
-  it("finds covering ranges, bounded gaps, head, and trims interval count", () => {
+  it("finds covering ranges and bounded gaps", () => {
     const set = new IntervalSet([
       [1, 3],
       [5, 5],
@@ -58,14 +58,6 @@ describe("IntervalSet", () => {
       [6, 7],
       [10, 11],
     ]);
-    expect(set.head()).toEqual([8, 9]);
-    expect(set.trimTo(2, "head").toJSON()).toEqual([
-      [5, 5],
-      [8, 9],
-    ]);
-    expect(set.trimTo(0).toJSON()).toEqual([]);
-    expect(set.trimTo(10).toJSON()).toEqual(set.toJSON());
-    expect(new IntervalSet().head()).toBeUndefined();
     expect(new IntervalSet().gapsWithin(-1, 1)).toEqual([[-1, 1]]);
   });
 
@@ -75,8 +67,6 @@ describe("IntervalSet", () => {
     input[0]![0] = 0;
     const json = set.toJSON() as [number, number][];
     json[0]![1] = 100;
-    const head = set.head() as [number, number];
-    head[0] = -100;
     const covering = set.covering(2) as [number, number];
     covering[1] = 99;
     expect(set.toJSON()).toEqual([[1, 3]]);
@@ -109,11 +99,10 @@ describe("IntervalSet", () => {
     },
   );
 
-  it("rejects reversed ranges and negative retention counts", () => {
+  it("rejects reversed ranges", () => {
     expect(() => new IntervalSet().add(2, 1)).toThrow(AppError);
     expect(() => new IntervalSet().remove(2, 1)).toThrow(AppError);
     expect(() => new IntervalSet().gapsWithin(2, 1)).toThrow(AppError);
-    expect(() => new IntervalSet().trimTo(-1)).toThrow(AppError);
   });
 
   it("matches a naive bitset across 8000 seeded additions/removals and gap queries", () => {

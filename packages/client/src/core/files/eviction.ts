@@ -1,6 +1,9 @@
 import { Semaphore } from "@talos/base";
-import type { Database } from "@talos/store";
+import { mergeReplica } from "@talos/sync";
+import type { WindowedTypes } from "@talos/sync";
+import type { Database, LockManagerLike } from "@talos/store";
 import type { StoredRow } from "../data/db.ts";
+import { ScopeLocks, readReplicas, writeReplica } from "../data/scope-store.ts";
 
 interface CacheEntry {
   key: string;
@@ -23,17 +26,22 @@ export interface QuotaOptions {
   fallbackBytes?: number;
   exhausted: () => void;
   onEvicted?: () => Promise<void>;
+  /** Windowed row types: the only rows eviction may drop, through the replica merge. */
+  windowed: WindowedTypes;
+  locks?: LockManagerLike | null;
 }
 /** Only reconstructible entries are candidates. Unknown keys and all intent stay protected. */
 export class EvictionManager {
   private readonly serial = new Semaphore(1);
   private readonly now: () => number;
   private readonly accessed = new Map<string, number>();
+  private readonly locks: ScopeLocks;
   constructor(
     private readonly db: Database,
     private readonly options: QuotaOptions,
   ) {
     this.now = options.now ?? Date.now;
+    this.locks = new ScopeLocks(options.locks);
     db.setQuotaRecovery(() => this.makeRoom(0, true), options.exhausted);
   }
   touch(key: string): void {
@@ -303,12 +311,19 @@ export class EvictionManager {
           },
         });
       }
-      // Windowed mirrors can be reconstructed on the next pull. Never evict while
-      // queued intent may refer to them; state/draft/profile rows are not candidates.
+      // Windowed rows can be fetched again: eviction removes them and their
+      // coverage through the replica merge, which leaves an explicit hole. Never
+      // evict while queued intent may refer to them; mirrored rows are not candidates.
       const pending = await this.db.table<unknown[]>("outbox").range();
       if (!pending.some((items) => items.length)) {
         for (const row of rows) {
-          if (row.type !== "post" && row.type !== "aiMessage") continue;
+          if (
+            !Object.prototype.hasOwnProperty.call(
+              this.options.windowed,
+              row.type,
+            )
+          )
+            continue;
           const deadline =
             row.type === "post" ? expiry(`${row.scope}:body:${row.id}`) : 0;
           if (deadline > this.now()) continue;
@@ -319,35 +334,44 @@ export class EvictionManager {
               (row.data as { created?: number } | null)?.created ??
               row.rev,
             bytes: JSON.stringify(row).length * 2,
-            remove: async () => {
-              await this.db.tx(
-                ["rows", "scopes", "outbox"],
-                "readwrite",
-                (tx) =>
-                  tx
-                    .table<StoredRow>("rows")
-                    .range()
-                    .then((latest) => {
-                      if (policyStamp(latest) !== policiesAtScan) return;
-                      return tx
-                        .table<unknown[]>("outbox")
-                        .range()
-                        .then((intent) => {
-                          if (intent.some((items) => items.length)) return;
-                          tx.table("rows").delete([
-                            row.scope,
-                            row.type,
-                            row.id,
-                          ]);
-                          tx.table("scopes").put({
-                            scope: row.scope,
-                            cursor: 0,
+            remove: () =>
+              this.locks.run([row.scope], () =>
+                this.db.tx(
+                  ["rows", "scopes", "outbox"],
+                  "readwrite",
+                  (tx) =>
+                    tx
+                      .table<StoredRow>("rows")
+                      .range()
+                      .then((latest) => {
+                        if (policyStamp(latest) !== policiesAtScan) return;
+                        return tx
+                          .table<unknown[]>("outbox")
+                          .range()
+                          .then((intent) => {
+                            if (intent.some((items) => items.length)) return;
+                            return readReplicas(tx, [row.scope], (held) => {
+                              const before = held.get(row.scope)!;
+                              writeReplica(
+                                tx,
+                                row.scope,
+                                before,
+                                mergeReplica(
+                                  before.replica,
+                                  {
+                                    kind: "evict",
+                                    type: row.type,
+                                    ids: [row.id],
+                                  },
+                                  this.options.windowed,
+                                ),
+                              );
+                            });
                           });
-                        });
-                    }),
-                false,
-              );
-            },
+                      }),
+                  false,
+                ),
+              ),
           });
         }
       }

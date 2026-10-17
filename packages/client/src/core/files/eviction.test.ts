@@ -2,8 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
 import { FileStore } from "@talos/store";
 import { sha256Hex } from "@talos/base";
+import type { Row } from "@talos/sync";
 import { openAppDb } from "../../platform/storage/database.ts";
 import { EvictionManager } from "./eviction.ts";
+
+const windowed = {
+  post: { seqOf: (row: Row) => (row.data as { seq?: number }).seq ?? 0 },
+};
 
 describe("one storage eviction policy", () => {
   it("evicts LRU caches before expired retention and never retained content or user intent", async () => {
@@ -51,6 +56,7 @@ describe("one storage eviction policy", () => {
     await db.table("kv").put("draft", "feature:u:ai:text:draft");
     let usage = 400;
     const manager = new EvictionManager(db, {
+      windowed,
       now: () => now,
       estimate: async () => ({ usage, quota: 400 }),
       exhausted: vi.fn(),
@@ -78,6 +84,7 @@ describe("one storage eviction policy", () => {
         channel: null,
       });
       const manager = new EvictionManager(db, {
+        windowed,
         estimate: async () => {
           throw new Error("unavailable");
         },
@@ -136,6 +143,7 @@ it("rechecks retention changed by another tab after candidate discovery", async 
   await files.put(rid, bytes);
   await files.retain("u:library:d:retained", rid);
   const manager = new EvictionManager(db, {
+    windowed,
     now: () => 100,
     exhausted: vi.fn(),
     estimate: async () => {

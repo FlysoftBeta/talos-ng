@@ -32,6 +32,7 @@ export class ClientRuntime implements RuntimePort {
   readonly operation: RuntimePort["operation"];
   readonly outbox: RuntimePort["outbox"];
   readonly loadRows: RuntimePort["loadRows"];
+  readonly holes: RuntimePort["holes"];
   readonly fetchBody: RuntimePort["fetchBody"];
   readonly readFile: RuntimePort["readFile"];
   readonly hasFile: RuntimePort["hasFile"];
@@ -102,6 +103,7 @@ export class ClientRuntime implements RuntimePort {
     this.operation = controller.operation.bind(controller);
     this.outbox = controller.outbox.bind(controller);
     this.loadRows = controller.loadRows.bind(controller);
+    this.holes = controller.holes.bind(controller);
     this.fetchBody = controller.fetchBody.bind(controller);
     this.readFile = controller.readFile.bind(controller);
     this.hasFile = controller.hasFile.bind(controller);

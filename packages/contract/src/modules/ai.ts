@@ -154,7 +154,12 @@ export const ai = {
         before: revSchema.optional(),
         limit: z.number().int().min(1).max(20).default(10),
       }),
-      z.object({ messages: z.array(aiMessageSchema), more: z.boolean() }),
+      // `rev`: the server revision the page was read at.
+      z.object({
+        messages: z.array(aiMessageSchema),
+        more: z.boolean(),
+        rev: revSchema,
+      }),
     ),
   },
   draft: { set: method("ai.draft.set", aiDraftSchema, okSchema, "queue") },
