@@ -5,7 +5,9 @@ import { describe, expect, it } from "vitest";
 import { YtDlpProvider } from "./provider.ts";
 import type { Spawn } from "./provider.ts";
 
-const fixture = (name: string): Record<string, unknown> & { entries: any[] } =>
+const fixture = (
+  name: string,
+): Record<string, unknown> & { entries: Record<string, unknown>[] } =>
   JSON.parse(
     readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), "utf8"),
   );
