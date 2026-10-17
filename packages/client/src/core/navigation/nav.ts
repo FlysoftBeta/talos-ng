@@ -1,8 +1,8 @@
 import { AppError, isAppError } from "@talos/base";
 
 export const AREA_IDS = [
-  "chat",
   "recent",
+  "chat",
   "library",
   "learning",
   "media",
