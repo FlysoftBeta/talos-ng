@@ -1,124 +1,118 @@
 {
- "id": "周杰伦 - playlists",
- "title": "周杰伦 - playlists",
- "_type": "playlist",
- "entries": [
-  {
-   "_type": "url",
-   "title": "周杰伦新歌2026",
-   "thumbnails": [
+  "id": "周杰伦 - playlists",
+  "title": "周杰伦 - playlists",
+  "_type": "playlist",
+  "entries": [
     {
-     "url": "https://yt3.googleusercontent.com/g7PNXxOeBil__8Mh6tsgR0KdtqLjUdWMJu8qv5LhbDQmjQZtLgtIDyzr0D10mQ1XvIKZo-fV3N-MCa8O=w60-h60-l90-rj",
-     "width": 60,
-     "height": 60
+      "_type": "url",
+      "title": "周杰伦新歌2026",
+      "thumbnails": [
+        {
+          "url": "https://yt3.googleusercontent.com/g7PNXxOeBil__8Mh6tsgR0KdtqLjUdWMJu8qv5LhbDQmjQZtLgtIDyzr0D10mQ1XvIKZo-fV3N-MCa8O=w60-h60-l90-rj",
+          "width": 60,
+          "height": 60
+        },
+        {
+          "url": "https://yt3.googleusercontent.com/g7PNXxOeBil__8Mh6tsgR0KdtqLjUdWMJu8qv5LhbDQmjQZtLgtIDyzr0D10mQ1XvIKZo-fV3N-MCa8O=w120-h120-l90-rj",
+          "width": 120,
+          "height": 120
+        }
+      ],
+      "ie_key": "YoutubeTab",
+      "talos_kind": "playlist",
+      "id": "PLHqj6kISyn5iERA2kvFvh4Rwynb0B5tfH",
+      "url": "https://music.youtube.com/playlist?list=PLHqj6kISyn5iERA2kvFvh4Rwynb0B5tfH",
+      "channel": "Vinnie VC"
     },
     {
-     "url": "https://yt3.googleusercontent.com/g7PNXxOeBil__8Mh6tsgR0KdtqLjUdWMJu8qv5LhbDQmjQZtLgtIDyzr0D10mQ1XvIKZo-fV3N-MCa8O=w120-h120-l90-rj",
-     "width": 120,
-     "height": 120
-    }
-   ],
-   "ie_key": "YoutubeTab",
-   "talos_kind": "playlist",
-   "id": "PLHqj6kISyn5iERA2kvFvh4Rwynb0B5tfH",
-   "url": "https://music.youtube.com/playlist?list=PLHqj6kISyn5iERA2kvFvh4Rwynb0B5tfH",
-   "channel": "Vinnie VC"
-  },
-  {
-   "_type": "url",
-   "title": "宝宝听的周杰伦",
-   "thumbnails": [
-    {
-     "url": "https://yt3.googleusercontent.com/tU3-VWvt_rHDKvjyRLjoHDWpGarNb2R9gGWHKqZWXSHYvOGw7HRnwrv_tuy5YMiw-F_eNeDp4Gs=s192",
-     "width": 192,
-     "height": 192
+      "_type": "url",
+      "title": "宝宝听的周杰伦",
+      "thumbnails": [
+        {
+          "url": "https://yt3.googleusercontent.com/tU3-VWvt_rHDKvjyRLjoHDWpGarNb2R9gGWHKqZWXSHYvOGw7HRnwrv_tuy5YMiw-F_eNeDp4Gs=s192",
+          "width": 192,
+          "height": 192
+        },
+        {
+          "url": "https://yt3.googleusercontent.com/tU3-VWvt_rHDKvjyRLjoHDWpGarNb2R9gGWHKqZWXSHYvOGw7HRnwrv_tuy5YMiw-F_eNeDp4Gs=s576",
+          "width": 576,
+          "height": 576
+        }
+      ],
+      "ie_key": "YoutubeTab",
+      "talos_kind": "playlist",
+      "id": "PLtbTn0wO-KJ5ms3D4old3dfQKeEN-4b_F",
+      "url": "https://music.youtube.com/playlist?list=PLtbTn0wO-KJ5ms3D4old3dfQKeEN-4b_F",
+      "channel": "hugo Hu"
     },
     {
-     "url": "https://yt3.googleusercontent.com/tU3-VWvt_rHDKvjyRLjoHDWpGarNb2R9gGWHKqZWXSHYvOGw7HRnwrv_tuy5YMiw-F_eNeDp4Gs=s576",
-     "width": 576,
-     "height": 576
-    }
-   ],
-   "ie_key": "YoutubeTab",
-   "talos_kind": "playlist",
-   "id": "PLtbTn0wO-KJ5ms3D4old3dfQKeEN-4b_F",
-   "url": "https://music.youtube.com/playlist?list=PLtbTn0wO-KJ5ms3D4old3dfQKeEN-4b_F",
-   "channel": "hugo Hu"
-  },
-  {
-   "_type": "url",
-   "title": "周杰倫新專輯",
-   "thumbnails": [
-    {
-     "url": "https://yt3.googleusercontent.com/g7PNXxOeBil__8Mh6tsgR0KdtqLjUdWMJu8qv5LhbDQmjQZtLgtIDyzr0D10mQ1XvIKZo-fV3N-MCa8O=w60-h60-l90-rj",
-     "width": 60,
-     "height": 60
+      "_type": "url",
+      "title": "周杰倫新專輯",
+      "thumbnails": [
+        {
+          "url": "https://yt3.googleusercontent.com/g7PNXxOeBil__8Mh6tsgR0KdtqLjUdWMJu8qv5LhbDQmjQZtLgtIDyzr0D10mQ1XvIKZo-fV3N-MCa8O=w60-h60-l90-rj",
+          "width": 60,
+          "height": 60
+        },
+        {
+          "url": "https://yt3.googleusercontent.com/g7PNXxOeBil__8Mh6tsgR0KdtqLjUdWMJu8qv5LhbDQmjQZtLgtIDyzr0D10mQ1XvIKZo-fV3N-MCa8O=w120-h120-l90-rj",
+          "width": 120,
+          "height": 120
+        }
+      ],
+      "ie_key": "YoutubeTab",
+      "talos_kind": "playlist",
+      "id": "PL5b5lj4hFW_XdMSn6MYfs3S9hU3gwUhfb",
+      "url": "https://music.youtube.com/playlist?list=PL5b5lj4hFW_XdMSn6MYfs3S9hU3gwUhfb",
+      "channel": "李權恩"
     },
     {
-     "url": "https://yt3.googleusercontent.com/g7PNXxOeBil__8Mh6tsgR0KdtqLjUdWMJu8qv5LhbDQmjQZtLgtIDyzr0D10mQ1XvIKZo-fV3N-MCa8O=w120-h120-l90-rj",
-     "width": 120,
-     "height": 120
-    }
-   ],
-   "ie_key": "YoutubeTab",
-   "talos_kind": "playlist",
-   "id": "PL5b5lj4hFW_XdMSn6MYfs3S9hU3gwUhfb",
-   "url": "https://music.youtube.com/playlist?list=PL5b5lj4hFW_XdMSn6MYfs3S9hU3gwUhfb",
-   "channel": "李權恩"
-  },
-  {
-   "_type": "url",
-   "title": "周杰倫純伴奏",
-   "thumbnails": [
-    {
-     "url": "https://yt3.ggpht.com/ADhv5qt4mDaY8CKga4t2-L2RhQDV-TpcGoKUqaVxWoYI1uckUI6dZXfal9OxaIZU3BQVXpBrjvE=s192",
-     "width": 192,
-     "height": 192
+      "_type": "url",
+      "title": "周杰倫純伴奏",
+      "thumbnails": [
+        {
+          "url": "https://yt3.ggpht.com/ADhv5qt4mDaY8CKga4t2-L2RhQDV-TpcGoKUqaVxWoYI1uckUI6dZXfal9OxaIZU3BQVXpBrjvE=s192",
+          "width": 192,
+          "height": 192
+        },
+        {
+          "url": "https://yt3.ggpht.com/ADhv5qt4mDaY8CKga4t2-L2RhQDV-TpcGoKUqaVxWoYI1uckUI6dZXfal9OxaIZU3BQVXpBrjvE=s576",
+          "width": 576,
+          "height": 576
+        }
+      ],
+      "ie_key": "YoutubeTab",
+      "talos_kind": "playlist",
+      "id": "PLkTqlozIJjRUNzyPcq0T-dquaWuATHpo_",
+      "url": "https://music.youtube.com/playlist?list=PLkTqlozIJjRUNzyPcq0T-dquaWuATHpo_",
+      "channel": "綺蘿"
     },
     {
-     "url": "https://yt3.ggpht.com/ADhv5qt4mDaY8CKga4t2-L2RhQDV-TpcGoKUqaVxWoYI1uckUI6dZXfal9OxaIZU3BQVXpBrjvE=s576",
-     "width": 576,
-     "height": 576
+      "_type": "url",
+      "title": "周杰伦冷门歌",
+      "thumbnails": [
+        {
+          "url": "https://yt3.googleusercontent.com/lH8VSUSNyvogaNQ-YztaQsFIjQgGV8z4q2jXj-dc_ntGaciCUZs6d4zQ67nxWs99_ICNKTtolg=s192",
+          "width": 192,
+          "height": 192
+        },
+        {
+          "url": "https://yt3.googleusercontent.com/lH8VSUSNyvogaNQ-YztaQsFIjQgGV8z4q2jXj-dc_ntGaciCUZs6d4zQ67nxWs99_ICNKTtolg=s576",
+          "width": 576,
+          "height": 576
+        }
+      ],
+      "ie_key": "YoutubeTab",
+      "talos_kind": "playlist",
+      "id": "PLobG4XPCJ-GSKPEXHKXhGb1WIDo_xCmwr",
+      "url": "https://music.youtube.com/playlist?list=PLobG4XPCJ-GSKPEXHKXhGb1WIDo_xCmwr",
+      "channel": "fred jiang"
     }
-   ],
-   "ie_key": "YoutubeTab",
-   "talos_kind": "playlist",
-   "id": "PLkTqlozIJjRUNzyPcq0T-dquaWuATHpo_",
-   "url": "https://music.youtube.com/playlist?list=PLkTqlozIJjRUNzyPcq0T-dquaWuATHpo_",
-   "channel": "綺蘿"
-  },
-  {
-   "_type": "url",
-   "title": "周杰伦冷门歌",
-   "thumbnails": [
-    {
-     "url": "https://yt3.googleusercontent.com/lH8VSUSNyvogaNQ-YztaQsFIjQgGV8z4q2jXj-dc_ntGaciCUZs6d4zQ67nxWs99_ICNKTtolg=s192",
-     "width": 192,
-     "height": 192
-    },
-    {
-     "url": "https://yt3.googleusercontent.com/lH8VSUSNyvogaNQ-YztaQsFIjQgGV8z4q2jXj-dc_ntGaciCUZs6d4zQ67nxWs99_ICNKTtolg=s576",
-     "width": 576,
-     "height": 576
-    }
-   ],
-   "ie_key": "YoutubeTab",
-   "talos_kind": "playlist",
-   "id": "PLobG4XPCJ-GSKPEXHKXhGb1WIDo_xCmwr",
-   "url": "https://music.youtube.com/playlist?list=PLobG4XPCJ-GSKPEXHKXhGb1WIDo_xCmwr",
-   "channel": "fred jiang"
-  }
- ],
- "webpage_url": "https://music.youtube.com/search?q=%E5%91%A8%E6%9D%B0%E4%BC%A6#playlists",
- "extractor": "youtube:music:search_url+talos-music",
- "extractor_key": "YoutubeMusicSearchURL",
- "release_year": null,
- "requested_entries": [
-  6,
-  7,
-  8,
-  9,
-  10
- ],
- "playlist_count": null
+  ],
+  "webpage_url": "https://music.youtube.com/search?q=%E5%91%A8%E6%9D%B0%E4%BC%A6#playlists",
+  "extractor": "youtube:music:search_url+talos-music",
+  "extractor_key": "YoutubeMusicSearchURL",
+  "release_year": null,
+  "requested_entries": [6, 7, 8, 9, 10],
+  "playlist_count": null
 }

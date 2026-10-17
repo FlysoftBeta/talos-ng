@@ -1,194 +1,188 @@
 {
- "id": "PLakXhnGUu2l9dzRD1MPgV6UDURVx11NDK",
- "title": "Nedley Classical",
- "description": "",
- "thumbnails": [
-  {
-   "url": "https://i.ytimg.com/vi/eC9pGtaEFzY/hqdefault.jpg?sqp=-oaymwEWCKgBEF5IWvKriqkDCQgBFQAAiEIYAQ==&rs=AOn4CLASz-Ak2PX3f3rS8Z4LTiPrfSx5zw",
-   "height": 94,
-   "width": 168,
-   "id": "0",
-   "resolution": "168x94"
-  },
-  {
-   "url": "https://i.ytimg.com/vi/eC9pGtaEFzY/hqdefault.jpg?sqp=-oaymwEWCMQBEG5IWvKriqkDCQgBFQAAiEIYAQ==&rs=AOn4CLBx0BMtUGe4Tlr03JCQkFrEh9T07w",
-   "height": 110,
-   "width": 196,
-   "id": "1",
-   "resolution": "196x110"
-  }
- ],
- "playlist_count": 30,
- "channel": "Mel K",
- "channel_id": "UCgkUBLw9hNin7X_tmu-U_zQ",
- "uploader_id": "@valleysedgehomestead",
- "uploader": "Mel K",
- "channel_url": "https://www.youtube.com/channel/UCgkUBLw9hNin7X_tmu-U_zQ",
- "uploader_url": "https://www.youtube.com/@valleysedgehomestead",
- "_type": "playlist",
- "entries": [
-  {
-   "title": "Energize with Music | Classical Music CD Nedley | 50 Min",
-   "thumbnails": [
+  "id": "PLakXhnGUu2l9dzRD1MPgV6UDURVx11NDK",
+  "title": "Nedley Classical",
+  "description": "",
+  "thumbnails": [
     {
-     "url": "https://i.ytimg.com/vi/eC9pGtaEFzY/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBZzzptClhX7oICpv36HwZKaecXMQ",
-     "height": 94,
-     "width": 168
+      "url": "https://i.ytimg.com/vi/eC9pGtaEFzY/hqdefault.jpg?sqp=-oaymwEWCKgBEF5IWvKriqkDCQgBFQAAiEIYAQ==&rs=AOn4CLASz-Ak2PX3f3rS8Z4LTiPrfSx5zw",
+      "height": 94,
+      "width": 168,
+      "id": "0",
+      "resolution": "168x94"
     },
     {
-     "url": "https://i.ytimg.com/vi/eC9pGtaEFzY/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLCZzbyrtAYvjV5vzPg7c38ApFwhLw",
-     "height": 110,
-     "width": 196
+      "url": "https://i.ytimg.com/vi/eC9pGtaEFzY/hqdefault.jpg?sqp=-oaymwEWCMQBEG5IWvKriqkDCQgBFQAAiEIYAQ==&rs=AOn4CLBx0BMtUGe4Tlr03JCQkFrEh9T07w",
+      "height": 110,
+      "width": 196,
+      "id": "1",
+      "resolution": "196x110"
     }
-   ],
-   "duration": 3006,
-   "view_count": 9400,
-   "timestamp": null,
-   "live_status": null,
-   "availability": null,
-   "channel_url": "https://www.youtube.com/channel/UC_XnVL214c1gpJuVuDKujEw",
-   "uploader_url": "https://www.youtube.com/@ganzherzigSein",
-   "creators": null,
-   "channel": "Ganzherzig Sein",
-   "channel_id": "UC_XnVL214c1gpJuVuDKujEw",
-   "uploader": "Ganzherzig Sein",
-   "uploader_id": "@ganzherzigSein",
-   "ie_key": "Youtube",
-   "id": "eC9pGtaEFzY",
-   "_type": "url",
-   "url": "https://music.youtube.com/watch?v=eC9pGtaEFzY"
-  },
-  {
-   "title": "Beethoven: Piano Sonata No. 14 in C-Sharp Minor, Op. 27 No. 2 \"Moonlight Sonata\": I. Adagio...",
-   "thumbnails": [
+  ],
+  "playlist_count": 30,
+  "channel": "Mel K",
+  "channel_id": "UCgkUBLw9hNin7X_tmu-U_zQ",
+  "uploader_id": "@valleysedgehomestead",
+  "uploader": "Mel K",
+  "channel_url": "https://www.youtube.com/channel/UCgkUBLw9hNin7X_tmu-U_zQ",
+  "uploader_url": "https://www.youtube.com/@valleysedgehomestead",
+  "_type": "playlist",
+  "entries": [
     {
-     "url": "https://i.ytimg.com/vi/21EU31SqQEg/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLCVSjXVzCS9zCvea_6YKOeS8X7f1Q",
-     "height": 94,
-     "width": 168
+      "title": "Energize with Music | Classical Music CD Nedley | 50 Min",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/eC9pGtaEFzY/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBZzzptClhX7oICpv36HwZKaecXMQ",
+          "height": 94,
+          "width": 168
+        },
+        {
+          "url": "https://i.ytimg.com/vi/eC9pGtaEFzY/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLCZzbyrtAYvjV5vzPg7c38ApFwhLw",
+          "height": 110,
+          "width": 196
+        }
+      ],
+      "duration": 3006,
+      "view_count": 9400,
+      "timestamp": null,
+      "live_status": null,
+      "availability": null,
+      "channel_url": "https://www.youtube.com/channel/UC_XnVL214c1gpJuVuDKujEw",
+      "uploader_url": "https://www.youtube.com/@ganzherzigSein",
+      "creators": null,
+      "channel": "Ganzherzig Sein",
+      "channel_id": "UC_XnVL214c1gpJuVuDKujEw",
+      "uploader": "Ganzherzig Sein",
+      "uploader_id": "@ganzherzigSein",
+      "ie_key": "Youtube",
+      "id": "eC9pGtaEFzY",
+      "_type": "url",
+      "url": "https://music.youtube.com/watch?v=eC9pGtaEFzY"
     },
     {
-     "url": "https://i.ytimg.com/vi/21EU31SqQEg/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLAXBwkzWwmCyXiBAS6V-N3oVNDTXQ",
-     "height": 110,
-     "width": 196
-    }
-   ],
-   "duration": 401,
-   "view_count": 545000,
-   "timestamp": null,
-   "live_status": null,
-   "availability": null,
-   "channel_url": "https://www.youtube.com/channel/UCD7QUSiWc7QBP2XGRMGwjEg",
-   "uploader_url": null,
-   "creators": null,
-   "channel": "Daniel Barenboim",
-   "channel_id": "UCD7QUSiWc7QBP2XGRMGwjEg",
-   "uploader": "Daniel Barenboim",
-   "ie_key": "Youtube",
-   "id": "21EU31SqQEg",
-   "_type": "url",
-   "url": "https://music.youtube.com/watch?v=21EU31SqQEg"
-  },
-  {
-   "title": "Für Elise, WoO 59",
-   "thumbnails": [
-    {
-     "url": "https://i.ytimg.com/vi/CsZGmT9Z-Gc/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLDmAKig8jUfEJW916VhQfC0xhWrqA",
-     "height": 94,
-     "width": 168
+      "title": "Beethoven: Piano Sonata No. 14 in C-Sharp Minor, Op. 27 No. 2 \"Moonlight Sonata\": I. Adagio...",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/21EU31SqQEg/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLCVSjXVzCS9zCvea_6YKOeS8X7f1Q",
+          "height": 94,
+          "width": 168
+        },
+        {
+          "url": "https://i.ytimg.com/vi/21EU31SqQEg/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLAXBwkzWwmCyXiBAS6V-N3oVNDTXQ",
+          "height": 110,
+          "width": 196
+        }
+      ],
+      "duration": 401,
+      "view_count": 545000,
+      "timestamp": null,
+      "live_status": null,
+      "availability": null,
+      "channel_url": "https://www.youtube.com/channel/UCD7QUSiWc7QBP2XGRMGwjEg",
+      "uploader_url": null,
+      "creators": null,
+      "channel": "Daniel Barenboim",
+      "channel_id": "UCD7QUSiWc7QBP2XGRMGwjEg",
+      "uploader": "Daniel Barenboim",
+      "ie_key": "Youtube",
+      "id": "21EU31SqQEg",
+      "_type": "url",
+      "url": "https://music.youtube.com/watch?v=21EU31SqQEg"
     },
     {
-     "url": "https://i.ytimg.com/vi/CsZGmT9Z-Gc/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLAW0eT1QsG5lWmM8nUihUgO9lf8GQ",
-     "height": 110,
-     "width": 196
-    }
-   ],
-   "duration": 189,
-   "view_count": 284000,
-   "timestamp": null,
-   "live_status": null,
-   "availability": null,
-   "channel_url": "https://www.youtube.com/channel/UCorrb0WxBCVl8IhFQmfP8kw",
-   "uploader_url": null,
-   "creators": null,
-   "channel": "Nelly Kokinos - Topic",
-   "channel_id": "UCorrb0WxBCVl8IhFQmfP8kw",
-   "uploader": "Nelly Kokinos - Topic",
-   "ie_key": "Youtube",
-   "id": "CsZGmT9Z-Gc",
-   "_type": "url",
-   "url": "https://music.youtube.com/watch?v=CsZGmT9Z-Gc"
-  },
-  {
-   "title": "Air on a G String",
-   "thumbnails": [
-    {
-     "url": "https://i.ytimg.com/vi/CoXajguwmk0/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBlCRwkrdU_4jRSR4FnOAm7PpeZSg",
-     "height": 94,
-     "width": 168
+      "title": "Für Elise, WoO 59",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/CsZGmT9Z-Gc/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLDmAKig8jUfEJW916VhQfC0xhWrqA",
+          "height": 94,
+          "width": 168
+        },
+        {
+          "url": "https://i.ytimg.com/vi/CsZGmT9Z-Gc/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLAW0eT1QsG5lWmM8nUihUgO9lf8GQ",
+          "height": 110,
+          "width": 196
+        }
+      ],
+      "duration": 189,
+      "view_count": 284000,
+      "timestamp": null,
+      "live_status": null,
+      "availability": null,
+      "channel_url": "https://www.youtube.com/channel/UCorrb0WxBCVl8IhFQmfP8kw",
+      "uploader_url": null,
+      "creators": null,
+      "channel": "Nelly Kokinos - Topic",
+      "channel_id": "UCorrb0WxBCVl8IhFQmfP8kw",
+      "uploader": "Nelly Kokinos - Topic",
+      "ie_key": "Youtube",
+      "id": "CsZGmT9Z-Gc",
+      "_type": "url",
+      "url": "https://music.youtube.com/watch?v=CsZGmT9Z-Gc"
     },
     {
-     "url": "https://i.ytimg.com/vi/CoXajguwmk0/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLAreAyrm2KrgeMqPpVkgamR2MC6fA",
-     "height": 110,
-     "width": 196
-    }
-   ],
-   "duration": 290,
-   "view_count": 9100000,
-   "timestamp": null,
-   "live_status": null,
-   "availability": null,
-   "channel_url": "https://www.youtube.com/channel/UC09GemGjss3hPdljwtJ8TPA",
-   "uploader_url": null,
-   "creators": null,
-   "channel": "HAUSER",
-   "channel_id": "UC09GemGjss3hPdljwtJ8TPA",
-   "uploader": "HAUSER",
-   "ie_key": "Youtube",
-   "id": "CoXajguwmk0",
-   "_type": "url",
-   "url": "https://music.youtube.com/watch?v=CoXajguwmk0"
-  },
-  {
-   "title": "Chopin - Etude Op. 10 No. 3 (Tristesse)",
-   "thumbnails": [
-    {
-     "url": "https://i.ytimg.com/vi/bzBH9Nm1BP8/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLD-eIswSeGRBh1C2DzmbBCafF6P8w",
-     "height": 94,
-     "width": 168
+      "title": "Air on a G String",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/CoXajguwmk0/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBlCRwkrdU_4jRSR4FnOAm7PpeZSg",
+          "height": 94,
+          "width": 168
+        },
+        {
+          "url": "https://i.ytimg.com/vi/CoXajguwmk0/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLAreAyrm2KrgeMqPpVkgamR2MC6fA",
+          "height": 110,
+          "width": 196
+        }
+      ],
+      "duration": 290,
+      "view_count": 9100000,
+      "timestamp": null,
+      "live_status": null,
+      "availability": null,
+      "channel_url": "https://www.youtube.com/channel/UC09GemGjss3hPdljwtJ8TPA",
+      "uploader_url": null,
+      "creators": null,
+      "channel": "HAUSER",
+      "channel_id": "UC09GemGjss3hPdljwtJ8TPA",
+      "uploader": "HAUSER",
+      "ie_key": "Youtube",
+      "id": "CoXajguwmk0",
+      "_type": "url",
+      "url": "https://music.youtube.com/watch?v=CoXajguwmk0"
     },
     {
-     "url": "https://i.ytimg.com/vi/bzBH9Nm1BP8/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLALZLP2VghYWuFkGoECVHQ-RLtngA",
-     "height": 110,
-     "width": 196
+      "title": "Chopin - Etude Op. 10 No. 3 (Tristesse)",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/bzBH9Nm1BP8/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLD-eIswSeGRBh1C2DzmbBCafF6P8w",
+          "height": 94,
+          "width": 168
+        },
+        {
+          "url": "https://i.ytimg.com/vi/bzBH9Nm1BP8/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLALZLP2VghYWuFkGoECVHQ-RLtngA",
+          "height": 110,
+          "width": 196
+        }
+      ],
+      "duration": 288,
+      "view_count": 5500000,
+      "timestamp": null,
+      "live_status": null,
+      "availability": null,
+      "channel_url": "https://www.youtube.com/channel/UCPZUQqtVDmcjm4NY5FkzqLA",
+      "uploader_url": "https://www.youtube.com/@Rousseau",
+      "creators": null,
+      "channel": "Rousseau",
+      "channel_id": "UCPZUQqtVDmcjm4NY5FkzqLA",
+      "uploader": "Rousseau",
+      "uploader_id": "@Rousseau",
+      "ie_key": "Youtube",
+      "id": "bzBH9Nm1BP8",
+      "_type": "url",
+      "url": "https://music.youtube.com/watch?v=bzBH9Nm1BP8"
     }
-   ],
-   "duration": 288,
-   "view_count": 5500000,
-   "timestamp": null,
-   "live_status": null,
-   "availability": null,
-   "channel_url": "https://www.youtube.com/channel/UCPZUQqtVDmcjm4NY5FkzqLA",
-   "uploader_url": "https://www.youtube.com/@Rousseau",
-   "creators": null,
-   "channel": "Rousseau",
-   "channel_id": "UCPZUQqtVDmcjm4NY5FkzqLA",
-   "uploader": "Rousseau",
-   "uploader_id": "@Rousseau",
-   "ie_key": "Youtube",
-   "id": "bzBH9Nm1BP8",
-   "_type": "url",
-   "url": "https://music.youtube.com/watch?v=bzBH9Nm1BP8"
-  }
- ],
- "extractor_key": "YoutubeTab",
- "extractor": "youtube:tab",
- "webpage_url": "https://www.youtube.com/playlist?list=PLakXhnGUu2l9dzRD1MPgV6UDURVx11NDK",
- "release_year": null,
- "requested_entries": [
-  1,
-  2,
-  3,
-  4,
-  5
- ]
+  ],
+  "extractor_key": "YoutubeTab",
+  "extractor": "youtube:tab",
+  "webpage_url": "https://www.youtube.com/playlist?list=PLakXhnGUu2l9dzRD1MPgV6UDURVx11NDK",
+  "release_year": null,
+  "requested_entries": [1, 2, 3, 4, 5]
 }
