@@ -2,7 +2,11 @@ export { startServer } from "./main.ts";
 export type { RunningServer } from "./main.ts";
 export { createKernel } from "./app/create-application.ts";
 export type { Kernel, KernelOptions } from "./app/create-application.ts";
-export { parseConfig, loadConfig, dataLayout } from "./kernel/config/config.ts";
+export {
+  parseConfig,
+  loadSettings,
+  dataLayout,
+} from "./kernel/config/config.ts";
 export type { ServerConfig } from "./kernel/config/config.ts";
 export { Db, migrate } from "./kernel/persistence/db.ts";
 export type { Migration } from "./kernel/persistence/db.ts";

@@ -12,7 +12,7 @@ import {
   TomatoProvider,
 } from "../modules/netbooks/index.ts";
 import type { NetbooksProvider } from "../modules/netbooks/index.ts";
-import { AiService, configuredProvider } from "../modules/ai/index.ts";
+import { AiService } from "../modules/ai/index.ts";
 import type { ModelProvider } from "../modules/ai/index.ts";
 import { LibraryService, LibraryAccess } from "../modules/library/index.ts";
 import {
@@ -220,7 +220,7 @@ export function createKernel(options: KernelOptions): Kernel {
     uploads,
     store,
     now,
-    provider: options.aiProvider ?? configuredProvider(process.env),
+    provider: options.aiProvider,
     allowed: (user) => authority.can(user, "feature.use", { feature: "ai" }),
   });
   aiService = ai;

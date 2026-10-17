@@ -1,8 +1,5 @@
 export { registerAiApi } from "./api.ts";
-export {
-  ResponsesProvider,
-  configuredProvider,
-} from "./providers/responses.ts";
+export { ResponsesProvider } from "./providers/responses.ts";
 export type {
   Model,
   ModelProvider,

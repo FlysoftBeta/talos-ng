@@ -1,3 +1,4 @@
+import { mediaManifest, ytDlpFiles } from "./media-binary.ts";
 import { nativeFiles } from "./native.ts";
 import { tarGz } from "./tar.ts";
 import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
@@ -26,14 +27,6 @@ const clientManifest = JSON.parse(
   await readFile(join(root, "packages/client/dist/app/manifest.json"), "utf8"),
 ) as { build: string; assets: { path: string }[] };
 const build = buildId(clientManifest.build);
-const mediaManifest = JSON.parse(
-  await readFile(join(root, "tools/package/media-manifest.json"), "utf8"),
-) as {
-  version: string;
-  linux: { url: string; sha256: string };
-  windows: { url: string; sha256: string };
-  plugin: { source: string; files: string[] };
-};
 const cache =
   process.env.TALOS_RUNTIME_CACHE ??
   join(homedir(), ".cache", "talos-ng", "node");
@@ -128,47 +121,6 @@ async function addTree(
     else files.set(name, await readFile(path));
   }
 }
-async function mediaBinary(
-  platform: "linux-x64" | "win32-x64",
-): Promise<Map<string, Uint8Array>> {
-  const spec =
-    platform === "win32-x64" ? mediaManifest.windows : mediaManifest.linux;
-  const dir =
-    process.env.TALOS_MEDIA_CACHE ??
-    join(homedir(), ".cache", "talos-ng", "media");
-  await mkdir(dir, { recursive: true });
-  const path = join(
-    dir,
-    platform === "win32-x64"
-      ? `yt-dlp-${mediaManifest.version}-win.zip`
-      : `yt-dlp-${mediaManifest.version}-linux`,
-  );
-  let bytes: Buffer;
-  try {
-    bytes = await readFile(path);
-  } catch {
-    bytes = Buffer.alloc(0);
-  }
-  if (digest(bytes) !== spec.sha256) {
-    const response = await fetch(spec.url);
-    if (!response.ok)
-      throw new Error(`yt-dlp download failed: ${response.status}`);
-    bytes = Buffer.from(await response.arrayBuffer());
-    if (digest(bytes) !== spec.sha256)
-      throw new Error("yt-dlp SHA-256 mismatch");
-    await writeFile(path, bytes);
-  }
-  if (platform === "linux-x64")
-    return new Map([["vendor/media/yt-dlp", bytes]]);
-  const zip = readZip(bytes);
-  const result = new Map<string, Uint8Array>();
-  for (const [name, data] of zip)
-    if (name === "yt-dlp.exe" || name.startsWith("_internal/"))
-      result.set(`vendor/media/${name}`, data);
-  if (!result.has("vendor/media/yt-dlp.exe"))
-    throw new Error("yt-dlp.exe missing");
-  return result;
-}
 for (const platform of packageTargets) {
   if (selectedTarget && selectedTarget !== platform) continue;
   const payload = new Map<string, Uint8Array>();
@@ -203,7 +155,7 @@ for (const platform of packageTargets) {
       await readFile(join(root, "packages/client/dist", name)),
     );
   await addTree(payload, join(root, "packages/shell/dist"), "shell");
-  for (const [name, data] of await mediaBinary(
+  for (const [name, data] of await ytDlpFiles(
     platform === "win32-x64" ? platform : "linux-x64",
   ))
     payload.set(name, data);
@@ -278,7 +230,6 @@ for (const platform of packageTargets) {
           ports: [8080],
           securePorts: [],
           bindHost: "0.0.0.0",
-          dataDir: "./data",
         },
         null,
         2,

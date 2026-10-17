@@ -8,6 +8,7 @@ import { dirname } from "node:path";
 import { acquireLock } from "./process/lock.ts";
 import { Supervisor } from "./process/supervisor.ts";
 import type { ServerChild } from "./process/supervisor.ts";
+import { sendStart } from "./process/server-start.ts";
 import { ReleaseFiles } from "./release/release-files.ts";
 import { installedTarget, assertTarget, hostTarget } from "./release/target.ts";
 const root = resolve(
@@ -38,10 +39,14 @@ const supervisor = new Supervisor({
     await new Promise<void>((resolve, reject) => {
       const child = spawn(
         process.execPath,
-        [join(root, "releases", previous, "server.js"), "restore", backup],
+        [
+          join(root, "releases", previous, "server.js"),
+          "restore",
+          backup,
+          join(root, "data"),
+        ],
         {
           cwd: root,
-          env: { ...process.env, TALOS_DATA_DIR: join(root, "data") },
           stdio: "inherit",
         },
       );
@@ -62,16 +67,13 @@ const supervisor = new Supervisor({
       cwd: root,
       execArgv: [],
       silent: true,
-      env: {
-        ...process.env,
-        TALOS_BUILD: build,
-        TALOS_UPDATE_PENDING: state.pending ? "true" : "false",
-        TALOS_DATA_DIR: join(root, "data"),
-        TALOS_ASSETS_DIR: join(release, "client"),
-        TALOS_WORKER_FILE: join(release, "shell", "sw.js"),
-        TALOS_RELEASE_ROOT: release,
-        TALOS_LAUNCHER_ROOT: root,
-      },
+    });
+    sendStart(child, {
+      dataDir: join(root, "data"),
+      settingsFile: join(root, "talos.config.json"),
+      assetsDir: join(release, "client"),
+      workerFile: join(release, "shell", "sw.js"),
+      launcher: { root, updatePending: !!state.pending },
     });
     const stdout = new ChildLogOutput((line) => {
       void log.write(line);

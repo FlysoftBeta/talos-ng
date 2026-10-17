@@ -106,9 +106,6 @@ try {
       ports: [port],
       securePorts: [],
       bindHost: "127.0.0.1",
-      dataDir: "./data",
-      dev: true,
-      testSeed: true,
     }),
   );
   const wrapper = join(directory, "wine-control.mjs");

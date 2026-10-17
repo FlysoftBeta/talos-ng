@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { fork } from "node:child_process";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
 import { createServer } from "node:net";
@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
+import { sendStart } from "../../../packages/launcher/src/process/server-start.ts";
 import { DIST, ROOT } from "./static-server.mjs";
 import { eventually } from "./wait.mjs";
 const execFileAsync = promisify(execFile);
@@ -58,29 +59,30 @@ export async function createRealServer() {
     },
     async start() {
       if (child) throw new Error("Server already started");
-      child = spawn(
-        process.execPath,
-        [
-          "--import",
-          "tsx",
-          path.join(ROOT, "packages/server/bin/testing/server.ts"),
-          "--dev",
-        ],
+      // Operator settings come from a real settings file; the rest is wiring.
+      const settingsFile = path.join(directory, "talos.config.json");
+      await writeFile(
+        settingsFile,
+        JSON.stringify({ ports: [port], bindHost: "127.0.0.1" }),
+      );
+      child = fork(
+        path.join(ROOT, "packages/server/bin/testing/server.ts"),
+        [],
         {
           cwd: ROOT,
-          env: {
-            ...process.env,
-            TALOS_PORTS: String(port),
-            TALOS_BIND_HOST: "127.0.0.1",
-            TALOS_DATA_DIR: data,
-            TALOS_ASSETS_DIR: assets,
-            TALOS_WORKER_FILE: path.join(ROOT, "packages/shell/dist/sw.js"),
-            TALOS_DEV: "true",
-            TALOS_TEST_SEED: "true",
-          },
-          stdio: ["ignore", "pipe", "pipe"],
+          execArgv: ["--import", "tsx"],
+          silent: true,
         },
       );
+      sendStart(child, {
+        dataDir: data,
+        settingsFile,
+        assetsDir: assets,
+        workerFile: path.join(ROOT, "packages/shell/dist/sw.js"),
+        dev: true,
+        testSeed: true,
+        printRootPin: false,
+      });
       child.stdout.on("data", (chunk) => {
         logs += String(chunk);
       });

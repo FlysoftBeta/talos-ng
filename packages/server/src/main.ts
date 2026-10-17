@@ -35,6 +35,8 @@ export async function startServer(
     printRootPin?: (pin: string) => void;
     ops?: OpsOptions;
     aiProvider?: ModelProvider;
+    /** Sync replica workers; default derives from the CPU count (tests pin it). */
+    readers?: number;
     /**
      * Module that runs a sync replica when loaded in a worker (the server
      * entry). Without it, every pull is computed on the main thread.
@@ -50,7 +52,7 @@ export async function startServer(
     ),
   );
   const unlock = await acquireLock(layout.root, true);
-  const log = new Logger({ directory: layout.logs, build: config.build });
+  const log = new Logger({ directory: layout.logs, build: "dev" });
   let db: Db;
   try {
     db = new Db(layout.db);
@@ -60,7 +62,7 @@ export async function startServer(
   }
   let replicas: SyncReplicas | undefined;
   const readers =
-    config.dbReaders ?? Math.min(4, Math.max(0, availableParallelism() - 1));
+    options.readers ?? Math.min(4, Math.max(0, availableParallelism() - 1));
   const store = createFsObjectStore({ root: layout.root });
   let kernel: Kernel | undefined;
   let gateway: HttpGateway | undefined;
@@ -70,7 +72,7 @@ export async function startServer(
   try {
     const assets = await loadHttpAssets(
       config.assetsDir,
-      config.build,
+      "dev",
       config.workerFile,
     );
     log.setBuild(assets.manifest.build);
@@ -86,11 +88,19 @@ export async function startServer(
         throw new AppError("E_INVALID", "无法读取 AI 模型配置");
       }
     }
-    // A release ships the plugin next to yt-dlp; a checkout has the source.
-    const mediaPluginDir = [
-      join(import.meta.dirname, "vendor", "media", "plugins"),
-      join(import.meta.dirname, "..", "ytdlp-plugin"),
-    ].find((dir) => existsSync(dir));
+    // A release ships yt-dlp and its plugin next to server.js; in a checkout the
+    // dev parent supplies both.
+    const releaseMedia = join(import.meta.dirname, "vendor", "media");
+    const releasePlugins = join(releaseMedia, "plugins");
+    const releaseBinary = join(
+      releaseMedia,
+      process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp",
+    );
+    const mediaPluginDir =
+      config.pluginDir ??
+      (existsSync(releasePlugins) ? releasePlugins : undefined);
+    const mediaBinaryPath =
+      config.ytDlp ?? (existsSync(releaseBinary) ? releaseBinary : undefined);
     kernel = createKernel({
       aiProvider,
       ops: {
@@ -118,16 +128,10 @@ export async function startServer(
       serverLogs: () => log.snapshot(),
       dev: config.dev,
       testSeed: config.testSeed,
-      mediaBinaryPath:
-        config.binaries["yt-dlp"] ??
-        join(
-          import.meta.dirname,
-          "vendor",
-          "media",
-          process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp",
-        ),
+      mediaBinaryPath,
       ...(mediaPluginDir ? { mediaPluginDir } : {}),
-      printRootPin: options.printRootPin,
+      printRootPin:
+        options.printRootPin ?? (config.printRootPin ? undefined : () => {}),
     });
     await kernel.chat.ready;
     const ready = kernel;

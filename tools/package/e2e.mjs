@@ -77,7 +77,7 @@ async function port() {
   await new Promise((r) => s.close(r));
   return p;
 }
-async function connect(url, pin = "123456", ca) {
+async function connect(url, pin = rootPin, ca) {
   let client;
   const ready = new Promise((resolve, reject) => {
     const timeout = setTimeout(
@@ -110,6 +110,7 @@ async function connect(url, pin = "123456", ca) {
 let launcher,
   browser,
   connection,
+  rootPin,
   logs = "";
 async function stopLauncher() {
   if (!launcher) return;
@@ -199,9 +200,6 @@ try {
       ports: [http],
       securePorts: [https],
       bindHost: "127.0.0.1",
-      dataDir: "./data",
-      dev: true,
-      testSeed: true,
       https: {
         cert: "cert.pem",
         key: "key.pem",
@@ -228,6 +226,12 @@ try {
     "A ready",
     Number(process.env.TALOS_E2E_STARTUP_TIMEOUT_MS ?? 120_000),
   );
+  // The first start prints the root PIN; the whole run signs in with it.
+  rootPin = await eventually(
+    () => /首次启动 PIN: (\d{6})/.exec(logs)?.[1],
+    Boolean,
+    "root PIN printed",
+  );
   const ca = await readFile(join(installation, "cert.pem"));
   const html = await new Promise((resolve, reject) => {
     request({ hostname: "localhost", port: https, path: "/", ca }, (res) => {
@@ -239,7 +243,7 @@ try {
       .end();
   });
   assert.match(html, /Talos II/);
-  const secure = await connect(`wss://localhost:${https}/link`, "123456", ca);
+  const secure = await connect(`wss://localhost:${https}/link`, rootPin, ca);
   assert.equal((await secure.api.sys.info({})).build, A);
   secure.client.stop();
   connection = await connect(`ws://localhost:${http}/link`);
@@ -256,7 +260,7 @@ try {
       for (const key of "Up Up Down Down Left Right Left Right".split(" "))
         await page.keyboard.press(`Arrow${key}`);
     await page.locator('[data-testid="auth.numpad"] button').first().waitFor();
-    for (const digit of "123456")
+    for (const digit of rootPin)
       await page
         .locator('[data-testid="auth.numpad"]')
         .getByRole("button", { name: digit, exact: true })
@@ -370,7 +374,7 @@ try {
     {},
     { timeoutMs: 300000 },
   );
-  const user = (await connection.api.auth.login({ pin: "123456" })).user.id;
+  const user = (await connection.api.auth.login({ pin: rootPin })).user.id;
   // A normal setting mutation gives the restore an observable database delta.
   await connection.api.me.setting.set({
     key: "ops-e2e",
@@ -391,6 +395,7 @@ try {
       join(installation, "releases", B, "server.js"),
       "restore",
       join(installation, "data/backups", backup.id + ".backup"),
+      join(installation, "data"),
     ],
     { cwd: installation },
   );

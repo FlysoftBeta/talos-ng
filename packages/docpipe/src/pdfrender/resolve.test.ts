@@ -4,7 +4,7 @@ import path from "node:path";
 import { expect, it } from "vitest";
 import { createPdfRenderResolver, type PdfRenderProbe } from "./resolve.ts";
 const vendorDir = path.resolve("vendor/pdfrender");
-it("uses explicit override before the environment and probes only that path", async () => {
+it("uses an explicit override and probes only that path", async () => {
   const paths: string[] = [];
   const probe: PdfRenderProbe = async (executable) => {
     paths.push(executable);
@@ -14,21 +14,11 @@ it("uses explicit override before the environment and probes only that path", as
     vendorDir,
     platform: "linux",
     override: "/explicit/render",
-    env: { TALOS_PDFRENDER: "/env/render" },
     probe,
   });
   expect(paths).toEqual(["/explicit/render"]);
   expect(result.selected.flavor).toBe("override");
   expect(result.selected.executable).toBe("/explicit/render");
-});
-it("uses the environment override", async () => {
-  const result = await createPdfRenderResolver().resolve({
-    vendorDir,
-    platform: "linux",
-    env: { TALOS_PDFRENDER: "/env/render" },
-    probe: async () => ({ ok: true, detail: "ready" }),
-  });
-  expect(result.executable).toBe("/env/render");
 });
 it("selects Fedora directly without probing Debian", async () => {
   const result = await createPdfRenderResolver().diagnose({

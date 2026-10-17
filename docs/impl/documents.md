@@ -74,7 +74,7 @@ fsync, exclusive hard-link publish; an existing destination is never overwritten
 The renderer stays a vendored prebuilt binary with the current archive format: a source
 build with progressive output would add three native build chains without a demonstrated
 quality or latency gain. Resolution lives in one function (`resolvePdfRender`): an explicit
-override or `TALOS_PDFRENDER`; else a packaged `vendor/pdfrender/target` file; else, in
+override option; else a packaged `vendor/pdfrender/target` file; else, in
 development, `/etc/os-release` (Fedora/RHEL family selects the Red Hat flavour, other Linux
 Debian). Only the chosen binary is probed (`--help`, two second limit, cached per resolver);
 there is never a fallback to another flavour. Linux prepends the binary directory to

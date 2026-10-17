@@ -20,10 +20,10 @@ it("serves sync pulls from read-only replica workers with the writer's results",
       assetsDir: join(dir, "assets"),
       dev: true,
       testSeed: true,
-      dbReaders: 2,
     }),
     {
       printRootPin: () => {},
+      readers: 2,
       replicaEntry: new URL("../../bin/testing/server.ts", import.meta.url),
     },
   );

@@ -192,16 +192,6 @@ export class ResponsesProvider implements ModelProvider {
     }
   }
 }
-export function configuredProvider(
-  env: NodeJS.ProcessEnv,
-): ModelProvider | undefined {
-  if (!env.TALOS_AI_CONFIG) return undefined;
-  try {
-    return new ResponsesProvider(JSON.parse(env.TALOS_AI_CONFIG) as unknown);
-  } catch {
-    return undefined;
-  }
-}
 export function usageCost(model: Model, u: Usage): number {
   return Math.ceil(
     Math.max(0, u.input - u.cached) * model.inputPrice +

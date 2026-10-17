@@ -27,3 +27,10 @@ export {
   installedTarget,
   assertTarget,
 } from "./release/target.ts";
+export {
+  serverWiringObject,
+  serverWiringSchema,
+  parseStartMessage,
+  sendStart,
+} from "./process/server-start.ts";
+export type { ServerWiring } from "./process/server-start.ts";

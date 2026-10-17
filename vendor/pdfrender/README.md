@@ -40,7 +40,7 @@ targets `win32-x64`, `linux-debian-x64`, and `linux-redhat-x64`. Each contains
 only its matching directory and a package-time `target` selection file.
 Docpipe never searches for another flavour when that binary fails. In development,
 `/etc/os-release` selects Red Hat for Fedora/RHEL-family hosts and Debian otherwise.
-An explicit path or `TALOS_PDFRENDER` overrides the binary path. Linux prepends
+An explicit path option overrides the binary path. Linux prepends
 that binary's directory to `LD_LIBRARY_PATH`.
 
 Run `node packages/docpipe/bin/docpipe.mjs doctor` in a checkout: it reports target,

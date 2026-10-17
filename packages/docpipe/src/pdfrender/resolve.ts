@@ -94,8 +94,7 @@ export function createPdfRenderResolver(): {
         ),
       );
     const env = { ...(options.env ?? process.env) };
-    const override =
-      options.override ?? env.TALOS_PDFRENDER ?? env.TALOS_PDFRENDER_PATH;
+    const override = options.override;
     const vendorDir = path.resolve(options.vendorDir);
     const key = JSON.stringify([
       platform,
@@ -185,7 +184,7 @@ export function createPdfRenderResolver(): {
       if (!probe.ok)
         throw new AppError(
           "E_UNAVAILABLE",
-          `pdfrender ${target} (${executable}): ${probe.detail}. Install the matching distribution libraries listed in vendor/pdfrender/README.md, or set TALOS_PDFRENDER to a compatible binary.`,
+          `pdfrender ${target} (${executable}): ${probe.detail}. Install the matching distribution libraries listed in vendor/pdfrender/README.md.`,
           { target, executable, flavors: [chosen] },
         );
       const selectedEnv = { ...env };

@@ -17,6 +17,8 @@ export interface UpdateBridge {
   apply(message: { archive: string; sha256: string; backup: string }): void;
   confirm(): void;
   pending: boolean;
+  /** The launcher's install directory, whose `target` file names the platform; none means the host's. */
+  root?: string;
 }
 interface CloudManifest {
   v: 1;
@@ -113,10 +115,7 @@ export class Updates {
   }
   private async prepare(bytes: Uint8Array, expected?: string): Promise<void> {
     const { manifest } = verifyRelease(bytes, expected);
-    assertTarget(
-      manifest.platform,
-      installedTarget(process.env.TALOS_LAUNCHER_ROOT),
-    );
+    assertTarget(manifest.platform, installedTarget(this.bridge?.root));
     if (manifest.build === this.state.build)
       throw new AppError("E_CONFLICT", "此版本已安装");
     this.state.progress = 0.5;
@@ -165,7 +164,7 @@ export class Updates {
       throw new AppError("E_UNAVAILABLE", "云端更新未开启");
     const manifestUrl =
       settings.manifestUrl ||
-      defaultManifestUrl(installedTarget(process.env.TALOS_LAUNCHER_ROOT));
+      defaultManifestUrl(installedTarget(this.bridge?.root));
     this.state.phase = "checking";
     try {
       this.latest = await this.fetchManifest(manifestUrl);
