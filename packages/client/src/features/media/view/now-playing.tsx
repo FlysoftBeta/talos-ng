@@ -33,6 +33,10 @@ export function NowPlayingView({
   onVolume,
   onStopAtEnd,
   onQueue,
+  shuffle,
+  repeat,
+  onShuffle,
+  onRepeat,
 }: {
   title: string;
   artists: string;
@@ -56,6 +60,10 @@ export function NowPlayingView({
   onVolume(value: number): void;
   onStopAtEnd(value: boolean): void;
   onQueue(): void;
+  shuffle: boolean;
+  repeat: "off" | "context" | "one";
+  onShuffle(value: boolean): void;
+  onRepeat(value: "off" | "context" | "one"): void;
 }): ReactElement {
   const length = Math.max(1, total);
   const level = Math.min(volume, maxVolume);
@@ -83,6 +91,12 @@ export function NowPlayingView({
         </div>
       </div>
       <div className="media-player-controls">
+        <IconButton
+          label="随机播放"
+          icon="shuffle"
+          pressed={shuffle}
+          onClick={() => onShuffle(!shuffle)}
+        />
         <IconButton label="上一首" icon="previous" onClick={onPrevious} />
         <button
           type="button"
@@ -94,6 +108,27 @@ export function NowPlayingView({
           <Icon name={playing ? "pause" : "play"} size={22} />
         </button>
         <IconButton label="下一首" icon="next" onClick={onNext} />
+        <IconButton
+          label={
+            repeat === "off"
+              ? "循环：关"
+              : repeat === "context"
+                ? "循环：列表"
+                : "循环：单曲"
+          }
+          icon="repeat"
+          pressed={repeat !== "off"}
+          onClick={() =>
+            onRepeat(
+              repeat === "off"
+                ? "context"
+                : repeat === "context"
+                  ? "one"
+                  : "off",
+            )
+          }
+        />
+        {repeat === "one" && <span className="media-repeat-one">1</span>}
       </div>
       <div className="media-player-seek">
         <time>{positionLabel}</time>

@@ -29,12 +29,15 @@ export function TrackRow({
   index,
   playlist,
   editable = true,
+  list,
 }: {
   track: MediaTrack;
   /** 1-based position in the shown list. */
   index: number;
   playlist?: MediaPlaylist;
   editable?: boolean;
+  /** The list this row belongs to; playing the row makes it the playback context. */
+  list?: { title: string; tracks: readonly MediaTrack[] };
 }): ReactElement {
   const runtime = useRuntime(),
     snapshot = useClientSnapshot(),
@@ -100,13 +103,14 @@ export function TrackRow({
       removeReason={!editable ? "没有歌单写入权限" : itemsReason}
       error={error}
       onPlay={() => {
-        void player.play(track);
+        void player.play(track, list);
         if (playlist) execute(recordPlay(runtime, playlist.id));
       }}
       onFavorite={() =>
         execute(setFavorite(runtime, track.id, !isFavorite(data, track.id)))
       }
       onEnqueue={() => player.enqueue(track.id)}
+      onPlayNext={() => player.playNext(track.id)}
       onAdd={() => setAddingTo(true)}
       onRemove={() =>
         playlist && execute(removeFromPlaylist(runtime, playlist, track.id))

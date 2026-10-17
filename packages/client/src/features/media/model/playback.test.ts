@@ -115,15 +115,11 @@ describe("playback controller", () => {
     expect(online.session.playing).toHaveBeenCalled();
   });
 
-  it("advances on ended unless play-to-end stop is set, and stops at the queue end", async () => {
-    const queue = ["a", "b"];
-    const state = {
-      queue,
-      stopAtEnd: false,
-      queueStamp: { t: { ms: 5, counter: 0 }, op: "x" },
-    } as never;
+  it("advances through the context on ended, stops at its end, and honours play-to-end stop", async () => {
+    const state = { queue: [], stopAtEnd: false, queueStamp: null } as never;
     const t = setup({ state, offline: true });
-    await t.controller.play(t.tracks[0]!);
+    const list = { title: "专辑", tracks: t.tracks };
+    await t.controller.play(t.tracks[0]!, list);
     t.controller.ended();
     await vi.waitFor(() =>
       expect(t.controller.getState().current?.id).toBe("b"),
@@ -132,10 +128,13 @@ describe("playback controller", () => {
     await vi.waitFor(() => expect(t.controller.getState().playing).toBe(false));
     expect(t.controller.getState().current?.id).toBe("b");
     const stop = setup({
-      state: { ...(state as object), stopAtEnd: true } as never,
+      state: { queue: [], stopAtEnd: true, queueStamp: null } as never,
       offline: true,
     });
-    await stop.controller.play(stop.tracks[0]!);
+    await stop.controller.play(stop.tracks[0]!, {
+      title: "专辑",
+      tracks: stop.tracks,
+    });
     stop.controller.ended();
     await Promise.resolve();
     expect(stop.controller.getState().current?.id).toBe("a");
@@ -283,47 +282,153 @@ describe("playback transport edge cases", () => {
     expect(t.controller.getState().playing).toBe(false);
   });
 
-  it("advances to the next queued track on end unless stop-at-end is set", async () => {
-    const queue = ["a", "b"];
-    const state = { queue, queueStamp: null, stopAtEnd: false } as never;
-    const t = setup({ state });
+  it("plays the user queue before the context and removes each queued track once started", async () => {
+    const t = setup({
+      state: { queue: ["c"], queueStamp: null, stopAtEnd: false } as never,
+      tracks: [track("a"), track("b"), track("c")],
+    });
     t.command.mockResolvedValue(granted());
-    await t.controller.play(t.tracks[0]!);
-    t.command.mockResolvedValue({ ...granted(), track: track("b") });
+    await t.controller.play(t.input.tracks[0]!, {
+      title: "歌单",
+      tracks: t.input.tracks,
+    });
+    expect(t.controller.getState().upcoming).toEqual(["b", "c"]);
+    t.controller.ended();
+    await vi.waitFor(() =>
+      expect(t.controller.getState().current?.id).toBe("c"),
+    );
+    expect(t.controller.queueTracks).toEqual([]);
+    expect(t.command).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "media.queue.set" }),
+      expect.objectContaining({ tracks: [] }),
+    );
+    // the context continues where it was, with the tracks the queue did not take
     t.controller.ended();
     await vi.waitFor(() =>
       expect(t.controller.getState().current?.id).toBe("b"),
     );
-    const stopping = setup({
-      state: { queue, queueStamp: null, stopAtEnd: true } as never,
-    });
-    stopping.command.mockResolvedValue(granted());
-    await stopping.controller.play(stopping.tracks[0]!);
-    stopping.controller.ended();
-    await Promise.resolve();
-    expect(stopping.controller.getState()).toMatchObject({
-      current: { id: "a" },
-      playing: false,
-    });
   });
-
-  it("at the end of the queue next pauses and rewinds; previous at the start does nothing", async () => {
+  it("keeps the queue when a new list starts, and shuffle and repeat only touch the context", async () => {
+    const all = [track("a"), track("b"), track("c"), track("d")];
     const t = setup({
-      state: { queue: ["a", "b"], queueStamp: null, stopAtEnd: false } as never,
+      state: { queue: ["d"], queueStamp: null, stopAtEnd: false } as never,
+      tracks: all,
+    });
+    t.command.mockResolvedValue(granted());
+    t.controller.setShuffle(true);
+    t.controller.setRepeat("context");
+    expect(t.controller.getState()).toMatchObject({
+      shuffle: true,
+      repeat: "context",
+    });
+    await t.controller.play(all[0]!, { title: "专辑", tracks: all });
+    expect(t.controller.queueTracks).toEqual(["d"]);
+    expect([...t.controller.getState().upcoming].sort()).toEqual([
+      "b",
+      "c",
+      "d",
+    ]);
+    t.controller.setShuffle(false);
+    expect(t.controller.getState().upcoming).toEqual(["b", "c", "d"]);
+    t.controller.ended();
+    await vi.waitFor(() =>
+      expect(t.controller.getState().current?.id).toBe("d"),
+    );
+    expect(t.controller.queueTracks).toEqual([]);
+  });
+  it("repeat one replays the track at its end but a manual next moves on", async () => {
+    const t = setup({
+      state: { queue: [], queueStamp: null, stopAtEnd: false } as never,
+    });
+    t.command.mockResolvedValue(granted());
+    t.controller.setRepeat("one");
+    await t.controller.play(t.tracks[0]!, { title: "x", tracks: t.tracks });
+    const plays = t.command.mock.calls.length;
+    t.controller.ended();
+    await vi.waitFor(() =>
+      expect(t.command.mock.calls.length).toBeGreaterThan(plays),
+    );
+    expect(t.controller.getState().current?.id).toBe("a");
+    t.command.mockResolvedValue({ ...granted(), track: track("b") });
+    await t.controller.next();
+    expect(t.controller.getState().current?.id).toBe("b");
+  });
+  it("previous restarts after 3 s, otherwise goes back in the context", async () => {
+    const t = setup({
+      state: { queue: [], queueStamp: null, stopAtEnd: false } as never,
     });
     t.command.mockResolvedValue({ ...granted(), track: track("b") });
-    await t.controller.play(t.tracks[1]!);
+    await t.controller.play(t.tracks[1]!, { title: "x", tracks: t.tracks });
+    const seek = vi.spyOn(t.audio, "seek");
+    t.controller.timeUpdate(5);
+    await t.controller.previous();
+    expect(seek).toHaveBeenCalledWith(0);
+    expect(t.controller.getState().current?.id).toBe("b");
+    t.controller.timeUpdate(1);
+    t.command.mockResolvedValue(granted());
+    await t.controller.previous();
+    expect(t.controller.getState().current?.id).toBe("a");
+    // at the first track it restarts instead
+    seek.mockClear();
+    await t.controller.previous();
+    expect(seek).toHaveBeenCalledWith(0);
+  });
+  it("at the end of the context next pauses and rewinds; nothing playing is a no-op", async () => {
+    const t = setup({
+      state: { queue: [], queueStamp: null, stopAtEnd: false } as never,
+    });
+    t.command.mockResolvedValue({ ...granted(), track: track("b") });
+    await t.controller.play(t.tracks[1]!, { title: "x", tracks: t.tracks });
     t.controller.timeUpdate(2);
     await t.controller.next();
     expect(t.controller.getState()).toMatchObject({
       playing: false,
       position: 0,
     });
+    await setup().controller.next();
+  });
+  it("edits both sections: play next, play from the queue or the context, move and remove", async () => {
+    const all = [track("a"), track("b"), track("c"), track("d")];
+    const t = setup({
+      state: { queue: ["d"], queueStamp: null, stopAtEnd: false } as never,
+      tracks: all,
+    });
+    t.command.mockImplementation(
+      async (_m: unknown, args: { track?: string }) => ({
+        ...granted(),
+        track: track(args?.track ?? "a"),
+      }),
+    );
+    await t.controller.play(all[0]!, { title: "专辑", tracks: all });
+    t.controller.playNext("c");
+    expect(t.controller.queueTracks).toEqual(["c", "d"]);
+    t.controller.moveUpcoming(0, 1);
+    expect(t.controller.getState().upcoming).toEqual(["c", "b", "d"]);
+    t.controller.removeUpcoming(2);
+    expect(t.controller.getState().upcoming).toEqual(["c", "b"]);
+    await t.controller.playQueued(1);
+    expect(t.controller.getState().current?.id).toBe("d");
+    expect(t.controller.queueTracks).toEqual(["c"]);
+    await t.controller.playUpcoming(1);
+    expect(t.controller.getState().current?.id).toBe("b");
+    expect(t.controller.getState().upcoming).toEqual([]);
+    t.controller.clearQueue();
+    expect(t.controller.queueTracks).toEqual([]);
+    expect(t.controller.getState().contextTitle).toBe("专辑");
+  });
+  it("play all makes the list the context", async () => {
+    const t = setup({ state: { queue: [], queueStamp: null } as never });
     t.command.mockResolvedValue(granted());
-    await t.controller.play(t.tracks[0]!);
-    await t.controller.previous();
+    await t.controller.playAll("专辑", [track("a"), track("b")]);
+    expect(t.controller.getState()).toMatchObject({
+      current: { id: "a" },
+      contextTitle: "专辑",
+      upcoming: ["b"],
+    });
+    t.controller.enqueueAll(["c", "b", "c"]);
+    expect(t.controller.queueTracks).toEqual(["c", "b"]);
+    await t.controller.playAll("空", []);
     expect(t.controller.getState().current?.id).toBe("a");
-    await setup().controller.next(); // nothing playing: no-op
   });
 
   it("clamps volume, applies the cap, and ignores seeks that are not finite or not ready", async () => {
@@ -432,17 +537,5 @@ describe("playback transport edge cases", () => {
     expect(t.controller.getState().queueOpen).toBe(true);
     t.controller.closeQueue();
     expect(t.controller.getState().queueOpen).toBe(false);
-  });
-
-  it("play all starts the first track and queues the rest; enqueue all skips queued ones", async () => {
-    const t = setup({ state: { queue: [], queueStamp: null } as never });
-    t.command.mockResolvedValue(granted());
-    await t.controller.playAll([track("a"), track("b"), track("c")]);
-    expect(t.controller.getState().current?.id).toBe("a");
-    expect(t.controller.queueTracks).toEqual(["b", "c"]);
-    t.controller.enqueueAll(["c", "d", "e"]);
-    expect(t.controller.queueTracks).toEqual(["b", "c", "d", "e"]);
-    await t.controller.playAll([]);
-    expect(t.controller.getState().current?.id).toBe("a");
   });
 });

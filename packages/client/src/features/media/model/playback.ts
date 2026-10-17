@@ -9,9 +9,21 @@ import type {
 import {
   QueueTracker,
   movedTrack,
+  withTrackFirst,
   withTrackLast,
   withoutTrackAt,
 } from "./queue.ts";
+import {
+  advance,
+  jumpUpcoming,
+  moveUpcoming,
+  openContext,
+  removeUpcoming,
+  retreat,
+  upcoming,
+  withShuffle,
+} from "./play-queue.ts";
+import type { PlayContext, Random, Repeat } from "./play-queue.ts";
 
 /** The audio output. Only its adapter touches the element and object URLs. */
 export interface AudioPort {
@@ -68,9 +80,20 @@ export interface PlaybackState {
   maxVolume: number;
   error: string;
   queueOpen: boolean;
+  /** Shuffle and repeat apply to the context only, never to the user queue. */
+  shuffle: boolean;
+  repeat: Repeat;
+  /** Title of the list playback started from; empty without a context. */
+  contextTitle: string;
+  /** Ids still to come from the context ("Next from <context>"). */
+  upcoming: readonly string[];
 }
 export interface PlayerApi extends PlaybackState {
-  play(track: MediaTrack): Promise<void>;
+  /** Plays a track; when `list` is given it becomes the context, starting at the track. */
+  play(
+    track: MediaTrack,
+    list?: { title: string; tracks: readonly MediaTrack[] },
+  ): Promise<void>;
   pause(): void;
   resume(): Promise<void>;
   next(): Promise<void>;
@@ -80,10 +103,14 @@ export interface PlayerApi extends PlaybackState {
   setVolume(value: number): void;
   toggleQueue(): void;
   enqueue(track: string): void;
+  /** Puts a track at the front of the queue, to play right after the current one. */
+  playNext(track: string): void;
   /** Adds several tracks to the end of the queue, skipping the ones already queued. */
   enqueueAll(tracks: readonly string[]): void;
-  /** Plays the first track and queues the rest. */
-  playAll(tracks: readonly MediaTrack[]): Promise<void>;
+  /** Starts a list: its first track plays and the list becomes the context. */
+  playAll(title: string, tracks: readonly MediaTrack[]): Promise<void>;
+  setShuffle(value: boolean): void;
+  setRepeat(value: Repeat): void;
 }
 const CAP_KEY = "media:volume-cap";
 const message = (error: unknown, fallback: string): string =>
@@ -121,12 +148,20 @@ export class PlaybackController {
     maxVolume: 1,
     error: "",
     queueOpen: false,
+    shuffle: false,
+    repeat: "off",
+    contextTitle: "",
+    upcoming: [],
   };
+  private context: PlayContext | null = null;
+  /** The current track was taken from the user queue. */
+  private fromQueue = false;
   constructor(
     private readonly port: PlaybackPort,
     private readonly audio: AudioPort,
     private readonly transfer: AudioTransfer,
     private readonly session: MediaSessionPort,
+    private readonly random: Random = Math.random,
   ) {}
   getState = (): PlaybackState => this.state;
   subscribe = (listener: () => void): (() => void) => {
@@ -180,14 +215,76 @@ export class PlaybackController {
   }
   enqueue = (track: string): void =>
     this.replaceQueue(withTrackLast(this.queue.tracks, track));
-  enqueueAll = (tracks: readonly string[]): void =>
-    this.replaceQueue(tracks.reduce(withTrackLast, this.queue.tracks));
-  playAll = async (tracks: readonly MediaTrack[]): Promise<void> => {
-    const [first, ...rest] = tracks;
-    if (!first) return;
-    this.replaceQueue(rest.map((t) => t.id));
-    await this.play(first);
+  enqueueAll = (tracks: readonly string[]): void => {
+    const seen = new Set(this.queue.tracks);
+    const added = tracks.filter((id) => !seen.has(id) && !!seen.add(id));
+    if (added.length) this.replaceQueue([...this.queue.tracks, ...added]);
   };
+  /** Starts `list` as the context at `track`; the user queue is kept. */
+  private startContext(
+    track: MediaTrack,
+    list: { title: string; tracks: readonly MediaTrack[] },
+  ): Promise<void> {
+    this.context = openContext(
+      list.title,
+      list.tracks.map((t) => t.id),
+      track.id,
+      this.state.shuffle,
+      this.random,
+    );
+    this.fromQueue = false;
+    this.contextChanged();
+    return this.start(track);
+  }
+  playAll = async (
+    title: string,
+    tracks: readonly MediaTrack[],
+  ): Promise<void> => {
+    const first = tracks[0];
+    if (first) await this.startContext(first, { title, tracks });
+  };
+  private contextChanged(): void {
+    this.patch({
+      contextTitle: this.context?.title ?? "",
+      upcoming: upcoming(this.context),
+    });
+  }
+  setShuffle = (value: boolean): void => {
+    if (this.context)
+      this.context = withShuffle(this.context, value, this.random);
+    this.patch({ shuffle: value });
+    this.contextChanged();
+  };
+  setRepeat = (value: Repeat): void => this.patch({ repeat: value });
+  moveUpcoming(index: number, delta: -1 | 1): void {
+    if (this.context) this.context = moveUpcoming(this.context, index, delta);
+    this.contextChanged();
+  }
+  removeUpcoming(index: number): void {
+    if (this.context) this.context = removeUpcoming(this.context, index);
+    this.contextChanged();
+  }
+  /** Plays a track of the user queue now, removing it from the queue. */
+  playQueued = async (index: number): Promise<void> => {
+    const track = this.trackById(this.queue.tracks[index] ?? "");
+    if (!track) return;
+    this.replaceQueue(withoutTrackAt(this.queue.tracks, index));
+    this.fromQueue = true;
+    await this.start(track);
+  };
+  /** Plays an upcoming context track now, skipping the ones before it. */
+  playUpcoming = async (index: number): Promise<void> => {
+    if (!this.context) return;
+    this.context = jumpUpcoming(this.context, index);
+    const track = this.trackById(
+      this.context.ids[this.context.order[this.context.pos]!] ?? "",
+    );
+    this.fromQueue = false;
+    this.contextChanged();
+    if (track) await this.start(track);
+  };
+  playNext = (track: string): void =>
+    this.replaceQueue(withTrackFirst(this.queue.tracks, track));
   moveQueued(index: number, delta: -1 | 1): void {
     this.replaceQueue(movedTrack(this.input.state?.queue ?? [], index, delta));
   }
@@ -233,7 +330,12 @@ export class PlaybackController {
       error: "",
     });
   };
-  play = async (requested: MediaTrack): Promise<void> => {
+  play = (
+    track: MediaTrack,
+    list?: { title: string; tracks: readonly MediaTrack[] },
+  ): Promise<void> =>
+    this.startContext(track, list ?? { title: "", tracks: [track] });
+  private start = async (requested: MediaTrack): Promise<void> => {
     let track = requested;
     const { offline } = this.input;
     if (offline && !this.trackById(track.id)) {
@@ -349,19 +451,56 @@ export class PlaybackController {
       this.patch({ error: message(e, "播放失败") });
     }
   };
-  private adjacent = async (delta: number): Promise<void> => {
+  /** Moves on to the next playable track; false when nothing follows. */
+  private step = async (auto: boolean): Promise<void> => {
     const { current } = this.state;
     if (!current) return;
-    const id = this.queue.neighbour(current.id, delta);
-    const track = id ? this.trackById(id) : undefined;
-    if (track) await this.play(track);
-    else if (delta > 0) {
-      this.pause();
-      this.patch({ position: 0 });
+    let from = current.id;
+    for (let tries = 0; tries < 50; tries++) {
+      const step = advance(
+        {
+          context: this.context,
+          queue: this.queue.tracks,
+          repeat: this.state.repeat,
+        },
+        auto,
+        from,
+        this.random,
+      );
+      if (step.id === null) break;
+      this.context = step.context;
+      if (step.fromQueue) this.replaceQueue(step.queue);
+      this.fromQueue = step.fromQueue;
+      this.contextChanged();
+      const track = this.trackById(step.id);
+      if (track) return this.start(track);
+      // A revoked or missing track is skipped.
+      from = step.id;
+      auto = false;
     }
+    this.pause();
+    this.patch({ position: 0 });
   };
-  next = (): Promise<void> => this.adjacent(1);
-  previous = (): Promise<void> => this.adjacent(-1);
+  next = (): Promise<void> => this.step(false);
+  previous = async (): Promise<void> => {
+    const { current } = this.state;
+    if (!current) return;
+    const back = retreat(
+      { context: this.context, repeat: this.state.repeat },
+      this.fromQueue,
+      this.state.position,
+    );
+    if (back.restart) {
+      this.seek(0);
+      return;
+    }
+    const track = this.trackById(back.id);
+    if (!track) return;
+    this.context = back.context;
+    this.fromQueue = false;
+    this.contextChanged();
+    await this.start(track);
+  };
   seek = (seconds: number): void => {
     if (!this.audio.ready() || !Number.isFinite(seconds)) return;
     this.patch({ position: this.audio.seek(seconds) });
@@ -376,7 +515,7 @@ export class PlaybackController {
   ended(): void {
     this.patch({ playing: false });
     if (this.input.state?.stopAtEnd) return;
-    void this.next();
+    void this.step(true);
   }
   timeUpdate(seconds: number): void {
     this.patch({ position: seconds });

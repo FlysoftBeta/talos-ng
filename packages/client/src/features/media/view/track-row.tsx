@@ -37,6 +37,7 @@ export function TrackRowView({
   onPlay,
   onFavorite,
   onEnqueue,
+  onPlayNext,
   onAdd,
   onRemove,
   onRetention,
@@ -63,6 +64,7 @@ export function TrackRowView({
   onPlay(): void;
   onFavorite(): void;
   onEnqueue(): void;
+  onPlayNext(): void;
   onAdd(): void;
   onRemove(): void;
   onRetention(): void;
@@ -119,6 +121,11 @@ export function TrackRowView({
           label={`更多操作 ${title}`}
           items={[
             { label: "我的离线保留", icon: "download", onSelect: onRetention },
+            {
+              label: `下一首播放 ${title}`,
+              icon: "next",
+              onSelect: onPlayNext,
+            },
             {
               label: `加入队列 ${title}`,
               icon: "queue",

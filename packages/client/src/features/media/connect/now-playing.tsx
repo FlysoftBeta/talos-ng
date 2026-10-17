@@ -54,6 +54,10 @@ export function NowPlaying(): ReactElement | null {
       onVolume={player.setVolume}
       onStopAtEnd={player.setStopAtEnd}
       onQueue={player.toggleQueue}
+      shuffle={player.shuffle}
+      repeat={player.repeat}
+      onShuffle={player.setShuffle}
+      onRepeat={player.setRepeat}
     />
   );
 }

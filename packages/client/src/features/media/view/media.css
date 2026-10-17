@@ -539,3 +539,13 @@
 .media-collection-actions > * {
   margin-right: 8px;
 }
+.media-queue-heading {
+  padding: 12px 16px 4px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+.media-repeat-one {
+  font-size: 10px;
+  margin-left: -6px;
+  opacity: 0.8;
+}

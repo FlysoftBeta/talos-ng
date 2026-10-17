@@ -5,7 +5,6 @@ type QueueStamp = MediaUserState["queueStamp"];
 export interface QueueRow {
   id: string;
   title: string;
-  current: boolean;
   canUp: boolean;
   canDown: boolean;
 }
@@ -45,15 +44,15 @@ export class QueueTracker {
     this.queue = tracks;
     this.stamp = stamp;
   }
-  /** Id after (delta 1) or before (delta -1) the given one, if any. */
-  neighbour(id: string, delta: number): string | undefined {
-    return this.queue[this.queue.indexOf(id) + delta];
-  }
 }
 export const withTrackLast = (
   queue: readonly string[],
   id: string,
 ): string[] => [...queue.filter((value) => value !== id), id];
+export const withTrackFirst = (
+  queue: readonly string[],
+  id: string,
+): string[] => [id, ...queue.filter((value) => value !== id)];
 export function movedTrack(
   queue: readonly string[],
   index: number,
@@ -72,12 +71,10 @@ export const withoutTrackAt = (
 export function queueRows(
   queue: readonly string[],
   tracks: readonly MediaTrack[],
-  current: string | undefined,
 ): QueueRow[] {
   return queue.map((id, index) => ({
     id,
     title: tracks.find((t) => t.id === id)?.title ?? id,
-    current: current === id,
     canUp: index > 0,
     canDown: index < queue.length - 1,
   }));

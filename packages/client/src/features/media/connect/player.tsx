@@ -85,7 +85,10 @@ export function MediaPlayerProvider({
     setVolume: controller.setVolume,
     toggleQueue: controller.toggleQueue,
     enqueue: controller.enqueue,
+    playNext: controller.playNext,
     enqueueAll: controller.enqueueAll,
+    setShuffle: controller.setShuffle,
+    setRepeat: controller.setRepeat,
     playAll: controller.playAll,
     setStopAtEnd: (value) => controller.setStopAtEnd(value),
   };
@@ -101,18 +104,21 @@ export function MediaPlayerProvider({
       />
       {state.queueOpen && (
         <QueueSheetView
-          rows={queueRows(
-            data.state?.queue ?? [],
-            data.tracks,
-            state.current?.id,
-          )}
+          nowPlaying={state.current?.title}
+          queue={queueRows(data.state?.queue ?? [], data.tracks)}
+          contextTitle={state.contextTitle}
+          upcoming={queueRows(state.upcoming, data.tracks)}
           emptyState={emptyState(snapshot.status.connection)}
-          onPlay={(id) => {
-            const track = data.tracks.find((t) => t.id === id);
-            if (track) void controller.play(track);
+          queueActions={{
+            onPlay: (index) => void controller.playQueued(index),
+            onMove: (index, delta) => controller.moveQueued(index, delta),
+            onRemove: (index) => controller.removeQueued(index),
           }}
-          onMove={(index, delta) => controller.moveQueued(index, delta)}
-          onRemove={(index) => controller.removeQueued(index)}
+          upcomingActions={{
+            onPlay: (index) => void controller.playUpcoming(index),
+            onMove: (index, delta) => controller.moveUpcoming(index, delta),
+            onRemove: (index) => controller.removeUpcoming(index),
+          }}
           onClear={() => controller.clearQueue()}
           onClose={controller.closeQueue}
         />

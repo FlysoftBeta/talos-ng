@@ -191,6 +191,7 @@ export function MediaContent(): ReactElement {
               track={t}
               playlist={playlist}
               editable={canEdit}
+              list={{ title: playlist.title, tracks }}
             />
           ))}
         </TrackListView>
@@ -239,7 +240,7 @@ export function MediaContent(): ReactElement {
           queueReason={undefined}
           saveReason={canCreate.ok ? undefined : canCreate.reason}
           onBack={() => void search.back()}
-          onPlayAll={() => void player.playAll(search.results)}
+          onPlayAll={() => void player.playAll(opened.title, search.results)}
           onEnqueueAll={() =>
             player.enqueueAll(search.results.map((t) => t.id))
           }
@@ -274,7 +275,15 @@ export function MediaContent(): ReactElement {
           onRetry={() => void search.search()}
         >
           {tracks.map((t, i) => (
-            <TrackRow key={t.id} index={i + 1} track={t} />
+            <TrackRow
+              key={t.id}
+              index={i + 1}
+              track={t}
+              list={{
+                title: opened?.title ?? sourceTitle(source),
+                tracks,
+              }}
+            />
           ))}
         </TrackListView>
       )}

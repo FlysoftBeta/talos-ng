@@ -4,6 +4,7 @@ import {
   QueueTracker,
   movedTrack,
   queueRows,
+  withTrackFirst,
   withTrackLast,
   withoutTrackAt,
 } from "./queue.ts";
@@ -56,12 +57,9 @@ describe("queue tracker", () => {
     expect(q.tracks).toEqual([]);
   });
 
-  it("finds neighbours without wrapping", () => {
-    const q = new QueueTracker();
-    q.replace(["a", "b", "c"], { t: { ms: 1, counter: 0 }, op: "o" });
-    expect(q.neighbour("b", 1)).toBe("c");
-    expect(q.neighbour("a", -1)).toBeUndefined();
-    expect(q.neighbour("c", 1)).toBeUndefined();
+  it("puts a track at the front without duplicating it", () => {
+    expect(withTrackFirst(["a", "b", "c"], "c")).toEqual(["c", "a", "b"]);
+    expect(withTrackFirst([], "x")).toEqual(["x"]);
   });
 });
 
@@ -80,14 +78,10 @@ describe("queue edits", () => {
     expect(withoutTrackAt(["a"], 5)).toEqual(["a"]);
   });
   it("labels rows with unknown tracks by id and flags the ends", () => {
-    const rows = queueRows(
-      ["a", "b"],
-      [{ id: "a", title: "甲" } as never],
-      "b",
-    );
+    const rows = queueRows(["a", "b"], [{ id: "a", title: "甲" } as never]);
     expect(rows).toEqual([
-      { id: "a", title: "甲", current: false, canUp: false, canDown: true },
-      { id: "b", title: "b", current: true, canUp: true, canDown: false },
+      { id: "a", title: "甲", canUp: false, canDown: true },
+      { id: "b", title: "b", canUp: true, canDown: false },
     ]);
   });
 });

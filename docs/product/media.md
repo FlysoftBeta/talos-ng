@@ -28,8 +28,21 @@ it can fetch live or keeps for offline use.
 
 ## Queue and playback
 
-- The queue (播放队列) is per user, refreshed when opened: enqueue, remove, clear, replace.
-  Queue, favourites and play preference work offline.
+- Playback has two lists, shown as two sections of the queue sheet.
+  - 队列中 holds the tracks the user queued (加入队列, 下一首播放 puts one at the front). It
+    is per user and works offline; its tracks play before the list continues and are removed
+    once they start.
+  - 接下来播放 · <list> is the rest of the album, playlist, artist or result list the
+    playback started from. Playing a track from a list makes that list the context,
+    starting at the track; the queued tracks are kept. 播放全部 starts a list from its first
+    track.
+  - Shuffle and repeat (off, list, one) apply to the list only, never to the queue. Turning
+    shuffle on keeps the current track and shuffles what is still to come.
+  - Previous restarts the track after about 3 s, otherwise goes back to the previous track of
+    the list (from a queued track, to the list track played last). At the start of the list
+    it restarts, or wraps to the last track under list repeat.
+  - Both sections can be reordered, played from and edited track by track; 清空队列 clears
+    only 队列中.
 - A persistent player bar: play/pause, previous/next, seek, volume, queue, stop; it is
   compact outside the music area.
 - At the end of a track the next one plays; an option 播完即停 stops instead. If stopping

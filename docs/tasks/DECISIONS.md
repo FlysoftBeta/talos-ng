@@ -697,3 +697,10 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   its first page only, albums (`/releases`, else `/playlists`). Album pages are playlist urls
   (OLAK5uy_ ids work). The client keeps a trail of opened pages and the state machine in
   `model/online-search.ts`. Verified live against yt-dlp 2026.08.19 except OLAK5uy_ album opens.
+- **D-134 — Playback is a user queue plus a local context.** The synced `media.queue.set`
+  register stays the user queue ("Next in queue": added tracks, consumed when started, D-123
+  merging and offline editing unchanged). What used to be queue navigation moved to a local,
+  pure model (`model/play-queue.ts`): the context (list, play order, cursor), shuffle and repeat
+  (off/list/one) live only in the controller and never reach the queue. Advance order: repeat-one
+  replay on auto end, then the queue, then the context (wrapping under repeat, reshuffled when
+  shuffled). Previous restarts after 3 s. No wire or schema change.
