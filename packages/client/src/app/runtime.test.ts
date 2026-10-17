@@ -1032,7 +1032,7 @@ it("repairs a malformed sync event before a later valid push can skip its rows",
   ).toEqual(["base", "later", "missed"]);
   expect(
     link.calls.filter((call) => call.method === "sync.pull")[1]?.args,
-  ).toEqual({ cursors: { [scope]: 1 } });
+  ).toEqual({ cursors: { [scope]: 1 }, windowed: [] });
 });
 
 describe("admission with an unfinished background pull", () => {

@@ -6,6 +6,7 @@ import {
   communityMemberSchema,
 } from "@talos/contract";
 import type {
+  ArgsOf,
   ChatState,
   ChatPost,
   CommunityConversation,
@@ -75,6 +76,33 @@ export const chatModule = defineClientModule({
           (item.args as { id?: string } | null)?.id === textId,
       )
       .map((item) => item.op);
+  },
+  registers: {
+    "chat.state.set": {
+      key: (args) => {
+        const value = args as { conversation?: string; key?: string } | null;
+        return value?.conversation && value.key
+          ? `${value.conversation}:${value.key}`
+          : undefined;
+      },
+      merge: (earlier, later) => {
+        const a = earlier as ArgsOf<typeof contract.chat.state.set>;
+        const b = later as ArgsOf<typeof contract.chat.state.set>;
+        // The winning value carries its own text reference.
+        return lwwMerge(a.value, b.value) === a.value ? a : b;
+      },
+      debounceMs: (args) =>
+        (args as { key?: string } | null)?.key === "draft" ? 1500 : 0,
+    },
+    "chat.state.read": {
+      key: (args) => (args as { conversation?: string } | null)?.conversation,
+      merge: (earlier, later) => {
+        const a = earlier as ArgsOf<typeof contract.chat.state.read>;
+        const b = later as ArgsOf<typeof contract.chat.state.read>;
+        return { ...b, seq: Math.max(a.seq, b.seq) };
+      },
+      debounceMs: () => 1000,
+    },
   },
   operationTitles: {
     "chat.post.send": "发送消息",

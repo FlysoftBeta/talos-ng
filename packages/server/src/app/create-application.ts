@@ -38,6 +38,7 @@ import { LearningService } from "../modules/learning/index.ts";
 import type { Db } from "../kernel/persistence/db.ts";
 import { Uow } from "../kernel/persistence/uow.ts";
 import { SyncHub } from "../kernel/sync/sync-hub.ts";
+import type { SyncRequest, SyncSnapshot } from "../kernel/sync/sync-hub.ts";
 import { Jobs } from "../kernel/jobs/jobs.ts";
 import { LinkHost } from "../kernel/transport/link-host.ts";
 import { Incidents } from "../kernel/diagnostics/incidents.ts";
@@ -46,6 +47,7 @@ import { ObjectLedger } from "../kernel/objects/objects.ts";
 import { UploadService } from "../kernel/objects/uploads.ts";
 import { TicketService } from "../kernel/objects/tickets.ts";
 import { systemClock } from "../kernel/config/clock.ts";
+import { PerformanceMonitor } from "../kernel/diagnostics/performance.ts";
 import type { Clock } from "../kernel/config/clock.ts";
 export interface KernelOptions {
   db: Db;
@@ -64,6 +66,15 @@ export interface KernelOptions {
   netbooksWait?: (ms: number, signal: CancellationSignal) => Promise<void>;
   mediaProvider?: MediaProvider;
   mediaBinaryPath?: string;
+  /**
+   * Build over a read-only replica connection: no start-up writes, no
+   * background work. Only read paths (sync snapshots) are served from it.
+   */
+  replica?: boolean;
+  /** Statement timing and event-loop delay; created here when absent (not for replicas). */
+  performance?: PerformanceMonitor;
+  /** Computes sync pages off the main thread; absent, pulls run locally. */
+  syncReplicas?: (user: string, request: SyncRequest) => Promise<SyncSnapshot>;
 }
 export interface Kernel {
   purge: UserPurgeRegistry;
@@ -91,6 +102,7 @@ export interface Kernel {
   host: LinkHost;
   audit: Audit;
   incidents: Incidents;
+  performance: PerformanceMonitor | undefined;
   maintain(): Promise<void>;
   close(): Promise<void>;
 }
@@ -100,6 +112,12 @@ export function createKernel(options: KernelOptions): Kernel {
   const { db, store } = options;
   const clock = options.clock ?? systemClock;
   const now = () => clock.now();
+  const ownPerformance =
+    !options.performance && !options.replica
+      ? new PerformanceMonitor({ slowMs: 50, now })
+      : undefined;
+  if (ownPerformance) db.observe(ownPerformance.queries);
+  const performance = options.performance ?? ownPerformance;
   const incidents = new Incidents(db, now, 1000, options.build);
   const report = (error: unknown) => {
     incidents.report(error);
@@ -116,7 +134,9 @@ export function createKernel(options: KernelOptions): Kernel {
       committed: (set) => {
         // Revalidate every bound session before fan-out, including revocation on
         // another connection. No stale authentication can retain a subscription.
-        if (host)
+        // Access-neutral writes (posts, states, progress) cannot revoke anything;
+        // admission changes made outside units of work re-authenticate themselves.
+        if (host && !syncHub.accessNeutral(set))
           for (const connection of host.link.connections.values())
             identity.authenticate(connection);
         aiService?.jobsChanged(
@@ -130,6 +150,14 @@ export function createKernel(options: KernelOptions): Kernel {
     report,
   );
   let host: LinkHost | undefined = undefined;
+  const reauthenticate = () => {
+    if (host)
+      for (const conn of host.link.connections.values()) {
+        const before = sessionState(conn)?.user;
+        const after = identity.authenticate(conn).user;
+        if (before && !after) tickets.revokeUser(before);
+      }
+  };
   let community: CommunityService | undefined = undefined;
   let chat: ChatService | undefined = undefined;
   const authority: AuthorityService = new AuthorityService({
@@ -152,14 +180,7 @@ export function createKernel(options: KernelOptions): Kernel {
     projectAccess: (user) => authority.repo.project(user),
     accessRevision: (user) => authority.repo.revision(user),
     onBindingChanged: (connection) => syncHub.unsubscribe(connection.id),
-    onSessionsChanged: () => {
-      if (host)
-        for (const conn of host.link.connections.values()) {
-          const before = sessionState(conn)?.user;
-          const after = identity.authenticate(conn).user;
-          if (before && !after) tickets.revokeUser(before);
-        }
-    },
+    onSessionsChanged: () => reauthenticate(),
   });
   const communityService = new CommunityService({
     db,
@@ -304,6 +325,8 @@ export function createKernel(options: KernelOptions): Kernel {
   );
   const admin = new AdminService({
     serverLogs: options.serverLogs,
+    performance,
+    onAdmissionChanged: reauthenticate,
     db,
     uow,
     identity,
@@ -413,13 +436,32 @@ export function createKernel(options: KernelOptions): Kernel {
     libraryAccess,
     options.build,
     now,
+    options.syncReplicas,
   );
-  seedIdentity(identity, uow, options.testSeed);
-  for (const user of authority.repo.users()) {
-    library.ensureBuiltins(user);
-    communityService.initializeUser(user);
-    chatService.ensureStates(user);
+  if (!options.replica) {
+    seedIdentity(identity, uow, options.testSeed);
+    for (const user of authority.repo.users()) {
+      library.ensureBuiltins(user);
+      communityService.initializeUser(user);
+      chatService.ensureStates(user);
+    }
   }
+  const lifecycle = applicationLifecycle(
+    {
+      jobs,
+      ops,
+      host,
+      tickets,
+      db,
+      uploads,
+      media,
+      objects,
+      ai,
+      syncHub,
+    },
+    now,
+    options.backgroundTasks,
+  );
   return {
     purge,
     ai,
@@ -446,21 +488,14 @@ export function createKernel(options: KernelOptions): Kernel {
     host,
     audit,
     incidents,
-    ...applicationLifecycle(
-      {
-        jobs,
-        ops,
-        host,
-        tickets,
-        db,
-        uploads,
-        media,
-        objects,
-        ai,
-        syncHub,
-      },
-      now,
-      options.backgroundTasks,
-    ),
+    performance,
+    maintain: lifecycle.maintain,
+    close: async () => {
+      try {
+        await lifecycle.close();
+      } finally {
+        ownPerformance?.close();
+      }
+    },
   };
 }

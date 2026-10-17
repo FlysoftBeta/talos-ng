@@ -9,10 +9,12 @@ import {
 } from "../features/learning/index.ts";
 import { LibraryBackground } from "../features/library/index.ts";
 import {
+  ChatAreaContent,
   LibraryAreaContent,
   LibraryAreaList,
   adminExtensions,
 } from "./areas.tsx";
+import { RecentTracker } from "./recent.tsx";
 import {
   MediaList,
   MediaContent,
@@ -38,7 +40,6 @@ import {
 } from "../features/auth/index.ts";
 import {
   ChatList,
-  ChatContent,
   ChatBackground,
   useChatUnread,
 } from "../features/chat/connect/index.tsx";
@@ -278,7 +279,7 @@ function AppContent(): ReactElement {
             ) : state.nav.area === "ai" ? (
               <AiContent />
             ) : state.nav.area === "chat" ? (
-              <ChatContent />
+              <ChatAreaContent />
             ) : state.nav.area === "learning" ? (
               <LearningScreen />
             ) : state.nav.area === "library" ? (
@@ -288,6 +289,7 @@ function AppContent(): ReactElement {
             )}
           </AppFrame>
           <ChatBackground />
+          <RecentTracker />
           <LibraryBackground />
           <MediaBackground />
           <SettingsSheet open={overlay?.kind === "settings"} onClose={close} />

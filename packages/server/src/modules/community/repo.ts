@@ -95,6 +95,22 @@ export class CommunityRepo {
   all(): ConversationRecord[] {
     return this.db.all("SELECT * FROM community_conversations ORDER BY rev,id");
   }
+  /** Live conversations the user may read: system ones plus live memberships. */
+  accessible(user: string): ConversationRecord[] {
+    return this.db.all(
+      `SELECT c.* FROM community_members m JOIN community_conversations c ON c.id=m.conversation
+       WHERE m.user=? AND m.deleted=0 AND c.deleted=0 AND c.type='normal'
+       UNION ALL
+       SELECT * FROM community_conversations WHERE type IN('wild','announcement') AND deleted=0
+       ORDER BY rev,id`,
+      user,
+    );
+  }
+  systemConversations(): ConversationRecord[] {
+    return this.db.all(
+      "SELECT * FROM community_conversations WHERE type IN('wild','announcement') AND deleted=0 ORDER BY rev,id",
+    );
+  }
   handle(handle: string): ConversationRecord | undefined {
     return this.db.get(
       "SELECT * FROM community_conversations WHERE handle=? COLLATE NOCASE",
@@ -133,6 +149,19 @@ export class CommunityRepo {
       "SELECT * FROM community_members WHERE user=? AND conversation=?",
       user,
       conversation,
+    );
+  }
+  /** One revision-ordered page of a conversation's member records. */
+  membersAfter(
+    conversation: string,
+    since: number,
+    limit: number,
+  ): MemberRecord[] {
+    return this.db.all(
+      "SELECT * FROM community_members WHERE conversation=? AND rev>? ORDER BY rev,user LIMIT ?",
+      conversation,
+      since,
+      limit,
     );
   }
   members(conversation: string): MemberRecord[] {

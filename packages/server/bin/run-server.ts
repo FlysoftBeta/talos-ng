@@ -1,7 +1,11 @@
 import { loadConfig, startServer } from "../src/index.ts";
 import { restoreBackup } from "../src/modules/ops/index.ts";
 import type { ModelProvider } from "../src/modules/ai/index.ts";
-export async function runServer(aiProvider?: ModelProvider): Promise<void> {
+export async function runServer(
+  aiProvider?: ModelProvider,
+  /** This process's entry module; replica workers load it again. */
+  replicaEntry?: string,
+): Promise<void> {
   const config = await loadConfig(undefined, {
     ...process.env,
     ...(process.argv.includes("--dev") ? { TALOS_DEV: "true" } : {}),
@@ -14,6 +18,7 @@ export async function runServer(aiProvider?: ModelProvider): Promise<void> {
   } else {
     const server = await startServer(config, {
       aiProvider,
+      replicaEntry,
       ops: {
         bridge: process.send
           ? {

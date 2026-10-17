@@ -17,6 +17,12 @@ export interface ScopeProvider {
 }
 export interface EntitySerializer {
   windowed?: boolean;
+  /**
+   * Writes touching only such rows never change which scopes any user can
+   * access, so their fan-out reuses each subscription's known scopes instead
+   * of re-evaluating every provider for every connected user.
+   */
+  accessNeutral?: boolean;
   serialize(row: Row): Row;
   read(scopeId: string, id: string): Row | undefined;
 }
@@ -26,6 +32,8 @@ export interface SyncConnection {
 }
 export interface SyncRequest {
   cursors: Readonly<Record<string, number>>;
+  /** Scopes the client holds windows in; others (default all) omit windowed rows. */
+  windowed?: readonly string[];
   limit?: number;
   continuation?: string;
 }
@@ -46,6 +54,20 @@ export interface SyncHubOptions {
   pageSize?: number;
   windowResetThreshold?: number;
   reportError?(error: unknown): void;
+}
+/** A request's pages at one revision, computed without subscription state. */
+export interface SyncSnapshot {
+  revision: number;
+  accessible: string[];
+  response: SyncResponse;
+  /** UTF-8 length of the serialized response. */
+  bytes: number;
+}
+interface Flight {
+  connection: string | undefined;
+  touched: Set<string>;
+  changed: boolean;
+  cancelled: boolean;
 }
 interface Subscription {
   user: string;
@@ -75,6 +97,8 @@ export class SyncHub {
   >();
   private readonly pageSize: number;
   private readonly resetThreshold: number;
+  private readonly flights = new Set<Flight>();
+  private readonly retryLocally = new Set<string>();
 
   constructor(private readonly options: SyncHubOptions) {
     this.pageSize = options.pageSize ?? DEFAULT_SYNC_ROWS;
@@ -105,56 +129,114 @@ export class SyncHub {
     request: SyncRequest,
     connection?: SyncConnection,
   ): SyncResponse {
-    if (connection) {
-      const previous = this.subscriptions.get(connection.id);
-      if (previous && previous.user !== user) this.unsubscribe(connection.id);
-    }
-    const transferKey = connection
-      ? `connection:${connection.id}`
-      : `user:${user}`;
-    const now = (this.options.now ?? Date.now)();
-    for (const [key, transfer] of this.transfers)
-      if (transfer.expires <= now) this.transfers.delete(key);
+    const key = this.begin(user, connection);
     if (request.continuation)
-      return this.continueTransfer(user, transferKey, request.continuation);
-    this.transfers.delete(transferKey);
-    const limit = request.limit ?? this.pageSize;
-    this.positive(limit, "每页记录数");
-    const revision = this.options.revision();
-    if (!Number.isSafeInteger(revision) || revision < 0) {
-      throw new AppError("E_INTERNAL", "同步版本异常，请稍后重试");
+      return this.continueTransfer(user, key, request.continuation);
+    this.transfers.delete(key);
+    return this.finish(user, key, connection, this.snapshot(user, request));
+  }
+
+  /**
+   * Pull whose pages are computed elsewhere (a read replica on its own WAL
+   * snapshot). Commits that land while the snapshot is computed cannot reach a
+   * subscription that does not exist yet, so touched scopes stay incomplete and
+   * the client is told to pull again; that retry is computed locally.
+   */
+  async pullFrom(
+    compute: (user: string, request: SyncRequest) => Promise<SyncSnapshot>,
+    user: string,
+    request: SyncRequest,
+    connection?: SyncConnection,
+  ): Promise<SyncResponse> {
+    const key = this.begin(user, connection);
+    if (request.continuation)
+      return this.continueTransfer(user, key, request.continuation);
+    this.transfers.delete(key);
+    if (this.retryLocally.delete(key))
+      return this.finish(user, key, connection, this.snapshot(user, request));
+    // Validate against the writer before leaving the thread; the replica sees
+    // at least this revision because every earlier commit is visible to it.
+    this.validateRequest(request, this.options.revision());
+    const flight: Flight = {
+      connection: connection?.id,
+      touched: new Set(),
+      changed: false,
+      cancelled: false,
+    };
+    this.flights.add(flight);
+    let snapshot: SyncSnapshot;
+    try {
+      snapshot = await compute(user, {
+        cursors: request.cursors,
+        ...(request.windowed ? { windowed: request.windowed } : {}),
+        ...(request.limit !== undefined ? { limit: request.limit } : {}),
+      });
+    } finally {
+      this.flights.delete(flight);
     }
-    for (const cursor of Object.values(request.cursors)) {
-      if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > revision) {
-        throw new AppError("E_INVALID", "同步进度无效，请重新同步");
+    if (flight.cancelled)
+      throw new AppError("E_CONFLICT", "同步已中断，请重新同步");
+    let dirty: Set<string> | undefined;
+    if (flight.changed) {
+      const current = this.scopes(user);
+      const accessible = new Set(snapshot.accessible);
+      const response = snapshot.response;
+      dirty = new Set();
+      for (const scope of Object.keys(response.scopes)) {
+        if (!current.has(scope)) delete response.scopes[scope];
+        else if (flight.touched.has(scope)) {
+          dirty.add(scope);
+          response.scopes[scope] = { ...response.scopes[scope]!, more: true };
+        }
       }
+      const accessChanged =
+        current.size !== accessible.size ||
+        [...current].some((scope) => !accessible.has(scope));
+      if (accessChanged) {
+        const fresh = this.response(
+          current,
+          new Set(Object.keys(request.cursors)),
+        );
+        response.gone = fresh.gone;
+        response.added = fresh.added.filter(
+          (scope) => scope in response.scopes,
+        );
+      }
+      if (dirty.size || accessChanged) {
+        response.repull = true;
+        this.retryLocally.add(key);
+      }
+      snapshot = {
+        ...snapshot,
+        accessible: snapshot.accessible.filter((scope) => current.has(scope)),
+        bytes: utf8Encode(JSON.stringify(response)).length,
+      };
     }
+    return this.finish(user, key, connection, snapshot, dirty);
+  }
+
+  /** Pages for a request at the current revision; touches no subscription state. */
+  snapshot(user: string, request: SyncRequest): SyncSnapshot {
+    const limit = request.limit ?? this.pageSize;
+    const revision = this.options.revision();
+    this.validateRequest(request, revision);
     const accessible = this.scopes(user);
     const response = this.response(
       accessible,
       new Set(Object.keys(request.cursors)),
     );
-    let subscription: Subscription | undefined;
-    if (connection) {
-      const previous = this.subscriptions.get(connection.id);
-      // Rebinding must discard the previous user's access even if this pull fails.
-      if (previous && previous.user !== user)
-        this.subscriptions.delete(connection.id);
-      subscription = {
-        user,
-        connection,
-        known: accessible,
-        complete:
-          previous?.user === user ? new Set(previous.complete) : new Set(),
-      };
-      for (const scope of subscription.complete) {
-        if (!accessible.has(scope)) subscription.complete.delete(scope);
-      }
-    }
     let remainingBytes = MAX_SYNC_BYTES;
+    const windowed = new Set(request.windowed ?? []);
     for (const scope of accessible) {
       const cursor = request.cursors[scope] ?? 0;
-      const { rows, reset } = this.select(user, scope, cursor, limit, revision);
+      const { rows, reset } = this.select(
+        user,
+        scope,
+        cursor,
+        limit,
+        revision,
+        windowed.has(scope),
+      );
       const selected = selectDelta(rows, cursor, limit);
       const wireRows = selected.rows.map((row) =>
         this.serialize(row, revision),
@@ -184,19 +266,76 @@ export class SyncHub {
       };
       // Once all returned rows are included, skipped window rows and empty revisions
       // are covered too. Partial pages must not advance past unreturned ordinary rows.
-      const pull: ScopePull = {
+      response.scopes[scope] = {
         rows: page.rows,
         cursor: page.more ? page.cursor : revision,
         more: page.more,
         ...(reset.length > 0 ? { reset } : {}),
       };
-      response.scopes[scope] = pull;
-      if (subscription) {
-        if (pull.more) subscription.complete.delete(scope);
+    }
+    return {
+      revision,
+      accessible: [...accessible],
+      response,
+      bytes: utf8Encode(JSON.stringify(response)).length,
+    };
+  }
+
+  private begin(user: string, connection?: SyncConnection): string {
+    if (connection) {
+      const previous = this.subscriptions.get(connection.id);
+      if (previous && previous.user !== user) this.unsubscribe(connection.id);
+    }
+    const now = (this.options.now ?? Date.now)();
+    for (const [key, transfer] of this.transfers)
+      if (transfer.expires <= now) this.transfers.delete(key);
+    return connection ? `connection:${connection.id}` : `user:${user}`;
+  }
+
+  private validateRequest(request: SyncRequest, revision: number): void {
+    this.positive(request.limit ?? this.pageSize, "每页记录数");
+    if (!Number.isSafeInteger(revision) || revision < 0) {
+      throw new AppError("E_INTERNAL", "同步版本异常，请稍后重试");
+    }
+    for (const cursor of Object.values(request.cursors)) {
+      if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > revision) {
+        throw new AppError("E_INVALID", "同步进度无效，请重新同步");
+      }
+    }
+  }
+
+  private finish(
+    user: string,
+    transferKey: string,
+    connection: SyncConnection | undefined,
+    snapshot: SyncSnapshot,
+    dirty?: ReadonlySet<string>,
+  ): SyncResponse {
+    const { response } = snapshot;
+    const accessible = new Set(snapshot.accessible);
+    const now = (this.options.now ?? Date.now)();
+    let subscription: Subscription | undefined;
+    if (connection) {
+      const previous = this.subscriptions.get(connection.id);
+      // Rebinding must discard the previous user's access even if this pull fails.
+      if (previous && previous.user !== user)
+        this.subscriptions.delete(connection.id);
+      subscription = {
+        user,
+        connection,
+        known: accessible,
+        complete:
+          previous?.user === user ? new Set(previous.complete) : new Set(),
+      };
+      for (const scope of subscription.complete) {
+        if (!accessible.has(scope)) subscription.complete.delete(scope);
+      }
+      for (const [scope, pull] of Object.entries(response.scopes)) {
+        if (pull.more || dirty?.has(scope)) subscription.complete.delete(scope);
         else subscription.complete.add(scope);
       }
     }
-    if (utf8Encode(JSON.stringify(response)).length > MAX_SYNC_BYTES) {
+    if (snapshot.bytes > MAX_SYNC_BYTES) {
       // Hold completion until the final fragment. Only actual intervening
       // changes require catch-up; large metadata-only snapshots must converge.
       const complete = new Set(subscription?.complete);
@@ -235,17 +374,21 @@ export class SyncHub {
     for (const transfer of this.transfers.values())
       if (changeSet.changes.some((change) => transfer.scopes.has(change.scope)))
         transfer.dirty = true;
-    for (const subscription of this.subscriptions.values()) {
-      try {
-        const accessible = this.scopes(subscription.user);
-        const response = this.response(accessible, subscription.known);
-        this.updateAccess(subscription, accessible);
-        const seen = new Set<string>();
-        for (const change of changeSet.changes) {
-          if (!subscription.complete.has(change.scope)) continue;
-          const key = JSON.stringify([change.scope, change.type, change.id]);
-          if (seen.has(key)) continue;
-          seen.add(key);
+    for (const flight of this.flights) {
+      flight.changed = true;
+      for (const change of changeSet.changes) flight.touched.add(change.scope);
+    }
+    const neutral = this.accessNeutral(changeSet);
+    // A changed row reads and serialises the same for every subscriber of its
+    // scope; do it once per change set instead of once per connection.
+    const wired = new Map<string, { row: Row } | { error: unknown }>();
+    const wire = (
+      key: string,
+      change: SyncChangeSet["changes"][number],
+    ): Row => {
+      let result = wired.get(key);
+      if (!result) {
+        try {
           const entity = this.entities.get(change.type);
           if (!entity) throw new AppError("E_INTERNAL", `同步数据类型未注册`);
           const row = entity.read(change.scope, change.id);
@@ -261,6 +404,29 @@ export class SyncHub {
               "同步变更与记录不一致，请稍后重试",
             );
           }
+          result = { row: this.serialize(row, changeSet.rev) };
+        } catch (error) {
+          result = { error };
+        }
+        wired.set(key, result);
+      }
+      if ("error" in result) throw result.error;
+      return result.row;
+    };
+    for (const subscription of this.subscriptions.values()) {
+      try {
+        const accessible = neutral
+          ? subscription.known
+          : this.scopes(subscription.user);
+        const response = this.response(accessible, subscription.known);
+        this.updateAccess(subscription, accessible);
+        const seen = new Set<string>();
+        for (const change of changeSet.changes) {
+          if (!subscription.complete.has(change.scope)) continue;
+          const key = JSON.stringify([change.scope, change.type, change.id]);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const row = wire(key, change);
           const scope = response.scopes[change.scope] ?? {
             rows: [],
             cursor: changeSet.rev,
@@ -268,7 +434,7 @@ export class SyncHub {
           };
           response.scopes[change.scope] = {
             ...scope,
-            rows: [...scope.rows, this.serialize(row, changeSet.rev)],
+            rows: [...scope.rows, row],
           };
         }
         for (const [id, scope] of Object.entries(response.scopes))
@@ -284,8 +450,19 @@ export class SyncHub {
     }
   }
 
+  /** True when every change is of a type registered as access-neutral. */
+  accessNeutral(changeSet: SyncChangeSet): boolean {
+    return (
+      changeSet.changes.length > 0 &&
+      changeSet.changes.every(
+        (change) => this.entities.get(change.type)?.accessNeutral === true,
+      )
+    );
+  }
+
   /** Call after binding changes or authorization changes without a row mutation. */
   refreshAccess(): void {
+    for (const flight of this.flights) flight.changed = true;
     for (const subscription of this.subscriptions.values()) {
       try {
         const accessible = this.scopes(subscription.user);
@@ -302,10 +479,15 @@ export class SyncHub {
   unsubscribe(connectionId: string): void {
     this.subscriptions.delete(connectionId);
     this.transfers.delete(`connection:${connectionId}`);
+    this.retryLocally.delete(`connection:${connectionId}`);
+    for (const flight of this.flights)
+      if (flight.connection === connectionId) flight.cancelled = true;
   }
   clear(): void {
     this.subscriptions.clear();
     this.transfers.clear();
+    this.retryLocally.clear();
+    for (const flight of this.flights) flight.cancelled = true;
   }
 
   private continueTransfer(
@@ -342,14 +524,30 @@ export class SyncHub {
         more: transfer.offset + length < transfer.json.length,
       },
     });
-    // Count the full JSON envelope, including escaping and multi-byte text.
-    let lo = 0,
-      hi = Math.min(MAX_SYNC_BYTES, transfer.json.length - transfer.offset);
-    while (lo < hi) {
-      const mid = Math.ceil((lo + hi) / 2);
-      if (utf8Encode(JSON.stringify(response(mid))).length <= MAX_SYNC_BYTES)
-        lo = mid;
-      else hi = mid - 1;
+    // Count the full JSON envelope, including escaping and multi-byte text:
+    // one scan sizes the chunk against the largest envelope variant, and the
+    // exact encoding confirms it (bisecting only if that ever disagreed).
+    const envelope = utf8Encode(
+      JSON.stringify({
+        ...response(0),
+        repull: true,
+        transfer: { token: transfer.token, chunk: "", more: false },
+      }),
+    ).length;
+    let lo = jsonChunkLength(
+      transfer.json,
+      transfer.offset,
+      MAX_SYNC_BYTES - envelope,
+    );
+    if (utf8Encode(JSON.stringify(response(lo))).length > MAX_SYNC_BYTES) {
+      let hi = lo - 1;
+      lo = 0;
+      while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        if (utf8Encode(JSON.stringify(response(mid))).length <= MAX_SYNC_BYTES)
+          lo = mid;
+        else hi = mid - 1;
+      }
     }
     const result = response(lo);
     transfer.offset += lo;
@@ -386,6 +584,7 @@ export class SyncHub {
     cursor: number,
     limit: number,
     revision: number,
+    includeWindowed: boolean,
   ): { rows: Row[]; reset: string[] } {
     const retained = new Map<string, Row[]>();
     const counts = new Map<string, number>();
@@ -395,6 +594,10 @@ export class SyncHub {
       for (const batch of this.batches(provider, scope, cursor, revision)) {
         const touched = new Set<string>();
         for (const row of batch) {
+          // Without a held window the client keeps none of these rows; it loads
+          // windowed history through explicit pages.
+          if (!includeWindowed && this.entities.get(row.type)?.windowed)
+            continue;
           const count = (counts.get(row.type) ?? 0) + 1;
           counts.set(row.type, count);
           if (
@@ -586,6 +789,37 @@ export class SyncHub {
     if (!Number.isSafeInteger(value) || value < 1)
       throw new AppError("E_INVALID", `${name}必须是正整数`);
   }
+}
+
+/** Longest prefix of `text` from `start` whose JSON string body fits `budget` UTF-8 bytes. */
+function jsonChunkLength(text: string, start: number, budget: number): number {
+  let bytes = 0;
+  let index = start;
+  while (index < text.length) {
+    const code = text.charCodeAt(index);
+    let cost: number,
+      width = 1;
+    if (code === 0x22 || code === 0x5c) cost = 2;
+    else if (code < 0x20)
+      cost =
+        code === 8 || code === 9 || code === 10 || code === 12 || code === 13
+          ? 2
+          : 6;
+    else if (code < 0x80) cost = 1;
+    else if (code < 0x800) cost = 2;
+    else if (code >= 0xd800 && code <= 0xdbff) {
+      const next = text.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        cost = 4;
+        width = 2;
+      } else cost = 6;
+    } else if (code >= 0xdc00 && code <= 0xdfff) cost = 6;
+    else cost = 3;
+    if (bytes + cost > budget) break;
+    bytes += cost;
+    index += width;
+  }
+  return index - start;
 }
 
 function compareRows(left: Row, right: Row): number {

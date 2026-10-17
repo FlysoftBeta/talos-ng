@@ -25,7 +25,7 @@ and, on Linux, `@img/sharp-libvips-linux-x64` (Windows ships libvips DLLs inside
 `supportedArchitectures` (workspace file) installs the win32 packages on Linux so the lockfile
 pins their tarball integrity and the pnpm store makes assembly offline-capable; no prebuild
 download runs at package time. `native-manifest.json` pins SHA-256 of every `.node`, `.dll` and
-`.so`; assembly fails on a mismatch, a missing pin or any file named for another platform.
+`.so`; assembly fails on a mismatch, a missing pin or any file named for another platform. Sync replica worker threads (`server.md`) load the same `server.js` and the same addon binaries; a release ships no extra files for them.
 
 ## Shell: boot and offline assets (`@talos/shell`)
 

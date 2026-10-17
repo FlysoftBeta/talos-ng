@@ -98,6 +98,28 @@ export const libraryModule = defineClientModule({
       return `collection:${input.collection}`;
     return "";
   },
+  registers: {
+    "library.progress.set": {
+      key: (args) => {
+        const value = args as { doc?: string; device?: string } | null;
+        return value?.doc && value.device
+          ? `${value.doc}:${value.device}`
+          : undefined;
+      },
+      // Resume position is last-writer-wins; furthest and seconds are maxima.
+      merge: (earlier, later) => {
+        const a = contract.library.progress.set.args.parse(earlier),
+          b = contract.library.progress.set.args.parse(later);
+        return {
+          ...b,
+          resume: lwwMerge(a.resume, b.resume),
+          furthest: Math.max(a.furthest, b.furthest),
+          seconds: Math.max(a.seconds, b.seconds),
+        };
+      },
+      debounceMs: () => 3000,
+    },
+  },
   rowTypes: [
     "libraryDoc",
     "libraryCollection",

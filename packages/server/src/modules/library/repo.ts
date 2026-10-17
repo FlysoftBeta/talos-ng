@@ -49,6 +49,18 @@ export class LibraryRepo {
   collections(): RecordRow[] {
     return this.db.all("SELECT * FROM library_collections ORDER BY rev,id");
   }
+  ownedCollections(owner: string): RecordRow[] {
+    return this.db.all(
+      "SELECT * FROM library_collections WHERE owner=? ORDER BY rev,id",
+      owner,
+    );
+  }
+  ownedDocs(owner: string): RecordRow[] {
+    return this.db.all(
+      "SELECT * FROM library_documents WHERE owner=? ORDER BY rev,id",
+      owner,
+    );
+  }
   collection(id: string): RecordRow | undefined {
     return this.db.get("SELECT * FROM library_collections WHERE id=?", id);
   }

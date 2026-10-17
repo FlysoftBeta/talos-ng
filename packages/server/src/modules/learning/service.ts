@@ -126,6 +126,7 @@ export class LearningService {
       },
     });
     hub.registerEntity("learningProgress", {
+      accessNeutral: true,
       serialize: (row) => row,
       read: (scope, id) => this.repo.progress(scope.slice(3), id),
     });

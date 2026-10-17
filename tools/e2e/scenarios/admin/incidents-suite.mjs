@@ -43,9 +43,28 @@ export async function adminIncidentsSuite(
     assert.equal(response.status, 200);
     const bytes = new Uint8Array(await response.arrayBuffer());
     assert.equal(new DataView(bytes.buffer).getUint32(0, true), 0x04034b50);
+    // Statement tracing covers the writer and the sync replicas (the test
+    // server enables replicas), and the pane renders the same report.
+    const performance = (await root.call("admin.performance.get", {})).data;
+    assert.ok(
+      performance.queries.statements.some((row) => row.source === "writer"),
+    );
+    if (performance.replicas?.ready)
+      assert.ok(
+        performance.queries.statements.some((row) => row.source === "reader"),
+        "replica statements are reported",
+      );
   } finally {
     root.close();
   }
+  await openSection(cdp, "性能");
+  await cdp.wait(
+    "!!document.querySelector('[data-testid=\"admin.performance\"] [role=table]') && document.querySelector('[data-testid=\"admin.performance\"]').textContent.indexOf('SELECT')>=0",
+  );
+  await openSection(cdp, "事件");
+  await cdp.wait(
+    "!!document.querySelector('[data-testid=\"admin.incidents\"] [role=table]')",
+  );
   const errorCount = browser.errors.length;
   await click(cdp, "客户端自检");
   await click(cdp, "确认");

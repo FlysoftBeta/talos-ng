@@ -27,7 +27,6 @@ export type {
 export {
   reduceOutbox,
   nextToSend,
-  coalesce,
   isTerminalRejection,
   attemptBackoffMs,
 } from "./outbox.ts";
@@ -36,7 +35,6 @@ export type {
   EnqueueItem,
   OutboxEvent,
   SendOptions,
-  CoalesceRule,
 } from "./outbox.ts";
 export {
   pendingRow,

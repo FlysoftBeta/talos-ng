@@ -55,7 +55,9 @@ export class ObjectLedger {
       this.clock,
     );
     // A previous process may have stopped between reservation and deletion.
-    options.db.run("UPDATE objects SET deleting=0 WHERE deleting=1");
+    // (Read-only replicas leave recovery to the writer.)
+    if (!options.db.isReadOnly)
+      options.db.run("UPDATE objects SET deleting=0 WHERE deleting=1");
   }
   private requireWrite(): void {
     if (!this.options.uow.current)

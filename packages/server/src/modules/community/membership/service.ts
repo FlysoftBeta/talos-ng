@@ -16,7 +16,12 @@ export interface MembershipContext {
   >;
   repo: Pick<
     CommunityRepo,
-    "all" | "member" | "members" | "get" | "putMember" | "setOwner"
+    | "systemConversations"
+    | "member"
+    | "members"
+    | "get"
+    | "putMember"
+    | "setOwner"
   >;
   conversation(id: string): CommunityConversation | undefined;
   requireAccess(user: string, conversation: string): CommunityConversation;
@@ -27,9 +32,7 @@ export class Membership {
   constructor(private readonly context: MembershipContext) {}
   initializeUser(user: string): void {
     if (!this.context.options.user(user)) return;
-    for (const conv of this.context.repo
-      .all()
-      .filter((row) => row.type !== "normal" && !row.deleted)) {
+    for (const conv of this.context.repo.systemConversations()) {
       if (!this.context.repo.member(user, conv.id))
         this.context.options.uow.write((ctx) =>
           this.addMember(user, conv.id, ctx),

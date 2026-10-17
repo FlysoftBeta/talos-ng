@@ -8,6 +8,7 @@ import type {
 } from "../../../kernel/diagnostics/ports.ts";
 import type { IncidentDiagnostics } from "../../../kernel/diagnostics/ports.ts";
 import type { TicketService } from "../../../kernel/objects/tickets.ts";
+import type { PerformanceReport } from "../../../kernel/diagnostics/performance.ts";
 import { diagnosticZip } from "./zip.ts";
 
 export interface AdminDiagnosticsOptions {
@@ -17,11 +18,21 @@ export interface AdminDiagnosticsOptions {
   serverLogs?: () => string;
   tickets: TicketService;
   now?: () => number;
+  performance?: { report(reset?: boolean): Promise<PerformanceReport> };
 }
 export class AdminDiagnostics {
   private readonly now: () => number;
   constructor(private readonly options: AdminDiagnosticsOptions) {
     this.now = options.now ?? Date.now;
+  }
+  /** Statement timings, slow queries and event-loop delay; `reset` starts a new window. */
+  async performance(actor: string, reset = false): Promise<PerformanceReport> {
+    const source = this.options.performance;
+    if (!source) throw new AppError("E_UNAVAILABLE", "性能统计不可用");
+    const report = await source.report(reset);
+    if (reset)
+      this.options.audit.append(actor, "admin.performance.reset", null, {});
+    return report;
   }
   listAudit(input: ArgsOf<typeof contract.admin.audit.list>) {
     return this.options.audit.page(input);

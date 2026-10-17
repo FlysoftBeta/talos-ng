@@ -23,6 +23,9 @@ export interface CommunitySyncRead extends Pick<
   CommunityService,
   "canAccess" | "conversations" | "publicMember"
 > {
-  records: Pick<CommunityRepo, "get" | "member" | "members" | "memberships">;
+  records: Pick<
+    CommunityRepo,
+    "get" | "member" | "members" | "membersAfter" | "memberships"
+  >;
   user(id: string): User | undefined;
 }

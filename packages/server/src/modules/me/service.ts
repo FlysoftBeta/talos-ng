@@ -63,6 +63,7 @@ export class MeService {
           scope === `me:${id}` ? this.options.identity.profile(id) : undefined,
       }),
       hub.registerEntity("setting", {
+        accessNeutral: true,
         serialize: (row) => row,
         read: (scope, id) => this.repo.read(scope.slice(3), id),
       }),

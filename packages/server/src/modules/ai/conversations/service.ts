@@ -223,6 +223,7 @@ export class Conversations {
     });
     for (const type of ["aiConversation", "aiDraft", "aiCredit"])
       hub.registerEntity(type, {
+        accessNeutral: type !== "aiConversation",
         serialize: (r) => r,
         read: (scope, id) =>
           this.context.repo
@@ -243,6 +244,7 @@ export class Conversations {
     });
     hub.registerEntity("aiMessage", {
       windowed: true,
+      accessNeutral: true,
       serialize: (r) => r,
       read: (scope, id) => {
         const m = this.context.repo.message(id);

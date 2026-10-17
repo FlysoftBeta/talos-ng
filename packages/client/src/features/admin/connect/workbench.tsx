@@ -21,6 +21,7 @@ import { DevicesPanel } from "./devices.tsx";
 import { GroupsPanel } from "./groups.tsx";
 import { IncidentsPanel } from "./incidents.tsx";
 import { InvitationsPanel } from "./invitations.tsx";
+import { PerformancePanel } from "./performance.tsx";
 import { SystemPanel } from "./system.tsx";
 import { UsersPanel } from "./users.tsx";
 
@@ -38,6 +39,7 @@ const builtIn: Record<string, () => ReactElement> = {
   system: SystemPanel,
   audit: AuditPanel,
   incidents: IncidentsPanel,
+  performance: PerformancePanel,
   debug: DebugPanel,
 };
 

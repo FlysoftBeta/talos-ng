@@ -20,6 +20,10 @@ export function useChatRows() {
   const runtime = useRuntime();
   return useRepository(runtime.repositories.get("chat.rows")!);
 }
+/** Conversations visible to the user (for cross-feature lists such as recents). */
+export function useConversations() {
+  return conversations(useChatRows());
+}
 export function useChatUnread(): number {
   return unreadCount(states(useChatRows()));
 }

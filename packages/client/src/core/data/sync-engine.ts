@@ -1,6 +1,6 @@
 import { AppError, Emitter, Semaphore } from "@talos/base";
-import { contract, syncResultSchema } from "@talos/contract";
-import type { ResultOf } from "@talos/contract";
+import { MAX_PUSH_OPS, contract, syncResultSchema } from "@talos/contract";
+import type { JsonValue, ResultOf } from "@talos/contract";
 import {
   IntervalSet,
   isTerminalRejection,
@@ -21,6 +21,16 @@ import type { StoredRow, StoredScope } from "./db.ts";
 import type { TypedCall } from "./link.ts";
 import type { ModuleRegistry } from "./modules.ts";
 import { methodRegistry } from "@talos/contract";
+
+function holdsWindow(scope: StoredScope | undefined): boolean {
+  return Object.values(scope?.windows ?? {}).some(
+    (intervals) => intervals.length > 0,
+  );
+}
+
+/** Operations and argument bytes sent per flush request. */
+const BATCH_OPERATIONS = MAX_PUSH_OPS;
+const BATCH_BYTES = 64 * 1024;
 
 class SyncCursorChanged extends AppError {
   constructor() {
@@ -73,6 +83,7 @@ export class SyncEngine {
   private flushing?: Promise<void>;
   private retryTimer?: unknown;
   private retryBlocked = false;
+  private debounceTimer?: unknown;
   private pullRetryTimer?: unknown;
   private pullFailures = 0;
   private needsPull = false;
@@ -82,9 +93,13 @@ export class SyncEngine {
   private readonly timers: NonNullable<EngineOptions["timers"]>;
   constructor(private readonly options: EngineOptions) {
     this.sendOptions = {
-      maxInFlight: 1,
+      maxInFlight: BATCH_OPERATIONS,
       orderKey: (method: string, args: unknown) =>
         options.modules.orderKey(method, args),
+      register: (method: string, args: unknown) =>
+        options.modules.register(method, args),
+      merge: (method: string, earlier: unknown, later: unknown) =>
+        options.modules.merge(method, earlier, later),
     };
     this.now = options.now ?? Date.now;
     this.timers = options.timers;
@@ -113,13 +128,15 @@ export class SyncEngine {
   }
   private async refresh(): Promise<void> {
     const { db, user, modules } = this.options;
-    const [rows, outbox, lastSync, admitted, scopes] = await Promise.all([
-      db.table<StoredRow>("rows").range(),
-      db.table<readonly OutboxItem[], string>("outbox").get(user),
-      db.table<number, string>("kv").get(`lastSync:${user}`),
-      db.table<readonly string[], string>("kv").get(`scopes:${user}`),
-      db.table<StoredScope>("scopes").range(),
-    ]);
+    const [rows, outbox, lastSync, admitted, scopes, partial] =
+      await Promise.all([
+        db.table<StoredRow>("rows").range(),
+        db.table<readonly OutboxItem[], string>("outbox").get(user),
+        db.table<number, string>("kv").get(`lastSync:${user}`),
+        db.table<readonly string[], string>("kv").get(`scopes:${user}`),
+        db.table<StoredScope>("scopes").range(),
+        db.table<boolean, string>("kv").get(`partialSync:${user}`),
+      ]);
     // Every engine owns a per-account set of admitted scopes; other users' me rows never project.
     const visible = rows.filter((row) => (admitted ?? []).includes(row.scope));
     this.publish({
@@ -129,6 +146,7 @@ export class SyncEngine {
       lastSync,
       cacheReady:
         lastSync !== undefined &&
+        partial !== true &&
         (admitted ?? []).every((scope) =>
           scopes.some(
             (saved) =>
@@ -137,7 +155,13 @@ export class SyncEngine {
         ),
     });
   }
-  private async change(event: OutboxEvent, generation?: number): Promise<void> {
+  private async change(
+    change: OutboxEvent | readonly OutboxEvent[],
+    generation?: number,
+  ): Promise<void> {
+    const events: readonly OutboxEvent[] = Array.isArray(change)
+      ? change
+      : [change as OutboxEvent];
     await this.writes.run(async () => {
       if (generation !== undefined && generation !== this.generation) return;
       const { db, user } = this.options;
@@ -146,29 +170,31 @@ export class SyncEngine {
         return table.get(user).then((items) => {
           if (generation !== undefined && generation !== this.generation)
             return;
-          const nextEvent =
-            event.type === "enqueue"
-              ? {
-                  ...event,
-                  item: {
-                    ...event.item,
-                    dependsOn: [
-                      ...new Set([
-                        ...(event.item.dependsOn ?? []),
-                        ...this.options.modules.dependencies(
-                          event.item.method,
-                          event.item.args,
-                          items ?? [],
-                        ),
-                      ]),
-                    ],
-                  },
-                }
-              : event;
-          return table.put(
-            reduceOutbox(items ?? [], nextEvent, this.sendOptions),
-            user,
-          );
+          let next = items ?? [];
+          for (const event of events)
+            next = reduceOutbox(
+              next,
+              event.type === "enqueue"
+                ? {
+                    ...event,
+                    item: {
+                      ...event.item,
+                      dependsOn: [
+                        ...new Set([
+                          ...(event.item.dependsOn ?? []),
+                          ...this.options.modules.dependencies(
+                            event.item.method,
+                            event.item.args,
+                            next,
+                          ),
+                        ]),
+                      ],
+                    },
+                  }
+                : event,
+              this.sendOptions,
+            );
+          return table.put(next, user);
         });
       });
       await this.refresh();
@@ -182,7 +208,17 @@ export class SyncEngine {
   }): Promise<void> {
     if (!this.options.modules.supports(item.method))
       throw new AppError("E_INVALID", "此操作未注册离线处理器");
-    await this.change({ type: "enqueue", item });
+    // Bursts of register writes (drafts, read marks, reading progress) wait for a
+    // quiet period and merge in the durable outbox; a deadline bounds the delay.
+    const debounce = this.options.modules.debounceMs(item.method, item.args);
+    const now = this.now();
+    await this.change({
+      type: "enqueue",
+      item:
+        debounce > 0
+          ? { ...item, notBefore: now + debounce, deadline: now + 4 * debounce }
+          : item,
+    });
     this.flushInBackground();
   }
   async retry(op: string): Promise<void> {
@@ -203,6 +239,8 @@ export class SyncEngine {
     this.retryBlocked = false;
     this.timers.clear(this.pullRetryTimer);
     this.pullRetryTimer = undefined;
+    this.timers.clear(this.debounceTimer);
+    this.debounceTimer = undefined;
     this.publish({ phase: "offline" });
     // In-flight callbacks settle through their generation fence before the next flush.
   }
@@ -236,15 +274,25 @@ export class SyncEngine {
               .get(`scopes:${user}`)) ?? [];
           const scopes = await db.table<StoredScope>("scopes").range();
           const cursors: Record<string, number> = {};
+          // Scopes without a held window need none of their windowed rows, which
+          // are most of a large conversation's history; omitting them lets a
+          // conversation's metadata finish (and open) on the first page.
+          const windowed: string[] = [];
           for (const scope of scopes)
-            if (admitted.includes(scope.scope))
+            if (admitted.includes(scope.scope)) {
               cursors[scope.scope] = scope.cursor;
+              if (holdsWindow(scope)) windowed.push(scope.scope);
+            }
           const bases = { ...cursors };
           const pages = new Map<string, ScopePull[]>();
           const gone = new Set<string>();
           let more: boolean;
           do {
-            const response = await this.pullResponse(cursors, generation);
+            const response = await this.pullResponse(
+              cursors,
+              windowed,
+              generation,
+            );
             if (!response) return;
             if (generation !== this.generation) return;
             more = response.repull === true;
@@ -271,7 +319,42 @@ export class SyncEngine {
                 progress: this.snapshot.progress + page.rows.length,
               });
             }
+            if (!more) break;
+            // Scopes whose chain is already complete become usable while other
+            // scopes keep paging. Each commit is still atomic per scope chain, and
+            // the request base moves with it so later pages continue that chain.
+            const ready = new Map<string, ScopePull[]>();
+            for (const [scope, chain] of pages)
+              if (
+                !gone.has(scope) &&
+                !chain[chain.length - 1]!.more &&
+                chain.some((page) => page.rows.length || page.reset?.length)
+              )
+                ready.set(scope, chain);
+            // Revocations found by a pull stay with the final commit: a later page
+            // may regrant the scope, which must not run its cleanup in between.
+            if (!ready.size) continue;
+            try {
+              await this.applyPages(
+                ready,
+                [],
+                generation,
+                revocations,
+                bases,
+                "partial",
+                windowed,
+              );
+            } catch (error) {
+              if (error instanceof SyncCursorChanged && attempt < 2) break;
+              throw error;
+            }
+            if (generation !== this.generation) return;
+            for (const [scope, chain] of ready) {
+              bases[scope] = chain[chain.length - 1]!.cursor;
+              pages.delete(scope);
+            }
           } while (more);
+          if (more) continue;
           try {
             await this.applyPages(
               pages,
@@ -279,6 +362,8 @@ export class SyncEngine {
               generation,
               revocations,
               bases,
+              "pull",
+              windowed,
             );
           } catch (error) {
             if (error instanceof SyncCursorChanged && attempt < 2) continue;
@@ -304,9 +389,13 @@ export class SyncEngine {
   }
   private async pullResponse(
     cursors: Record<string, number>,
+    windowed: readonly string[],
     generation: number,
   ): Promise<ResultOf<typeof contract.sync.pull> | undefined> {
-    let response = await this.options.call(contract.sync.pull, { cursors });
+    let response = await this.options.call(contract.sync.pull, {
+      cursors,
+      windowed: [...windowed],
+    });
     const chunks: string[] = [];
     while (response.transfer) {
       if (generation !== this.generation) return;
@@ -328,6 +417,7 @@ export class SyncEngine {
       }
       response = await this.options.call(contract.sync.pull, {
         cursors,
+        windowed: [...windowed],
         continuation: transfer.token,
       });
       if (!response.transfer)
@@ -431,6 +521,8 @@ export class SyncEngine {
     generation: number,
     revocations: ReadonlyMap<string, number>,
     bases?: Readonly<Record<string, number>>,
+    stage: "pull" | "partial" | "delta" = bases ? "pull" : "delta",
+    windowed?: readonly string[],
   ): Promise<void> {
     await this.writes.run(async () => {
       if (generation !== this.generation) return;
@@ -478,6 +570,15 @@ export class SyncEngine {
                   // Both advances from another tab and eviction resets invalidate
                   // the request base. Never overwrite that change with buffered pages.
                   if (bases && currentCursor !== (bases[scope] ?? 0))
+                    throw new SyncCursorChanged();
+                  // A page fetched during the pull opened a window the request
+                  // declared absent, so its omitted rows may be newer than the page.
+                  if (
+                    windowed &&
+                    wasAdmitted &&
+                    !windowed.includes(scope) &&
+                    holdsWindow(saved.find((item) => item.scope === scope))
+                  )
                     throw new SyncCursorChanged();
                   // Eviction invalidates the scope by resetting its cursor. A
                   // delta cannot certify the missing history, even between pulls.
@@ -588,9 +689,13 @@ export class SyncEngine {
                   [...admitted],
                   `scopes:${user}`,
                 );
-                return tx
-                  .table<number, string>("kv")
-                  .put(this.now(), `lastSync:${user}`);
+                // Until the whole pull commits, scopes sit at different revisions.
+                // The durable marker keeps the cache "not ready" across a reload.
+                const kv = tx.table<unknown, string>("kv");
+                if (stage === "partial")
+                  return kv.put(true, `partialSync:${user}`);
+                if (stage === "pull") kv.delete(`partialSync:${user}`);
+                return kv.put(this.now(), `lastSync:${user}`);
               }),
           ),
         );
@@ -691,7 +796,7 @@ export class SyncEngine {
       if (
         this.online &&
         !this.retryBlocked &&
-        nextToSend(this.snapshot.outbox, this.sendOptions).length
+        nextToSend(this.snapshot.outbox, this.sendOptions, this.now()).length
       )
         return this.flush();
       return;
@@ -703,6 +808,88 @@ export class SyncEngine {
       this.flushing = undefined;
     }
   }
+  /** Wakes the flusher when the earliest debounced write becomes due. */
+  private scheduleDebounced(now: number): void {
+    this.timers.clear(this.debounceTimer);
+    this.debounceTimer = undefined;
+    const due = this.snapshot.outbox.reduce(
+      (earliest, item) =>
+        item.state === "pending" &&
+        item.notBefore !== undefined &&
+        item.notBefore > now
+          ? Math.min(earliest, item.notBefore)
+          : earliest,
+      Infinity,
+    );
+    if (!this.online || !Number.isFinite(due)) return;
+    this.debounceTimer = this.timers.set(() => {
+      this.debounceTimer = undefined;
+      this.flushInBackground();
+    }, due - now);
+  }
+  /** One request per flush step: independent heads and register writes travel together. */
+  private batch(eligible: readonly OutboxItem[]): readonly OutboxItem[] {
+    const batch: OutboxItem[] = [];
+    let bytes = 0;
+    for (const item of eligible) {
+      const size = JSON.stringify(item.args ?? null).length + item.op.length;
+      if (batch.length && bytes + size > BATCH_BYTES) break;
+      batch.push(item);
+      bytes += size;
+    }
+    return batch;
+  }
+  /** Per-operation outcome; a whole-request failure applies to every operation. */
+  private async send(
+    batch: readonly OutboxItem[],
+  ): Promise<Map<string, AppError | undefined>> {
+    const outcomes = new Map<string, AppError | undefined>();
+    const failure = (cause: unknown): AppError =>
+      cause instanceof AppError
+        ? cause
+        : new AppError("E_DISCONNECTED", "连接已断开");
+    if (batch.length === 1) {
+      const item = batch[0]!;
+      const method = methodRegistry[item.method];
+      try {
+        if (!method) throw new AppError("E_INVALID", "未知的排队操作");
+        await this.options.call(method, item.args, { op: item.op });
+        outcomes.set(item.op, undefined);
+      } catch (cause) {
+        outcomes.set(item.op, failure(cause));
+      }
+      return outcomes;
+    }
+    try {
+      const { results } = await this.options.call(contract.sync.push, {
+        ops: batch.map((item) => ({
+          op: item.op,
+          method: item.method,
+          args: item.args as JsonValue,
+        })),
+      });
+      const byOp = new Map(results.map((result) => [result.op, result]));
+      for (const item of batch) {
+        const result = byOp.get(item.op);
+        outcomes.set(
+          item.op,
+          !result
+            ? new AppError("E_PROTOCOL", "服务器响应无效")
+            : result.error
+              ? new AppError(
+                  result.error.code,
+                  result.error.message,
+                  result.error.data,
+                )
+              : undefined,
+        );
+      }
+    } catch (cause) {
+      const error = failure(cause);
+      for (const item of batch) outcomes.set(item.op, error);
+    }
+    return outcomes;
+  }
   private async runFlush(): Promise<void> {
     while (
       this.online &&
@@ -710,88 +897,107 @@ export class SyncEngine {
       !this.retryBlocked &&
       this.pullRetryTimer === undefined
     ) {
-      const item = nextToSend(this.snapshot.outbox, this.sendOptions)[0];
-      if (!item) return;
-      const generation = this.generation;
-      await this.change({ type: "sendStarted", op: item.op }, generation);
-      if (!this.online || generation !== this.generation) {
-        await this.change({ type: "connectionLost" });
+      const now = this.now();
+      const batch = this.batch(
+        nextToSend(this.snapshot.outbox, this.sendOptions, now),
+      );
+      if (!batch.length) {
+        this.scheduleDebounced(now);
         return;
       }
-      let accepted = false;
-      try {
-        const method = methodRegistry[item.method];
-        if (!method) throw new AppError("E_INVALID", "未知的排队操作");
-        await this.options.call(method, item.args, { op: item.op });
-        if (!this.online || generation !== this.generation) {
-          await this.change({ type: "connectionLost" });
-          return;
+      const generation = this.generation;
+      const lost = async (): Promise<boolean> => {
+        if (this.online && generation === this.generation) return false;
+        await this.change({ type: "connectionLost" });
+        return true;
+      };
+      await this.change(
+        batch.map((item) => ({ type: "sendStarted" as const, op: item.op })),
+        generation,
+      );
+      if (await lost()) return;
+      const outcomes = await this.send(batch);
+      if (await lost()) return;
+      const paused = [...outcomes.values()].find(
+        (error) => error && this.pausesSync(error),
+      );
+      if (paused) {
+        this.disconnect();
+        await this.change({ type: "connectionLost" });
+        this.options.onError?.(paused);
+        return;
+      }
+      const accepted = batch.filter((item) => !outcomes.get(item.op));
+      const events: OutboxEvent[] = [];
+      let retry = false;
+      let terminal = false;
+      for (const item of batch) {
+        const error = outcomes.get(item.op);
+        if (!error) continue;
+        if (isTerminalRejection(error.code)) terminal = true;
+        else retry = true;
+        events.push({
+          type: isTerminalRejection(error.code)
+            ? "rejected"
+            : "transportFailed",
+          op: item.op,
+          error: error.toJSON(),
+        });
+      }
+      if (events.length) await this.change(events, generation);
+      if (await lost()) return;
+      if (accepted.length || terminal) {
+        // Authoritative pull precedes removal of the optimistic layer, including
+        // duplicate acks, and rolls back rejected writes.
+        let pulled = true;
+        let readError = new AppError("E_DISCONNECTED", "连接已断开");
+        try {
+          await this.pull();
+        } catch (error) {
+          pulled = false;
+          if (error instanceof AppError) readError = error;
+          if (!accepted.length) {
+            this.options.onError?.(error);
+            return;
+          }
         }
-        accepted = true;
-        // Authoritative pull precedes removal of the optimistic layer, including duplicate acks.
-        await this.pull();
-        if (!this.online || generation !== this.generation) {
-          await this.change({ type: "connectionLost" });
-          return;
-        }
-        await this.change({ type: "acked", op: item.op }, generation);
-      } catch (cause) {
-        if (generation !== this.generation || !this.online) {
-          await this.change({ type: "connectionLost" });
-          return;
-        }
-        const error =
-          cause instanceof AppError
-            ? cause
-            : new AppError("E_DISCONNECTED", "连接已断开");
-        if (this.pausesSync(error)) {
-          this.disconnect();
-          await this.change({ type: "connectionLost" });
-          this.options.onError?.(error);
-          return;
-        }
+        if (await lost()) return;
         // A confirmed write followed by a failed read is still accepted by the server.
         // Keep its idempotency key/optimistic layer and retry reconciliation, never reject it.
-        const terminal = !accepted && isTerminalRejection(error.code);
         await this.change(
-          {
-            type: terminal ? "rejected" : "transportFailed",
-            op: item.op,
-            error: error.toJSON(),
-          },
+          accepted.map((item): OutboxEvent =>
+            pulled
+              ? { type: "acked", op: item.op }
+              : {
+                  type: "transportFailed",
+                  op: item.op,
+                  error: readError.toJSON(),
+                },
+          ),
           generation,
         );
-        if (generation !== this.generation) {
-          await this.change({ type: "connectionLost" });
-          return;
-        }
-        if (terminal) {
-          if (this.online) {
-            try {
-              await this.pull();
-            } catch (error) {
-              this.options.onError?.(error);
-              return;
-            }
-          }
-        } else {
-          if (this.online) {
-            this.timers.clear(this.retryTimer);
-            this.retryBlocked = true;
-            this.retryTimer = this.timers.set(
-              () => {
-                this.retryBlocked = false;
-                this.flushInBackground();
-              },
-              this.snapshot.outbox.find((op) => op.op === item.op)
-                ?.retryAfterMs ?? 500,
-            );
-          }
-          return;
-        }
+        if (await lost()) return;
+        retry = retry || !pulled;
       }
-      if (generation !== this.generation) {
-        await this.change({ type: "connectionLost" });
+      if (retry) {
+        if (this.online) {
+          this.timers.clear(this.retryTimer);
+          this.retryBlocked = true;
+          this.retryTimer = this.timers.set(
+            () => {
+              this.retryBlocked = false;
+              this.flushInBackground();
+            },
+            Math.max(
+              500,
+              ...batch.map(
+                (item) =>
+                  this.snapshot.outbox.find((op) => op.op === item.op)
+                    ?.retryAfterMs ?? 0,
+              ),
+            ),
+          );
+        }
         return;
       }
     }

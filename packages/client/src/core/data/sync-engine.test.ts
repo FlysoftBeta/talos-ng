@@ -87,11 +87,34 @@ async function fixture(
     args: unknown,
     options?: CallOptions,
   ) => Promise<unknown> = async () => empty();
+  const batches: string[][] = [];
   const call: TypedCall = async <M extends Method>(
     method: M,
     args: ArgsOf<M>,
     options?: CallOptions,
   ): Promise<ResultOf<M>> => {
+    // Plays the server's batch endpoint: each entry is an ordinary queued call.
+    if (method.name === "sync.push") {
+      const { ops } = args as ArgsOf<typeof contract.sync.push>;
+      batches.push(ops.map((entry) => entry.op));
+      const results = [];
+      for (const entry of ops) {
+        calls.push({
+          name: entry.method,
+          args: structuredClone(entry.args),
+          options: { op: entry.op },
+        });
+        try {
+          await handler(entry.method, entry.args, { op: entry.op });
+          results.push({ op: entry.op });
+        } catch (error) {
+          if (!(error instanceof AppError) || error.code === "E_DISCONNECTED")
+            throw error;
+          results.push({ op: entry.op, error: error.toJSON() });
+        }
+      }
+      return { results } as ResultOf<M>;
+    }
     calls.push({ name: method.name, args: structuredClone(args), options });
     return (await handler(method.name, args, options)) as ResultOf<M>;
   };
@@ -126,6 +149,7 @@ async function fixture(
     db,
     engine,
     calls,
+    batches,
     timers,
     make,
     setNow: (value: number) => {
@@ -507,7 +531,7 @@ describe("durable outbox", () => {
 });
 
 describe("scope synchronization", () => {
-  it("buffers multi-scope pages atomically even when completed scopes repeat", async () => {
+  it("commits completed scopes while another scope pages, and the rest atomically", async () => {
     const f = await fixture();
     let page = 0;
     f.handle(async () =>
@@ -529,12 +553,68 @@ describe("scope synchronization", () => {
             added: [],
           },
     );
-    const states: number[] = [];
-    f.engine.subscribe(() => states.push(f.engine.getSnapshot().rows.length));
+    const states: { rows: number; ready: boolean }[] = [];
+    f.engine.subscribe(() =>
+      states.push({
+        rows: f.engine.getSnapshot().rows.length,
+        ready: f.engine.getSnapshot().cacheReady,
+      }),
+    );
     await f.engine.connect();
     expect(f.engine.getSnapshot().rows).toHaveLength(3);
-    expect(states.every((count) => count === 0 || count === 3)).toBe(true);
-    expect(f.calls[1]!.args).toEqual({ cursors: { [scope]: 1, sys: 1 } });
+    // The completed public scope is usable before the paged one finishes; the
+    // paged scope's pages never appear separately, and the cache is not ready yet.
+    expect(states.map((state) => state.rows)).toContain(1);
+    expect(states.map((state) => state.rows)).not.toContain(2);
+    expect(
+      states.filter((state) => state.rows === 1).every((s) => !s.ready),
+    ).toBe(true);
+    expect(f.engine.getSnapshot().cacheReady).toBe(true);
+    expect(f.calls[1]!.args).toEqual({
+      cursors: { [scope]: 1, sys: 1 },
+      windowed: [],
+    });
+    expect(
+      (await f.db.table<StoredScope, string>("scopes").get("sys"))?.cursor,
+    ).toBe(2);
+  });
+  it("keeps a reloaded cache not ready after a pull stopped between scope commits", async () => {
+    const f = await fixture();
+    let page = 0;
+    f.handle(async () => {
+      if (++page === 1)
+        return {
+          scopes: {
+            [scope]: { rows: [row("first", 1)], cursor: 1, more: true },
+            sys: { rows: [row("public", 1)], cursor: 1, more: false },
+          },
+          gone: [],
+          added: [scope, "sys"],
+        };
+      throw new AppError("E_DISCONNECTED", "断开");
+    });
+    await expect(f.engine.connect()).rejects.toMatchObject({
+      code: "E_DISCONNECTED",
+    });
+    const restarted = f.make();
+    await restarted.hydrate();
+    expect(restarted.getSnapshot().rows.map((r) => r.id)).toEqual(["public"]);
+    expect(restarted.getSnapshot().scopes).toEqual(["sys"]);
+    expect(restarted.getSnapshot().cacheReady).toBe(false);
+    f.handle(async () => ({
+      scopes: {
+        [scope]: { rows: [row("first", 1)], cursor: 1, more: false },
+        sys: { rows: [], cursor: 1, more: false },
+      },
+      gone: [],
+      added: [scope],
+    }));
+    await restarted.connect();
+    expect(f.calls[f.calls.length - 1]!.args).toEqual({
+      cursors: { sys: 1 },
+      windowed: [],
+    });
+    expect(restarted.getSnapshot().cacheReady).toBe(true);
   });
   it("failed paginated pull commits neither partial rows nor cursor", async () => {
     const f = await fixture();
@@ -650,7 +730,7 @@ describe("scope synchronization", () => {
     expect(bob.getSnapshot().rows).toEqual([]);
     expect(bob.getSnapshot().outbox).toEqual([]);
     await bob.connect();
-    expect(f.calls[0]!.args).toEqual({ cursors: {} });
+    expect(f.calls[0]!.args).toEqual({ cursors: {}, windowed: [] });
     const alice = f.make();
     await alice.hydrate();
     expect(
@@ -759,7 +839,23 @@ describe("window page admission", () => {
     deleted: false,
     data: { seq },
   });
-  it("persists disjoint pages, extends the newest window, and ignores uncached gap edits", async () => {
+  it("declares held windows and repulls when a page opens one during the pull", async () => {
+    const s = await fixture(windowModules);
+    await s.engine.delta(response([], 1));
+    let pulls = 0;
+    s.handle(async () => {
+      // The reader opens the conversation while the first pull is on the wire.
+      if (++pulls === 1) await s.engine.loadRows(scope, [post(1)]);
+      return response(pulls === 1 ? [] : [post(1, 2)], 2);
+    });
+    await s.engine.pull();
+    expect(s.calls.map((call) => call.args)).toEqual([
+      { cursors: { [scope]: 1 }, windowed: [] },
+      { cursors: { [scope]: 1 }, windowed: [scope] },
+    ]);
+    expect(s.engine.getSnapshot().rows[0]).toMatchObject({ id: "1", rev: 2 });
+  });
+  it("persists disjoint pages, extends every window, and ignores uncached gap edits", async () => {
     const s = await fixture(windowModules);
     await s.engine.delta(response([], 1));
     await s.engine.loadRows(scope, [post(1), post(2), post(10)]);
@@ -771,18 +867,18 @@ describe("window page admission", () => {
         .getSnapshot()
         .rows.map((r) => r.id)
         .sort(),
-    ).toEqual(["1", "10", "11", "2"]);
+    ).toEqual(["1", "10", "11", "2", "3"]);
     expect(
       (await s.db.table<StoredScope, string>("scopes").get(scope))?.windows,
     ).toEqual({
       post: [
-        [1, 2],
+        [1, 3],
         [10, 11],
       ],
     });
     const restarted = s.make();
     await restarted.hydrate();
-    expect(restarted.getSnapshot().rows).toHaveLength(4);
+    expect(restarted.getSnapshot().rows).toHaveLength(5);
   });
   it("resets window intervals and prevents fetched pages from restoring revoked scopes", async () => {
     const s = await fixture(windowModules);
@@ -1036,7 +1132,7 @@ it("a failed delta cannot let the next push advance past unapplied history", asy
       .rows.map((r) => r.id)
       .sort(),
   ).toEqual(["base", "later", "missing"]);
-  expect(f.calls[1]?.args).toEqual({ cursors: { [scope]: 1 } });
+  expect(f.calls[1]?.args).toEqual({ cursors: { [scope]: 1 }, windowed: [] });
 });
 
 it("buffers all transfer fragments before applying and honors rotating continuation tokens", async () => {
@@ -1069,10 +1165,10 @@ it("buffers all transfer fragments before applying and honors rotating continuat
   });
   await f.engine.connect();
   expect(f.calls.map((call) => call.args)).toEqual([
-    { cursors: {} },
-    { cursors: {}, continuation: "part0" },
-    { cursors: {}, continuation: "part1" },
-    { cursors: { [scope]: 4 } },
+    { cursors: {}, windowed: [] },
+    { cursors: {}, windowed: [], continuation: "part0" },
+    { cursors: {}, windowed: [], continuation: "part1" },
+    { cursors: { [scope]: 4 }, windowed: [] },
   ]);
   expect(sizes.every((size) => size === 0 || size === 2)).toBe(true);
   expect(
@@ -1101,7 +1197,7 @@ it("restarts an expired fragmented response from durable cursors and handles rep
   expect(await f.db.table("scopes").range()).toEqual([]);
   f.fire();
   await until(f.engine, (s) => s.phase === "live");
-  expect(f.calls[2]?.args).toEqual({ cursors: {} });
+  expect(f.calls[2]?.args).toEqual({ cursors: {}, windowed: [] });
   await f.engine.delta({ ...empty(), repull: true });
   expect(f.engine.getSnapshot().rows[0]?.rev).toBe(4);
 });
@@ -1133,6 +1229,8 @@ it("isolates chat conversations while retaining durable text-upload dependencies
   const conversation = "01ARZ3NDEKTSV4RRFFQ69G5FAB";
   const message = "01ARZ3NDEKTSV4RRFFQ69G5FAC";
   const other = "01ARZ3NDEKTSV4RRFFQ69G5FAD";
+  const same = "01ARZ3NDEKTSV4RRFFQ69G5FAE";
+  const elsewhere = "01ARZ3NDEKTSV4RRFFQ69G5FAF";
   await f.engine.enqueue({
     op: "upload",
     method: "chat.text.put",
@@ -1146,16 +1244,26 @@ it("isolates chat conversations while retaining durable text-upload dependencies
     args: { id: message, conversation, kind: "text", textId: text },
   });
   await f.engine.enqueue({
-    op: "same-conversation",
-    method: "chat.state.read",
+    op: same,
+    method: "chat.post.send",
     createdAt: 3,
-    args: { conversation, seq: 1 },
+    args: {
+      id: same,
+      conversation,
+      kind: "text",
+      text: "b",
+    },
   });
   await f.engine.enqueue({
-    op: "other-conversation",
-    method: "chat.state.read",
+    op: elsewhere,
+    method: "chat.post.send",
     createdAt: 4,
-    args: { conversation: other, seq: 1 },
+    args: {
+      id: elsewhere,
+      conversation: other,
+      kind: "text",
+      text: "c",
+    },
   });
   expect(f.engine.getSnapshot().outbox[1]?.dependsOn).toEqual(["upload"]);
   f.handle(async (method) => {
@@ -1169,11 +1277,11 @@ it("isolates chat conversations while retaining durable text-upload dependencies
     f.calls
       .filter((call) => call.name !== "sync.pull")
       .map((call) => call.options?.op),
-  ).toEqual(["upload", "other-conversation"]);
+  ).toEqual(["upload", elsewhere]);
   expect(f.engine.getSnapshot().outbox.map((op) => [op.op, op.state])).toEqual([
     ["upload", "failed"],
     [message, "failed"],
-    ["same-conversation", "pending"],
+    [same, "pending"],
   ]);
 });
 
@@ -1299,4 +1407,79 @@ it("certifies empty scopes at cursor zero, preserves completeness across restart
   expect(restored.getSnapshot().cacheReady).toBe(false);
   await restored.connect();
   expect(restored.getSnapshot().cacheReady).toBe(true);
+});
+
+describe("outbound batching and debounce", () => {
+  const conversation = "01ARZ3NDEKTSV4RRFFQ69G5FAB";
+  const draft = (op: string, ms: number, v: string) => ({
+    op,
+    method: "chat.state.set",
+    createdAt: ms,
+    args: {
+      conversation,
+      key: "draft",
+      value: { v, t: { ms, counter: 0 }, op },
+    },
+  });
+  it("merges a burst of draft edits durably and sends only the latest after the quiet period", async () => {
+    const f = await fixture(new ModuleRegistry([chatModule]));
+    f.handle(async () => empty());
+    await f.engine.connect();
+    f.setNow(1000);
+    await f.engine.enqueue(draft("01ARZ3NDEKTSV4RRFFQ69G5FA1", 1000, "h"));
+    f.setNow(1400);
+    await f.engine.enqueue(draft("01ARZ3NDEKTSV4RRFFQ69G5FA2", 1400, "he"));
+    f.setNow(1800);
+    await f.engine.enqueue(draft("01ARZ3NDEKTSV4RRFFQ69G5FA3", 1800, "hey"));
+    await f.engine.flush();
+    expect(f.calls.filter((c) => c.name !== "sync.pull")).toEqual([]);
+    // The coalesced pending state survives a reload and still projects locally.
+    const restored = f.make();
+    await restored.hydrate();
+    expect(restored.getSnapshot().outbox).toEqual([
+      expect.objectContaining({
+        op: "01ARZ3NDEKTSV4RRFFQ69G5FA3",
+        createdAt: 1000,
+        notBefore: 3300,
+        args: expect.objectContaining({
+          value: expect.objectContaining({ v: "hey" }),
+        }),
+      }),
+    ]);
+    restored.close();
+    expect([...f.timers.values()].map((timer) => timer.ms)).toContain(1500);
+    f.setNow(3300);
+    f.fire();
+    await until(f.engine, (s) => s.outbox.length === 0);
+    expect(
+      f.calls
+        .filter((c) => c.name !== "sync.pull")
+        .map((c) => [
+          c.options?.op,
+          (c.args as { value: { v: string } }).value.v,
+        ]),
+    ).toEqual([["01ARZ3NDEKTSV4RRFFQ69G5FA3", "hey"]]);
+  });
+  it("sends independent operations in one request followed by one pull", async () => {
+    const f = await fixture();
+    f.handle(async () => empty());
+    await f.engine.enqueue(item("theme"));
+    await f.engine.enqueue({
+      ...item("volume"),
+      args: { key: "volume", value: "quiet" },
+    });
+    await f.engine.enqueue(item("theme-again"));
+    await f.engine.connect();
+    await until(f.engine, (s) => s.outbox.length === 0);
+    // Strict operations on one key never share a request; independent heads do.
+    expect(f.batches).toEqual([["theme", "volume"]]);
+    expect(f.calls.map((c) => c.name)).toEqual([
+      "sync.pull",
+      "me.setting.set",
+      "me.setting.set",
+      "sync.pull",
+      "me.setting.set",
+      "sync.pull",
+    ]);
+  });
 });

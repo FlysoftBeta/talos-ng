@@ -41,6 +41,16 @@ export const mediaModule = defineClientModule({
     if (typeof input.playlist === "string") return `playlist:${input.playlist}`;
     return "";
   },
+  registers: {
+    "media.queue.set": {
+      key: () => "queue",
+      merge: (earlier, later) => {
+        const a = contract.media.queue.args.parse(earlier),
+          b = contract.media.queue.args.parse(later);
+        return newer(a, b) ? a : b;
+      },
+    },
+  },
   rowTypes: ["mediaTrack", "mediaPlaylist", "mediaUserState", "mediaRetention"],
   reducers: {
     "media.favorite.set": (rows, args, { user }) =>

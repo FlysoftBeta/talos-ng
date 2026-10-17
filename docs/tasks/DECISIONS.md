@@ -578,3 +578,56 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   caches cannot trigger retention cleanup or replacement of an unseen playback queue.
   Missing feature rows show loading/offline states, and arriving idle settings reset the
   timer. This supersedes the earlier full-sync-before-login assumption.
+
+- **D-121 — Every held window grows; visible chat gaps backfill.** Pull planning extends any
+  window by consecutive rows, not only the newest: a history page fetched during a buffered
+  pull created a newer window and the bridging run was dropped for good, because the
+  advanced cursor never redelivers it. Open conversations fetch a visible gap between loaded
+  posts once; the manual action remains after a failure.
+
+- **D-122 — Per-scope partial commit and window-aware pulls.** A pull commits each scope as
+  soon as its chain completes; revocations stay with the final commit. A durable
+  `partialSync` marker keeps `cacheReady` false until then, also across reloads. Pulls list
+  `windowed` scopes and the server omits windowed rows elsewhere (they were discarded
+  anyway), so conversations complete on the first page; a window opened mid-pull restarts it.
+
+- **D-123 — Register writes and batched push.** Modules declare order-irrelevant upserts
+  (register key, merge, debounce). They bypass order-key FIFO, merge in the durable outbox
+  into a fresh operation id, and wait a bounded quiet period. Each flush sends all eligible
+  independent operations in one `sync.push` request with per-operation idempotency and
+  results, then one pull. Strict FIFO keys and dependencies keep messages and text uploads
+  ordered. Supersedes the explicit-only `coalesce` helper, which is removed. Wire format and
+  stored outbox changed without migration (nothing released).
+
+- **D-124 — One writer, read-only sync replicas, always-on statement tracing.** Supersedes
+  D-006 for reads. All writes and transactions stay on the main thread's single
+  `better-sqlite3` connection; sync pull pages are computed by `TALOS_DB_READERS` worker
+  threads (default `min(4, cpus − 1)`) that load the same `server.js`, open the WAL database
+  read-only and build the module graph over it, so providers and serialisers are shared
+  code, not a second implementation. Each task is one read transaction (consistent snapshot,
+  read-your-writes for commits made before the task). Subscription state stays on the main
+  thread; a commit racing a snapshot leaves the touched scopes incomplete with `repull`, and
+  the retry runs locally, so live delivery cannot miss a row. Unavailable or hung replicas
+  fall back to local computation. Releases need no new files (the bundle is its own worker
+  entry; both addons already load per thread). Every statement and transaction is timed into
+  normalized-SQL histograms with a slow log (`TALOS_SLOW_QUERY_MS`, default 50 ms) exposed
+  as `admin.performance.get` and the workbench 性能 section. Measured with
+  `bin/testing/sync-load.ts`, the hot spots fixed with it were per-pull empty units of work,
+  per-commit access re-evaluation and re-authentication of every subscriber (skipped for
+  `accessNeutral` row types; admission changes outside units of work now re-authenticate
+  explicitly), full scans in community/library/authority providers, per-row re-reads, sliding
+  session writes on every authentication (coalesced to once a minute; device activity every
+  5 s), the lazily rebuilt recursive zod JSON schema (now one walk) and duplicate result
+  validation. Index added to the initial schema (`library_collections(owner, rev)`), no
+  migration (nothing released).
+- **D-125 — Recent and frequent views rank by frecency, kept locally.** One pure module
+  (`client/src/core/ranking`) scores each item as an exponentially decayed visit count
+  (14-day half-life; visits within 30 s count once) and cuts lists where the score stops
+  being meaningful (absolute floor plus a fraction of the top score, with a hard maximum),
+  so list length follows the data. Opens of conversations, books, booklists, songs and
+  playlists are recorded as one compact `[score, at]` counter per item in a single per-user
+  kv document (IndexedDB, no Blobs, bounded to 300 entries, debounced save). Not synced:
+  the access counters are a per-device convenience, and cross-device merge would need a
+  server contract and scope for little value; rows already synced (favourites, queue,
+  retention `lastUsed`) are unchanged. Music and reading panels list recent plus frequent
+  items; the chat landing page hosts the global panel across all five kinds.

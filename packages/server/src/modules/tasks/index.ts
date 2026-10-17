@@ -21,6 +21,7 @@ export function createTasks(options: TasksOptions): TasksService {
     select: (scope, rev, limit) => service.repo.select(scope, rev, limit),
   });
   options.syncHub.registerEntity("job", {
+    accessNeutral: true,
     serialize: (row) => row,
     read: (scope, id) => service.repo.read(scope, id),
   });

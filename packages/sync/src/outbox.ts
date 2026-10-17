@@ -15,11 +15,21 @@ export interface OutboxItem {
   readonly discardedDependencies?: readonly string[];
   /** Duration hint only; the executor owns clocks, jitter and scheduling. */
   readonly retryAfterMs?: number;
+  /** Debounced register write: not sent before this executor time. */
+  readonly notBefore?: number;
+  /** Latest notBefore a register write keeps when later writes merge into it. */
+  readonly deadline?: number;
 }
 
 export type EnqueueItem = Pick<
   OutboxItem,
-  "op" | "method" | "args" | "createdAt" | "dependsOn"
+  | "op"
+  | "method"
+  | "args"
+  | "createdAt"
+  | "dependsOn"
+  | "notBefore"
+  | "deadline"
 >;
 export type OutboxEvent =
   | { readonly type: "enqueue"; readonly item: EnqueueItem }
@@ -37,6 +47,73 @@ export type OutboxEvent =
 export interface SendOptions {
   readonly maxInFlight: number;
   readonly orderKey: (method: string, args: unknown) => string;
+  /**
+   * Order-irrelevant state upserts (last-writer-wins, maximum, per-device counters)
+   * name the register they write. They bypass order-key FIFO, travel with any other
+   * operations, and a pending write merges with a later write to the same register.
+   * Operations without a register keep strict FIFO per order key.
+   */
+  readonly register?: (method: string, args: unknown) => string | undefined;
+  /** Arguments equivalent to applying `earlier` then `later`; default `later`. */
+  readonly merge?: (
+    method: string,
+    earlier: unknown,
+    later: unknown,
+  ) => unknown;
+}
+
+function barrier(item: OutboxItem, options: SendOptions): string {
+  const register = options.register?.(item.method, item.args);
+  return register === undefined
+    ? JSON.stringify(["order", options.orderKey(item.method, item.args)])
+    : JSON.stringify(["register", item.method, register]);
+}
+
+/** Replace a pending write to the same register; sending and failed writes stay. */
+function mergeRegister(
+  items: readonly OutboxItem[],
+  item: EnqueueItem,
+  options: SendOptions,
+): { items: readonly OutboxItem[]; item: EnqueueItem } {
+  const register = options.register?.(item.method, item.args);
+  if (register === undefined) return { items, item };
+  const referenced = new Set<string>();
+  for (const entry of items)
+    for (const dependency of entry.dependsOn ?? []) referenced.add(dependency);
+  const earlier = items.find(
+    (entry) =>
+      entry.state === "pending" &&
+      entry.method === item.method &&
+      !entry.discardedDependencies?.length &&
+      !referenced.has(entry.op) &&
+      !item.dependsOn?.includes(entry.op) &&
+      options.register!(entry.method, entry.args) === register,
+  );
+  if (!earlier) return { items, item };
+  const deadline = Math.min(
+    earlier.deadline ?? Infinity,
+    item.deadline ?? Infinity,
+  );
+  const dependsOn = [
+    ...new Set([...(earlier.dependsOn ?? []), ...(item.dependsOn ?? [])]),
+  ];
+  return {
+    items: items.filter((entry) => entry !== earlier),
+    // The later operation id is fresh: an earlier id may already have been applied
+    // under its old arguments, and the server's idempotency cache would replay that.
+    item: {
+      ...item,
+      args: options.merge
+        ? options.merge(item.method, earlier.args, item.args)
+        : item.args,
+      createdAt: earlier.createdAt,
+      ...(dependsOn.length ? { dependsOn } : { dependsOn: undefined }),
+      ...(item.notBefore !== undefined
+        ? { notBefore: Math.min(item.notBefore, deadline) }
+        : {}),
+      ...(Number.isFinite(deadline) ? { deadline } : {}),
+    },
+  };
 }
 
 export function isTerminalRejection(code: ErrorCode): boolean {
@@ -86,10 +163,14 @@ function cascade(items: readonly OutboxItem[]): readonly OutboxItem[] {
   }
 }
 
-/** Array position is durable FIFO order; creation timestamps need not be monotonic. */
+/**
+ * Array position is durable FIFO order; creation timestamps need not be monotonic.
+ * With `now`, debounced register writes wait for their `notBefore`.
+ */
 export function nextToSend(
   items: readonly OutboxItem[],
   options: SendOptions,
+  now?: number,
 ): readonly OutboxItem[] {
   integer(options.maxInFlight, "maxInFlight");
   let capacity =
@@ -100,16 +181,18 @@ export function nextToSend(
   const selected: OutboxItem[] = [];
   // Reserve sending keys even for a restored list containing an earlier pending item.
   for (const item of items)
-    if (item.state === "sending")
-      blockedKeys.add(options.orderKey(item.method, item.args));
+    if (item.state === "sending") blockedKeys.add(barrier(item, options));
   for (const item of items) {
-    const key = options.orderKey(item.method, item.args);
+    const key = barrier(item, options);
     if (blockedKeys.has(key)) continue;
     blockedKeys.add(key);
     if (
       capacity <= 0 ||
       item.state !== "pending" ||
-      item.discardedDependencies?.length
+      item.discardedDependencies?.length ||
+      (now !== undefined &&
+        item.notBefore !== undefined &&
+        item.notBefore > now)
     )
       continue;
     if (item.dependsOn?.some((op) => outstanding.has(op))) continue;
@@ -126,21 +209,23 @@ export function reduceOutbox(
   options: SendOptions,
 ): readonly OutboxItem[] {
   if (event.type === "enqueue") {
-    const item = event.item;
+    if (items.some((existing) => existing.op === event.item.op))
+      throw new AppError("E_CONFLICT", "重复的操作标识");
+    const merged = mergeRegister(items, event.item, options);
+    const item = merged.item;
+    const remaining = merged.items;
     valid(
       item.op.length > 0 && item.method.length > 0,
       "Operation and method must be nonempty",
     );
     integer(item.createdAt, "createdAt");
-    if (items.some((existing) => existing.op === item.op))
-      throw new AppError("E_CONFLICT", "重复的操作标识");
-    const outstanding = new Set(items.map((existing) => existing.op));
+    const outstanding = new Set(remaining.map((existing) => existing.op));
     valid(
       (item.dependsOn ?? []).every((op) => outstanding.has(op)),
       "Dependencies must already be queued",
     );
     return cascade([
-      ...items,
+      ...remaining,
       {
         ...item,
         dependsOn: item.dependsOn?.slice(),
@@ -245,40 +330,4 @@ export function reduceOutbox(
       }
     }),
   );
-}
-
-/** Return a register identity only for methods that are safe to replace wholesale. */
-export type CoalesceRule = (item: OutboxItem) => string | undefined;
-
-export function coalesce(
-  items: readonly OutboxItem[],
-  rule: CoalesceRule,
-): readonly OutboxItem[] {
-  const referenced = new Set<string>();
-  for (const item of items)
-    for (const dependency of item.dependsOn ?? []) referenced.add(dependency);
-  const later = new Set<string>();
-  const retained: OutboxItem[] = [];
-  for (let index = items.length - 1; index >= 0; index--) {
-    const item = items[index]!;
-    const key = rule(item);
-    // Sending/failed writes are barriers: do not change meaning across them.
-    if (key === undefined) {
-      retained.push(item);
-      continue;
-    }
-    if (
-      item.state !== "pending" ||
-      item.dependsOn?.length ||
-      item.discardedDependencies?.length ||
-      referenced.has(item.op)
-    ) {
-      later.delete(key);
-      retained.push(item);
-      continue;
-    }
-    if (!later.has(key)) retained.push(item);
-    later.add(key);
-  }
-  return retained.reverse();
 }

@@ -118,3 +118,69 @@ export const adminIncidentMethods = Object.freeze({
     offline: "online",
   }),
 });
+
+const source = z.enum(["writer", "reader"]);
+const kind = z.enum(["statement", "transaction"]);
+const ms = z.number().nonnegative();
+const performanceSchema = z
+  .object({
+    queries: z
+      .object({
+        since: revSchema,
+        slowMs: ms,
+        statements: z.array(
+          z
+            .object({
+              source,
+              kind,
+              sql: z.string(),
+              count: z.number().int().nonnegative(),
+              totalMs: ms,
+              p50Ms: ms,
+              p95Ms: ms,
+              maxMs: ms,
+              slow: z.number().int().nonnegative(),
+            })
+            .strict(),
+        ),
+        recentSlow: z.array(
+          z
+            .object({ source, kind, sql: z.string(), ms, at: revSchema })
+            .strict(),
+        ),
+        dropped: z.number().int().nonnegative(),
+      })
+      .strict(),
+    eventLoop: z
+      .object({
+        since: revSchema,
+        p50Ms: ms,
+        p99Ms: ms,
+        maxMs: ms,
+        meanMs: ms,
+        utilization: z.number().min(0).max(1),
+      })
+      .strict(),
+    replicas: z
+      .object({
+        size: z.number().int(),
+        ready: z.number().int(),
+        busy: z.number().int(),
+        completed: z.number().int(),
+        failed: z.number().int(),
+        restarts: z.number().int(),
+      })
+      .strict()
+      .nullable(),
+  })
+  .strict();
+export type AdminPerformance = z.infer<typeof performanceSchema>;
+export const adminPerformanceMethods = Object.freeze({
+  get: defineMethod({
+    name: "admin.performance.get",
+    args: z.object({ reset: z.boolean().optional() }).strict(),
+    result: performanceSchema,
+    auth: "user",
+    offline: "online",
+  }),
+});

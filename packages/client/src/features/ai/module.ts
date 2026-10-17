@@ -14,6 +14,26 @@ export const aiModule = defineClientModule({
       seqOf: (row: { data: unknown }) => aiMessageSchema.parse(row.data).seq,
     },
   },
+  registers: {
+    "ai.draft.set": {
+      key: (args) => (args as { id?: string } | null)?.id,
+      merge: (earlier, later) => {
+        const a = ai.draft.set.args.parse(earlier),
+          b = ai.draft.set.args.parse(later);
+        return lwwMerge(a.value, b.value) === a.value ? a : b;
+      },
+      debounceMs: () => 1500,
+    },
+    "ai.conversation.read": {
+      key: (args) => (args as { id?: string } | null)?.id,
+      merge: (earlier, later) => {
+        const a = ai.conversation.read.args.parse(earlier),
+          b = ai.conversation.read.args.parse(later);
+        return { ...b, seq: Math.max(a.seq, b.seq) };
+      },
+      debounceMs: () => 1000,
+    },
+  },
   reducers: {
     "ai.text.put": (rows) => rows,
     "ai.draft.set": (rows, args, { user }) => {

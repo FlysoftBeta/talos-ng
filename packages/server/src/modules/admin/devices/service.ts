@@ -9,6 +9,8 @@ export interface AdminDevicesOptions {
   db: Db;
   identity: Pick<IdentityAdmin, "repo" | "directory">;
   policy: Pick<AdminPolicy, "settings">;
+  /** Re-evaluate connected sessions after a device lock, binding or removal. */
+  onAdmissionChanged?: () => void;
 }
 export class AdminDevices {
   constructor(private readonly options: AdminDevicesOptions) {}
@@ -52,6 +54,7 @@ export class AdminDevices {
         fields: Object.keys(input).filter((k) => k !== "id"),
       });
     });
+    this.options.onAdmissionChanged?.();
     return { device: this.options.identity.directory.device(input.id)! };
   }
   deleteDevice(actor: string, id: string, actorDevice: string): void {
@@ -62,5 +65,6 @@ export class AdminDevices {
       if (!removed) throw new AppError("E_NOT_FOUND", "设备不存在");
       this.options.audit.append(actor, "admin.device.delete", id);
     });
+    this.options.onAdmissionChanged?.();
   }
 }

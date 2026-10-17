@@ -87,6 +87,7 @@ export const methods = Object.freeze([
   identity.profile.update,
   identity.pins.replace,
   sync.pull,
+  sync.push,
   upload.begin,
   upload.append,
   upload.commit,

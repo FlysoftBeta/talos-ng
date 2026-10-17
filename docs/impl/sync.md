@@ -46,13 +46,31 @@ Scope providers (`match, access, list, select`) and entity serialisers register 
   previous subscription. Pushes after commit re-read touched rows from the committed state.
 - Memory stays bounded: changes are scanned in batches retaining candidate rows for the first
   page plus the next revision group, per entity type; counts continue to detect window resets.
+- `snapshot(user, request)` computes a request's pages at one revision without touching
+  subscription state; `pull` is snapshot plus bookkeeping. `pullFrom` takes the snapshot
+  from a read replica (`server.md`): commits and access refreshes that land while it is in
+  flight are recorded, the touched scopes are returned with `more` and stay incomplete,
+  scopes that lost access are dropped and the response carries `repull`, so the client pulls
+  again; that retry is computed on the main thread and cannot race. A disconnect or rebind
+  during the snapshot fails the pull instead of installing a subscription.
+- Entity types whose writes can never change scope access (posts, chat and reading states,
+  settings, progress, jobs, AI messages) are registered `accessNeutral`. A change set made
+  only of such rows reuses each subscription's known scopes instead of re-evaluating every
+  provider per connected user, and skips the per-connection re-authentication; admission
+  changes made outside units of work (device policy, device lock or removal) re-authenticate
+  connections themselves.
 
 ## Windowed types
 
 Posts (and AI messages) are too large to mirror. The client keeps contiguous **intervals** by
 sequence number (`IntervalSet`: closed, canonical, merged on overlap and adjacency). Deltas
 cover the whole scope; the client applies rows inside held windows and consecutive
-extensions of the greatest window, and ignores rows in gaps. If more than a threshold of
+extensions of any held window, and ignores rows in gaps. Extending every window (not only
+the newest) matters when a history page creates a newer window while a pull is buffered:
+the pulled run between the two windows bridges them, because the advanced cursor never
+delivers it again. A conversation fetches a gap between two loaded posts as soon as it is
+visible online (once per gap; the manual action remains after a failure), which repairs
+holes left by deltas that arrived before a page certified the window below them. If more than a threshold of
 changes accumulated, the server answers `reset` for that type and the client keeps only what
 it re-fetches through explicit page calls (`mergePage` certifies a fetched range; an empty
 complete page certifies absence). Windowed rows are never seeded by deltas into an empty
@@ -97,7 +115,28 @@ error?, dependencies}`.
 - FIFO per ordering key; only the first outstanding operation per key may fly; a failed or
   dependency-blocked head blocks its key. Modules declare independent object keys (chat
   conversations, settings keys, library targets and media targets); unspecified modules
-  keep a conservative module-wide barrier. Default capacity is one in flight in the app.
+  keep a conservative module-wide barrier.
+- **Register writes** are order-irrelevant state upserts (last-writer-wins, maximum,
+  per-device counters) that a module declares per method with a register key, a merge
+  and an optional debounce: chat pin/mute/draft/retention per conversation, read marks,
+  AI drafts and read marks, reading progress per document and device, settings per key,
+  the media queue. They bypass order-key FIFO (a failed message never holds a draft back)
+  but only one write per register flies. Enqueueing merges a pending write to the same
+  register into the new one: the new operation id carries the merged arguments (an old
+  id may already be applied, and its cached result would hide the new value), the
+  earlier creation time and the union of dependencies. Sending, failed and referenced
+  writes never merge. Debounced writes wait `notBefore` (drafts 1.5 s, read marks 1 s,
+  reading progress 3 s after the last edit), bounded by a `deadline` of four quiet periods
+  after the first. The merged list is persisted like any other outbox state, so a reload
+  keeps the coalesced intent and acknowledged writes are never touched.
+- **Batching.** Each flush step sends every eligible operation in one request, up to 32
+  operations and 64 KiB of arguments: the head of each strict order key plus due register
+  writes. Two operations whose order matters never share a request (same key, or a
+  dependency on an outstanding operation), so the entries are mutually independent.
+  `sync.push {ops:[{op, method, args}]}` runs them through the ordinary dispatch one by
+  one, each with its own idempotency record and write transaction, and answers per
+  operation (`{op}` or `{op, error}`); a single eligible operation uses its method
+  directly. One pull then precedes the acknowledgements of all accepted operations.
 - `op` is the idempotency key; the server remembers results for 14 days, so a late success
   after a connection loss is harmless.
 - Ack removes the item **only after** the authoritative rows arrive by delta/pull; the
@@ -114,8 +153,6 @@ error?, dependencies}`.
   recreated with new ids. A sending item cannot be discarded.
 - Chat records outstanding text uploads as durable prerequisites before enqueueing the
   dependent message or draft, so isolating conversation queues cannot bypass uploads.
-- `coalesce` lets a later pending whole-register LWW write replace an earlier pending one;
-  sending, failed, dependency-bearing and referenced operations are barriers. Never implicit.
 - No UI action silently drops an intent.
 
 ### Optimistic projections
@@ -136,6 +173,18 @@ per-user scope admission stops one user's cached shared data projecting into ano
 session. Revision checks stop stale push/pull data regressing state. Navigator `onLine` is
 only a negative hint; going offline interrupts the carrier and leaves reconnect to the link
 retry machine.
+
+A pull commits each scope as soon as its own page chain is complete, while other scopes
+keep paging, so conversations, documents and settings that already arrived are usable
+(and open) before the whole pull finishes. Each scope chain remains atomic, the request
+base advances with each commit, and revocations reported by the pull stay with the final
+commit (a later page may regrant the scope). Until the final commit a durable
+`partialSync` marker keeps `cacheReady` false, also across a reload, because scopes then
+sit at different revisions. A pull also lists the scopes holding windows (`windowed`);
+the server omits windowed rows of every other scope, which the client would discard
+anyway, so a large conversation's history no longer pages through its first sync. A
+page that opens a window during such a pull restarts it before commit (the omitted rows
+may be newer than the page). Requests without `windowed` receive every row.
 
 Full pull chains and deltas share an application gate: a newer delta cannot advance a
 cursor past buffered historical rows. Revocations purge immediately and carry per-scope

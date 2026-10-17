@@ -59,6 +59,10 @@ available for questions — decide, and record notable decisions.
   growing for ~20 min means kill and re-dispatch narrower; model/effort per the charter (never
   `gpt-6-sol` or `gpt-5.6-*`); check the quota meter with `node tools/codex-quota.mjs`
   (no arguments) before and after batches; no Claude sub-agents in parallel.
+- Waiting on a long job (sub-agent or tool known to run for a long time): arm a one-shot
+  self check-in about 55 min out (e.g. `send_later`) racing the job, so the orchestrator's
+  prompt cache is bumped before it expires; re-arm while the job runs and cancel the
+  check-in as soon as the job finishes first. Not for short jobs.
 - Decisions are appended to `docs/tasks/DECISIONS.md` (next free D-number, assigned at merge);
   helpers do not edit `HANDOFF.md`/`ROADMAP.md` (the orchestrator owns them).
 - Be sceptical: a claim counts only with evidence (command, test, screenshot); state what was

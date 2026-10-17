@@ -4,7 +4,9 @@ Needs the articles gate (reader types and downloads add their own gates; see rol
 
 ## Library
 
-The reading area has recent and booklist views (booklists can be filtered by group).
+The reading area has recent and booklist views (booklists can be filtered by group). The
+recent view starts with recently opened and frequently opened books and booklists, a
+variable-length list kept per device.
 Every user has two private built-in booklists: 我的书架 and 我的收藏. Both are pinned at the
 top of recent view, including when empty. Built-ins cannot be deleted, renamed, have their
 information edited, or be shared. Their contents can be reordered or removed.

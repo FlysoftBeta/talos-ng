@@ -97,7 +97,7 @@ describe("scope delta planner", () => {
     expect(db.cursor).toBe(100);
   });
 
-  it("applies held windows and contiguous head extensions but ignores gaps and older extensions", () => {
+  it("applies held windows and contiguous extensions of every window but ignores gaps", () => {
     const ops = planApply(
       state,
       pull([
@@ -113,7 +113,7 @@ describe("scope delta planner", () => {
     );
     expect(
       ops.filter((op) => op.kind === "put").map((op) => op.row.id),
-    ).toEqual(["2", "11", "12"]);
+    ).toEqual(["2", "4", "11", "12"]);
     expect(ops).toContainEqual({
       kind: "delete",
       type: "post",
@@ -125,7 +125,7 @@ describe("scope delta planner", () => {
       kind: "setWindow",
       type: "post",
       intervals: [
-        [1, 3],
+        [1, 4],
         [8, 12],
       ],
     });
@@ -147,6 +147,30 @@ describe("scope delta planner", () => {
       type: "post",
       intervals: [],
     });
+  });
+
+  it("bridges a history page fetched during a buffered pull with the pulled run below it", () => {
+    // Held [1,100]; while 300 posts arrive the reader opens the conversation and the
+    // latest page records [361,400] before the buffered pull commits rows 101..400.
+    const db = new Executor();
+    db.cursor = 100;
+    db.windows = {
+      post: [
+        [1, 100],
+        [361, 400],
+      ],
+    };
+    const pages: ScopePull[] = [];
+    for (let start = 101; start <= 400; start += 100) {
+      const rows: Row[] = [];
+      for (let seq = start; seq < start + 100; seq++) rows.push(row(seq));
+      pages.push({ rows, cursor: start + 99, more: start + 99 < 400 });
+    }
+    db.apply(planApply(db.state, pages, options));
+    expect(db.windows.post).toEqual([[1, 400]]);
+    for (let seq = 101; seq <= 360; seq++)
+      expect(db.rows.get(key(row(seq)))?.rev).toBe(seq);
+    expect(db.cursor).toBe(400);
   });
 
   it("buffers all pages, and extends the head despite reversed sequence arrival", () => {
@@ -317,10 +341,9 @@ describe("scope delta planner", () => {
               break;
             }
           }
-          expect(db.windows.post).toEqual([
-            [1, 4],
-            [8, sequence],
-          ]);
+          const held = new IntervalSet(db.windows.post);
+          for (const seq of [1, 4, 8, sequence])
+            expect(held.contains(seq)).toBe(true);
           for (const item of server.values()) {
             const expected =
               item.type !== "post" ||

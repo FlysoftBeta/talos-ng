@@ -64,6 +64,8 @@ export class ConversationController extends StateStore<ConversationState> {
   private generation = 0;
   private textGeneration = 0;
   private canRead: boolean | undefined;
+  /** Gaps already backfilled automatically; a failure leaves the manual action. */
+  private readonly repaired = new Set<string>();
   private readonly stops: Array<() => void>;
   constructor(
     private runtime: ConversationPort,
@@ -305,6 +307,7 @@ export class ConversationController extends StateStore<ConversationState> {
       this.patch({ awayFromBottom });
     const height = this.history.geometry().viewport;
     if (!height) return;
+    this.repairGaps();
     const visible = this.history
       .visible()
       .filter(
@@ -326,6 +329,23 @@ export class ConversationController extends StateStore<ConversationState> {
         .catch((cause) => this.patch({ error: message(cause) }));
     }
   };
+  /**
+   * Missing posts between two loaded ones are fetched as soon as the reader sees the
+   * gap. Sync never redelivers rows it skipped before a window covered them, so
+   * without this the gap would persist until the reader asked for it.
+   */
+  private repairGaps(): void {
+    if (this.state.loading || !this.online()) return;
+    const gap = this.history
+      .visible()
+      .map((row) => row.item.gap)
+      .find(
+        (value) => value && !this.repaired.has(`${value.from}:${value.to}`),
+      );
+    if (!gap) return;
+    this.repaired.add(`${gap.from}:${gap.to}`);
+    void this.load("after", gap.from - 1);
+  }
   view = async (post: ChatPost, edit: boolean): Promise<void> => {
     const generation = ++this.textGeneration;
     this.patch({

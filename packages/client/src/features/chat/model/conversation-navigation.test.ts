@@ -229,6 +229,34 @@ describe("loading at the ends", () => {
   });
 });
 
+describe("repairing gaps", () => {
+  it("backfills a visible gap between loaded posts once, without a manual action", async () => {
+    const t = fixture({ readSeq: 9, lastSeq: 9, rows: [1, 2, 8, 9] });
+    vi.mocked(page).mockResolvedValue(win([3, 4, 5, 6, 7]));
+    await t.open();
+    t.layout();
+    await settle();
+    t.layout();
+    expect(page).toHaveBeenCalledWith(t.runtime, "group", "after", 2);
+    expect(t.model.history.ids()).toEqual(
+      [1, 2, 3, 4, 5, 6, 7, 8, 9].map((seq) => `post${seq}`),
+    );
+    expect(
+      vi.mocked(page).mock.calls.filter((c) => c[2] === "after"),
+    ).toHaveLength(1);
+  });
+  it("leaves the gap to the manual action offline", async () => {
+    const t = fixture({
+      online: false,
+      readSeq: 9,
+      lastSeq: 9,
+      rows: [1, 2, 8, 9],
+    });
+    await t.open();
+    expect(page).not.toHaveBeenCalled();
+  });
+});
+
 describe("jumping to a quoted post", () => {
   it("centres a post that is already loaded", async () => {
     const t = fixture({ rows: [1, 2, 3, 4, 5, 6], readSeq: 6, lastSeq: 6 });
