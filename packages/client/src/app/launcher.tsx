@@ -12,7 +12,8 @@ import { useLauncher } from "../features/launcher/index.ts";
 import type { LauncherItem } from "../features/launcher/index.ts";
 import { bindMediaControls, useMediaPlayer } from "../features/media/index.ts";
 import { kindLabel, recentOverview } from "../features/recent/index.ts";
-import { useRecentTargets } from "./recent.tsx";
+import { useUnreadSignals } from "../features/chat/connect/index.tsx";
+import { chatSignals, useRecentTargets } from "./recent.tsx";
 
 const RECENT_SHOWN = 6;
 
@@ -31,7 +32,8 @@ export function LauncherEntry({
     player = useMediaPlayer(),
     history = useAccessHistory(),
     entries = useAccessEntries(history),
-    { resolvers, open } = useRecentTargets();
+    { resolvers, open } = useRecentTargets(),
+    unread = useUnreadSignals();
   const items: LauncherItem[] = [
     ...areas.map((area) => ({
       id: `app:${area.id}`,
@@ -39,7 +41,13 @@ export function LauncherEntry({
       title: area.title,
       hint: "",
     })),
-    ...recentOverview(entries, resolvers, Date.now())
+    ...recentOverview(
+      entries,
+      resolvers,
+      Date.now(),
+      RECENT_SHOWN,
+      chatSignals(unread),
+    )
       .slice(0, RECENT_SHOWN)
       .map((entry) => ({
         id: `${entry.kind}:${entry.id}`,

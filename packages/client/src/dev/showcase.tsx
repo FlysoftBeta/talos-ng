@@ -46,6 +46,7 @@ import type { ColorMode } from "../ui/theme/index.ts";
 import type { PanelState } from "../ui/feedback/index.ts";
 const areaNames: Record<AreaId, string> = {
   chat: "对话",
+  recent: "最近",
   library: "阅读",
   learning: "学习",
   media: "音乐",
@@ -207,7 +208,7 @@ export function Showcase({
                 <RailItem
                   key={area}
                   label={areaNames[area]}
-                  icon={<Icon name={area} />}
+                  icon={<Icon name={area === "recent" ? "history" : area} />}
                   selected={nav.area === area}
                   badge={area === "chat" ? 3 : undefined}
                   onClick={() => dispatch({ type: "switchArea", area })}

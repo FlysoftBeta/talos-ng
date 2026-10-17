@@ -24,6 +24,19 @@ export function useChatRows() {
 export function useConversations() {
   return conversations(useChatRows());
 }
+/** Unread count and newest unread message time per conversation id (muted ones omitted). */
+export function useUnreadSignals(): Record<
+  string,
+  { count: number; newestAt: number }
+> {
+  const out: Record<string, { count: number; newestAt: number }> = {};
+  for (const state of states(useChatRows())) {
+    const count = state.lastSeq - state.readSeq;
+    if (count > 0 && state.lastPost && !state.mute.v)
+      out[state.conversation] = { count, newestAt: state.lastPost.created };
+  }
+  return out;
+}
 export function useChatUnread(): number {
   return unreadCount(states(useChatRows()));
 }

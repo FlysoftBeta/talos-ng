@@ -2,6 +2,7 @@ import { ACCESS_KINDS, accessFrecent } from "../../../core/ranking/index.ts";
 import type {
   AccessKind,
   AccessSnapshot,
+  UnreadSignal,
 } from "../../../core/ranking/index.ts";
 
 export interface RecentEntry {
@@ -32,6 +33,8 @@ export function recentOverview(
   access: AccessSnapshot,
   resolvers: RecentResolvers,
   now: number,
+  max = 10,
+  chatUnread: Readonly<Record<string, UnreadSignal>> = {},
 ): RecentEntry[] {
   const out: RecentEntry[] = [];
   for (const ref of accessFrecent(
@@ -39,7 +42,8 @@ export function recentOverview(
     ACCESS_KINDS,
     now,
     (kind, id) => !!resolvers[kind](id),
-    { max: 10 },
+    { max },
+    chatUnread,
   )) {
     const found = resolvers[ref.kind](ref.id);
     if (found) out.push({ ...ref, ...found });

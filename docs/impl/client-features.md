@@ -158,9 +158,11 @@ bounded kv document per user through `getLocal`/`setLocal`, debounced, local onl
 `platform/react/use-access-history.ts` shares one history per runtime and user.
 
 `app/recent.tsx` is the connect layer: `RecentTracker` turns navigation changes
-(`features/recent/model/tracking.ts`) and the current song into visits, and `RecentHome`
+(`features/recent/model/tracking.ts`) and the current song into visits, and `RecentList`
 resolves titles from the chat, library and media data and fills `RecentPanelView`, the global
-panel hosted by the chat area's landing page. The music and reading list panes compute their
+list of the dedicated `recent` area (its list pane; the content pane only hints). The chat
+landing page is the plain conversation landing. Conversations with unread messages get a bounded boost from `core/ranking/unread.ts`
+(fraction of their own frecency, fading with the newest unread message). The music and reading list panes compute their
 own recent/frequent sections from `model/recent.ts` and render the shared `RecentSection`
 ui component; items that no longer exist are filtered out before the cut-off is applied.
 
@@ -171,5 +173,5 @@ highlight (stable across list refreshes); `model/launcher.ts` owns open state an
 ahead of time so `requestPictureInPicture()` runs inside the click, maps Media Session
 play/pause/next/previous to click/step actions (a pause event on the video is the fallback
 click) and re-installs the music player's handlers on stop. `app/launcher.tsx` builds the items
-from the reachable areas and `useRecentTargets()` (shared with `RecentHome`) and hides the rail
+from the reachable areas and `useRecentTargets()` (shared with `RecentList`) and hides the rail
 entry when `launcherSupported()` is false.

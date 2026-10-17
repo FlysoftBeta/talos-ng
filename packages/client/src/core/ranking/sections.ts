@@ -1,5 +1,6 @@
 import { selectFrecent, selectFrequent, selectRecent } from "./frecency.ts";
 import type { CutOff, Ranked } from "./frecency.ts";
+import type { UnreadSignal } from "./unread.ts";
 import { parseAccessKey } from "./history.ts";
 import type { AccessKind, AccessSnapshot } from "./history.ts";
 
@@ -32,15 +33,18 @@ const refs = (keys: readonly string[]): AccessRef[] => {
   return out;
 };
 
-/** One mixed list ranked by frecency with a variable-length cut-off. */
+/** One mixed list ranked by frecency with a variable-length cut-off; `unread` (by access key) boosts. */
 export function accessFrecent(
   entries: AccessSnapshot,
   kinds: readonly AccessKind[],
   now: number,
   exists: AccessExists,
   cutOff?: Partial<CutOff>,
+  unread?: Readonly<Record<string, UnreadSignal>>,
 ): AccessRef[] {
-  return refs(selectFrecent(candidates(entries, kinds, exists), now, cutOff));
+  return refs(
+    selectFrecent(candidates(entries, kinds, exists), now, cutOff, unread),
+  );
 }
 
 /** Recently opened items, then frequently opened ones the first list does not repeat. */

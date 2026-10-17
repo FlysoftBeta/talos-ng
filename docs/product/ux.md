@@ -29,6 +29,7 @@ decides its layout, not the other way round.
 | Area | Essence | Layout |
 |---|---|---|
 | 对话 chat | conversations, each a time-ordered stream | collection list + stream |
+| 最近 recent | what the user opened lately across chat, reading and music | one frecency-ranked list (conversations, books, booklists, songs, playlists; length follows the data; empty state when no history); unread messages lift a conversation the user engages with, never above their own usage pattern; selecting an item opens it in its own area |
 | 阅读 library | collections of documents; reading is immersive | collection list + document list; reading is focus mode |
 | 学习 learning | a dashboard and practice sessions | section nav + page; practice is focus mode |
 | 音乐 music | browse, then play while doing other things | section nav + track list; player persists everywhere |
@@ -59,7 +60,7 @@ briefly over whatever the user is doing.
 └────┴──────────────┴──────────────────────────────────────────┘
 ```
 
-- **Rail** (always visible): the five areas on top; below a flexible space the compact player
+- **Rail** (always visible): the six areas on top; below a flexible space the compact player
   (only while a track is loaded), then 状态, 任务, 设置, 管理 (administrators), 锁定. Each
   entry is an icon with a short label. The current area has a tinted indicator. Unread
   counts appear as a badge on 对话. An area the user may not use is hidden.

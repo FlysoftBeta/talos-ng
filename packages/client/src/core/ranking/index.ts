@@ -17,5 +17,11 @@ export {
   parseAccessKey,
 } from "./history.ts";
 export type { AccessKind, AccessSnapshot, AccessStorage } from "./history.ts";
+export {
+  UNREAD_HALF_LIFE_MS,
+  UNREAD_MAX_FRACTION,
+  unreadBoost,
+} from "./unread.ts";
+export type { UnreadSignal } from "./unread.ts";
 export { accessFrecent, accessSections } from "./sections.ts";
 export type { AccessExists, AccessRef } from "./sections.ts";

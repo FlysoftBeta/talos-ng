@@ -2,8 +2,7 @@ import type { ReactElement } from "react";
 import { Icon } from "../../../ui/icon/index.ts";
 import type { IconName } from "../../../ui/icon/index.ts";
 import { Pane, PaneBody, PaneHeader } from "../../../ui/layout/index.ts";
-import { EmptyPane } from "../../../ui/layout/index.ts";
-import { ListRow } from "../../../ui/feedback/index.ts";
+import { ListRow, StatePanel } from "../../../ui/feedback/index.ts";
 
 export interface RecentRowView {
   id: string;
@@ -15,19 +14,23 @@ export interface RecentRowView {
   onOpen(): void;
 }
 
-/** The global recent panel: one list across every module; the empty state is the plain landing hint. */
+/** The global recent list: one ranked list across every module, with an empty state. */
 export function RecentPanelView({
   rows,
-  emptyHint,
 }: {
   rows: readonly RecentRowView[];
-  emptyHint: string;
 }): ReactElement {
-  if (!rows.length) return <EmptyPane icon="chat" hint={emptyHint} />;
   return (
-    <Pane className="recent-panel">
+    <Pane className="recent-panel" data-testid="recent.list">
       <PaneHeader title="最近使用" />
       <PaneBody>
+        {!rows.length && (
+          <StatePanel
+            state="empty"
+            title="还没有使用记录"
+            hint="打开对话、文档、书单、歌曲或歌单后会出现在这里"
+          />
+        )}
         {rows.map((row) => (
           <ListRow
             key={row.id}

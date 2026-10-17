@@ -1,3 +1,6 @@
+import { unreadBoost } from "./unread.ts";
+import type { UnreadSignal } from "./unread.ts";
+
 /**
  * Frecency: one compact counter per item combines how often and how recently it
  * was opened. The counter is an exponentially decayed visit count stored as
@@ -80,11 +83,19 @@ export function selectFrecent<K extends string>(
   items: readonly Ranked<K>[],
   now: number,
   cutOff: Partial<CutOff> = {},
+  unread: Readonly<Record<string, UnreadSignal>> = {},
 ): K[] {
   const c = { ...FRECENT_CUTOFF, ...cutOff };
-  const scored = items
+  const base = items
     .map((item) => ({ ...item, value: scoreAt(item.entry, now, c.halfLifeMs) }))
-    .filter((item) => Number.isFinite(item.value))
+    .filter((item) => Number.isFinite(item.value));
+  const baseTop = base.reduce((m, item) => Math.max(m, item.value), 0);
+  const scored = base
+    .map((item) => ({
+      ...item,
+      value:
+        item.value + unreadBoost(item.value, baseTop, unread[item.key], now),
+    }))
     .sort(
       (a, b) =>
         b.value - a.value ||

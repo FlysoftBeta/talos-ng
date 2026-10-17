@@ -12,13 +12,12 @@ import {
 } from "../features/learning/index.ts";
 import { LibraryBackground } from "../features/library/index.ts";
 import {
-  ChatAreaContent,
   LibraryAreaContent,
   LibraryAreaList,
   adminExtensions,
 } from "./areas.tsx";
 import { LauncherEntry } from "./launcher.tsx";
-import { RecentTracker } from "./recent.tsx";
+import { RecentList, RecentTracker } from "./recent.tsx";
 import {
   MediaList,
   MediaContent,
@@ -44,6 +43,7 @@ import {
 } from "../features/auth/index.ts";
 import {
   ChatList,
+  ChatContent,
   ChatBackground,
   useChatUnread,
 } from "../features/chat/connect/index.tsx";
@@ -63,6 +63,12 @@ const areas: Record<
     title: "对话",
     icon: "chat",
     hint: "选择一个对话",
+    list: "collection",
+  },
+  recent: {
+    title: "最近",
+    icon: "history",
+    hint: "选择一个项目",
     list: "collection",
   },
   library: {
@@ -131,6 +137,7 @@ function AppContent(): ReactElement {
   const offline = useGate("offline");
   const areaGates = {
     chat: { ok: true as const },
+    recent: { ok: true as const },
     library: useGate("articles"),
     learning: useGate("learning"),
     media: useGate("media"),
@@ -260,6 +267,8 @@ function AppContent(): ReactElement {
                 <AiList />
               ) : state.nav.area === "chat" ? (
                 <ChatList />
+              ) : state.nav.area === "recent" ? (
+                <RecentList />
               ) : state.nav.area === "library" && areaGate.ok ? (
                 <LibraryAreaList />
               ) : state.nav.area === "media" && areaGate.ok ? (
@@ -284,7 +293,9 @@ function AppContent(): ReactElement {
             ) : state.nav.area === "ai" ? (
               <AiContent />
             ) : state.nav.area === "chat" ? (
-              <ChatAreaContent />
+              <ChatContent />
+            ) : state.nav.area === "recent" ? (
+              <EmptyPane icon="history" hint={areas.recent.hint} />
             ) : state.nav.area === "learning" ? (
               <LearningScreen />
             ) : state.nav.area === "library" ? (

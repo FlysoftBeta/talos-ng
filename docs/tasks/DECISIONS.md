@@ -704,3 +704,15 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   (off/list/one) live only in the controller and never reach the queue. Advance order: repeat-one
   replay on auto end, then the queue, then the context (wrapping under repeat, reshuffled when
   shuffled). Previous restarts after 3 s. No wire or schema change.
+
+- **D-135 — Recent is a top-level area, not the chat landing page.** The global frecency
+  list (D-121) lives in its own rail area `recent` (list pane, ranked mixed list of
+  conversations, books, booklists, songs and playlists, up to 30 by score cut-off, empty
+  state without history); the floating launcher lists it like every area. The chat landing
+  page is the plain conversation landing again, with its loading and offline hints.
+  Unread messages are one more ranking factor for conversations only: a boost of at most half
+  the conversation's own decayed frecency, growing with the unread count (log, saturating at
+  15) and halving per day of age of the newest unread message, scaled by its frecency relative
+  to the top item. A rarely opened conversation gains almost nothing and a conversation never
+  opened is not a candidate; muted conversations send no signal. The counts come from local
+  chat state, nothing new is synced.

@@ -6,8 +6,13 @@ import {
   useAccessHistoryFlush,
 } from "../platform/react/use-access-history.ts";
 import { useClientSnapshot, useRuntime } from "../platform/react/context.tsx";
+import { accessKey } from "../core/ranking/index.ts";
+import type { UnreadSignal } from "../core/ranking/index.ts";
 import type { AreaId } from "../core/navigation/index.ts";
-import { useConversations } from "../features/chat/connect/index.tsx";
+import {
+  useConversations,
+  useUnreadSignals,
+} from "../features/chat/connect/index.tsx";
 import { collectionPageId, useLibrary } from "../features/library/index.ts";
 import {
   playlistPageId,
@@ -100,11 +105,23 @@ export function useRecentTargets(): {
   return { resolvers, open };
 }
 
-/** The landing panel of the chat area: recent and frequent items of every module. */
-export function RecentHome(): ReactElement {
+/** Unread signals of conversations keyed the way the access history keys them. */
+export function chatSignals(
+  unread: Readonly<Record<string, UnreadSignal>>,
+): Record<string, UnreadSignal> {
+  const out: Record<string, UnreadSignal> = {};
+  for (const id of Object.keys(unread))
+    out[accessKey("chat", id)] = unread[id]!;
+  return out;
+}
+
+/** List pane of the recent area: items of every module ranked together by frecency. */
+export function RecentList(): ReactElement {
   const history = useAccessHistory(),
     entries = useAccessEntries(history),
-    { resolvers, open } = useRecentTargets();
+    { resolvers, open } = useRecentTargets(),
+    unread = useUnreadSignals();
+  const signals = chatSignals(unread);
   const icons = {
     chat: "chat",
     book: "document",
@@ -114,15 +131,16 @@ export function RecentHome(): ReactElement {
   } as const;
   return (
     <RecentPanelView
-      emptyHint="选择一个对话"
-      rows={recentOverview(entries, resolvers, Date.now()).map((e) => ({
-        id: `${e.kind}:${e.id}`,
-        title: e.title,
-        hint: e.hint,
-        label: kindLabel[e.kind],
-        icon: icons[e.kind],
-        onOpen: () => open[e.kind](e.id),
-      }))}
+      rows={recentOverview(entries, resolvers, Date.now(), 30, signals).map(
+        (e) => ({
+          id: `${e.kind}:${e.id}`,
+          title: e.title,
+          hint: e.hint,
+          label: kindLabel[e.kind],
+          icon: icons[e.kind],
+          onOpen: () => open[e.kind](e.id),
+        }),
+      )}
     />
   );
 }

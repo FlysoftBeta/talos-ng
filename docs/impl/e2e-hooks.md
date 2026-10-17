@@ -75,6 +75,12 @@ redesign (section 11); those are part of the contract as well.
 Data attributes: `data-reader-unit="<n>"` on each mounted unit, `data-page-ready="true"` on a
 rendered page's shadow host (`aria-label` is `文档第 N 页`).
 
+## Recent (`recent`)
+
+| hook | element | used by |
+|---|---|---|
+| `recent.list` | list pane of the recent area | - |
+
 ## 5. Learning (`learning`)
 
 | hook | element | used by |
@@ -150,7 +156,7 @@ Scenarios locate these by role and name; the names are product text.
 - Dialogs and sheets: `role=dialog`; the close control is a button named `关闭`; the last dialog
   in the DOM is the topmost.
 - Buttons are found by accessible name (or visible text) - e.g. `发送`, `设置`, `创建邀请`,
-  `确认`, `放弃`, `重试`, rail entries named by area (`对话`, `阅读`, `学习`, `音乐`, `AI`,
+  `确认`, `放弃`, `重试`, rail entries named by area (`对话`, `阅读`, `最近`, `学习`, `音乐`, `AI`,
   `管理`, `任务`); the current area has `aria-current`.
 - Choice groups: `role=group` with an `aria-label` (`主题`, `自律模式`, `数字键盘`) containing
   buttons with `aria-pressed`.

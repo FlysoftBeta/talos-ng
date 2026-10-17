@@ -1,6 +1,13 @@
 import { AppError, isAppError } from "@talos/base";
 
-export const AREA_IDS = ["chat", "library", "learning", "media", "ai"] as const;
+export const AREA_IDS = [
+  "chat",
+  "recent",
+  "library",
+  "learning",
+  "media",
+  "ai",
+] as const;
 export type AreaId = (typeof AREA_IDS)[number];
 export type Page =
   | { kind: "home" }
@@ -32,6 +39,7 @@ export function createNav(): Nav {
     area: "chat",
     areas: {
       chat: { stack: [{ kind: "home" }] },
+      recent: { stack: [{ kind: "home" }] },
       library: { stack: [{ kind: "home" }] },
       learning: { stack: [{ kind: "home" }] },
       media: { stack: [{ kind: "home" }] },
