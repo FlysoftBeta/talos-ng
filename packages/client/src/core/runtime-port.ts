@@ -7,7 +7,8 @@ import type {
   ResultOf,
   contract,
 } from "@talos/contract";
-import type { OutboxItem, Row } from "@talos/sync";
+import type { IntervalSetJSON, OutboxItem } from "@talos/sync";
+import type { WindowInput } from "./data/sync-engine.ts";
 import type { StoredRow } from "./data/db.ts";
 import type { Repository } from "./data/repository.ts";
 import type { Capability, ClientSnapshot } from "./lifecycle/snapshot.ts";
@@ -44,7 +45,10 @@ export interface RuntimeQueryPort {
   subscribe(listener: () => void): () => void;
   hasScope(scope: string): boolean;
   outbox(): readonly OutboxItem[];
-  loadRows(scope: string, rows: readonly Row[]): Promise<void>;
+  /** Merges a fetched window page or individually read rows into the scope's replica. */
+  loadRows(scope: string, input: WindowInput): Promise<void>;
+  /** Sequence numbers in lo..hi of a windowed type that are known holes (missing or stale). */
+  holes(scope: string, type: string, lo: number, hi: number): IntervalSetJSON;
 }
 
 /** Reads and retains session-owned bytes and local values; scope checks and quota recovery remain in core. */

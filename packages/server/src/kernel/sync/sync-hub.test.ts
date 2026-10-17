@@ -284,6 +284,7 @@ describe("SyncHub", () => {
       cursor: 6,
       more: true,
       reset: ["post"],
+      windowed: true,
     });
     const second = f.hub.pull("u", { cursors: { "me:u": 6 } }).scopes["me:u"]!;
     expect(second).toEqual({ rows: [row("c", 7)], cursor: 9, more: false });

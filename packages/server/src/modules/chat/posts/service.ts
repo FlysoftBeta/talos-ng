@@ -94,8 +94,11 @@ export class Posts {
     latest: number;
     hasBefore: boolean;
     hasAfter: boolean;
+    rev: number;
   } {
     const { conversation, anchor, direction = "latest", limit = 40 } = args;
+    // Reads are synchronous on the writer connection: this is the page's revision.
+    const rev = this.context.options.uow.revision;
     const latest = this.context.repo.latest(conversation)?.seq ?? 0;
     let start = 1,
       end = latest;
@@ -128,6 +131,7 @@ export class Posts {
       latest,
       hasBefore: first > 1,
       hasAfter: last > 0 && last < latest,
+      rev,
     };
   }
   edit(user: string, args: ArgsOf<typeof chat.post.edit>): { post: ChatPost } {

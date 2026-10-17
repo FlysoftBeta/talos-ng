@@ -171,21 +171,33 @@ describe("chat facts and windows", () => {
     const s = setup();
     for (const u of s.users) s.chat.ensureStates(u.id);
     const events: unknown[] = [];
+    const unwindowed: unknown[] = [];
+    s.hub.pull(
+      s.users[1]!.id,
+      { cursors: {}, windowed: [`conv:${s.conversation}`] },
+      { id: "bob", emit: (_topic, data) => events.push(data) },
+    );
     s.hub.pull(
       s.users[1]!.id,
       { cursors: {} },
-      { id: "bob", emit: (_topic, data) => events.push(data) },
+      { id: "bob-2", emit: (_topic, data) => unwindowed.push(data) },
     );
     const post = send(s);
     expect(events).toHaveLength(1);
-    const delta = events[0] as {
-      scopes: Record<string, { rows: { type: string }[] }>;
+    type Delta = {
+      scopes: Record<string, { rows: { type: string }[]; windowed?: boolean }>;
     };
+    const delta = events[0] as Delta;
+    expect(delta.scopes[`conv:${s.conversation}`]!.windowed).toBe(true);
     expect(
       delta.scopes[`conv:${s.conversation}`]!.rows.some(
         (r) => r.type === "post",
       ),
     ).toBe(true);
+    // A connection holding no window gets no posts, and is not told it got them.
+    const other = (unwindowed[0] as Delta).scopes[`conv:${s.conversation}`];
+    expect(other?.windowed).toBeUndefined();
+    expect(other?.rows.some((r) => r.type === "post") ?? false).toBe(false);
     expect(
       delta.scopes[`me:${s.users[1]!.id}`]!.rows.some(
         (r) => r.type === "chatState",

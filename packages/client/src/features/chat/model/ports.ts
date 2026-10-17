@@ -19,7 +19,7 @@ export type CommandPort = Pick<
   >;
 export type ConversationPort = CommandPort &
   Pick<RuntimeCommandPort, "can" | "sync" | "retry" | "discard" | "flush"> &
-  Pick<RuntimeQueryPort, "getSnapshot" | "outbox"> &
+  Pick<RuntimeQueryPort, "getSnapshot" | "outbox" | "holes"> &
   Pick<RuntimeSessionPort, "gate"> &
   Pick<RuntimeClockPort, "time">;
 export type ComposerPort = CommandPort &

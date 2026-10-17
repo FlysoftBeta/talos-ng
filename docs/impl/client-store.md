@@ -99,7 +99,9 @@ reconstructible mirrors and windowed history.
   estimates never invent figures.
 - Eviction runs above a 90% watermark in this order: unowned files, ordinary caches by last
   access, expired retention. Drafts, sessions, the outbox and in-window retention are
-  protected; mirrors are not removed while user intent is pending for them.
+  protected; mirrors are not removed while user intent is pending for them. Windowed rows
+  leave through the scope replica merge (`evict`), which removes their coverage too: the
+  scope cursor stays, and the evicted posts become holes fetched again when visible.
 - A quota abort evicts and retries the whole transaction once; exhaustion publishes
   `存储空间不足` in the activity centre.
 - Retained documents/audio/conversations download through resumable ranged `/dl/` fetches

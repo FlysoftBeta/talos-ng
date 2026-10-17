@@ -2,7 +2,7 @@ import type { HybridClock } from "@talos/base";
 import { AppError } from "@talos/base";
 import { contract } from "@talos/contract";
 import type { Database } from "@talos/store";
-import type { OutboxItem, Row } from "@talos/sync";
+import type { IntervalSetJSON, OutboxItem } from "@talos/sync";
 import type { SavedSession } from "../auth/session.ts";
 import type { FileStorage } from "../files/environment.ts";
 import type { EvictionManager } from "../files/eviction.ts";
@@ -16,6 +16,7 @@ import type { typedCall } from "./link.ts";
 import type { ModuleRegistry } from "./modules.ts";
 import type { Repository } from "./repository.ts";
 import { SyncEngine } from "./sync-engine.ts";
+import type { WindowInput } from "./sync-engine.ts";
 
 export interface SessionSyncControllerPorts {
   engine?: SyncEngine;
@@ -288,6 +289,9 @@ export class SessionSyncController {
       })),
     });
   }
+  holes(scope: string, type: string, lo: number, hi: number): IntervalSetJSON {
+    return this.ports.engine?.holes(scope, type, lo, hi) ?? [[lo, hi]];
+  }
   hasScope(scope: string): boolean {
     return this.ports.engine?.getSnapshot().scopes.includes(scope) ?? false;
   }
@@ -300,10 +304,10 @@ export class SessionSyncController {
   outbox(): readonly OutboxItem[] {
     return this.ports.engine?.getSnapshot().outbox ?? [];
   }
-  async loadRows(scope: string, rows: readonly Row[]): Promise<void> {
+  async loadRows(scope: string, input: WindowInput): Promise<void> {
     if (!this.ports.engine) throw new AppError("E_UNAUTHENTICATED", "请先登录");
     this.ports.eviction?.touch(scope);
-    await this.ports.engine.loadRows(scope, rows);
+    await this.ports.engine.loadRows(scope, input);
     await this.ports.eviction?.makeRoom(0);
   }
 }

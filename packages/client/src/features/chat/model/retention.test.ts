@@ -44,6 +44,7 @@ function result(posts: ChatPost[], hasBefore = false) {
     latest: 3,
     hasBefore,
     hasAfter: false,
+    rev: 3,
   };
 }
 describe("rolling retained conversations", () => {

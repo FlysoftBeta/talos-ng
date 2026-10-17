@@ -72,10 +72,7 @@ it("discards old personal media mirrors and unscoped audio owners on upgrade wit
   const db = await openAppDb(options);
   try {
     expect(await db.table("rows").range()).toEqual([]);
-    expect(await db.table("scopes").get("me:alice")).toEqual({
-      scope: "me:alice",
-      cursor: 0,
-    });
+    expect(await db.table("scopes").get("me:alice")).toBeUndefined();
     expect(await db.table("outbox").get("alice")).toEqual([{ op: "pending" }]);
     const current = new FileStore(db);
     expect(await current.owners(rid)).toEqual([]);

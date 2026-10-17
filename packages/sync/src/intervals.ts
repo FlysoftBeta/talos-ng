@@ -88,18 +88,4 @@ export class IntervalSet {
     if (next <= hi) gaps.push([next, hi]);
     return gaps;
   }
-
-  head(): Interval | undefined {
-    const interval = this.intervals[this.intervals.length - 1];
-    return interval && [interval[0], interval[1]];
-  }
-
-  /** Retain at most maxCount intervals, starting at the greatest upper bound. */
-  trimTo(maxCount: number, keep: "head" = "head"): IntervalSet {
-    integer(maxCount, "maxCount");
-    valid(keep === "head", "Only head retention is supported");
-    return new IntervalSet(
-      maxCount === 0 ? [] : this.intervals.slice(-maxCount),
-    );
-  }
 }

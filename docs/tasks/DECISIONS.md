@@ -645,3 +645,19 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   same-document `<use xlink:href="#id">` through which pdfrender draws every image; such
   references are now kept. Paged packs carry `meta.renderFormat`; a mismatch is rejected at
   conversion, re-rendered by the server on open and evicted from the client cache.
+- **D-128 — Inbound sync is one commutative merge over explicit coverage.** Supersedes the
+  window rules of D-121 and the restarts of D-122. A history page fetched while a pull was
+  buffered could lose rows because coverage was implied by a scope cursor. Each scope
+  replica now stores its coverage with its rows: revision interval sets of received changes
+  and, per windowed type, sequence ranges known as of a revision (closed under those sets),
+  plus eviction cuts. One pure `mergeReplica` takes every input (pull and push chains,
+  window pages carrying their read revision, individual rows, eviction, purge); remote
+  inputs only add facts, so any order or repetition gives the same replica, and anything
+  not vouched for is a reported hole that open conversations fetch when visible. The
+  server marks pages and pushes that carry windowed rows and pushes them only where the
+  client declared a window. Merges run in one transaction under per-scope Web Locks
+  (transaction-only without them). Obsolete: `planApply`, `mergePage`, cursor-change
+  restarts, the delta/pull gate, eviction's cursor reset and `IntervalSet.trimTo/head`.
+  A randomized interleaving test against a server log checks storage-or-hole, convergence
+  and order independence, and fails when the head-only window rule is restored. Stored
+  scope records and the page/pull wire shapes changed without migration (nothing released).

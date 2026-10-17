@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { AppError, deferred } from "@talos/base";
+import { IntervalSet } from "@talos/sync";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatPost, CommunityConversation } from "@talos/contract";
 import type { StoredRow } from "../../../core/data/db.ts";
@@ -38,6 +39,7 @@ const win = (seqs: number[], more: Partial<{ hasBefore: boolean }> = {}) => ({
   latest: 10,
   hasBefore: true,
   hasAfter: false,
+  rev: 10,
   ...more,
 });
 const stored = (seqs: number[]) =>
@@ -62,6 +64,8 @@ function fixture(
     readSeq?: number;
     lastSeq?: number;
     rows?: number[];
+    /** Stored posts the coverage no longer vouches for. */
+    stale?: number[];
   } = {},
 ) {
   let online = options.online ?? true;
@@ -72,6 +76,13 @@ function fixture(
     getSnapshot: () => ({ user: { id: "user" } }),
     command: vi.fn(async () => ({})),
     time: () => 1000,
+    // Coverage vouches for the stored posts only.
+    holes: (_scope: string, _type: string, lo: number, hi: number) =>
+      new IntervalSet(
+        (options.rows ?? [3, 4])
+          .filter((seq) => !options.stale?.includes(seq))
+          .map((seq) => [seq, seq]),
+      ).gapsWithin(lo, hi),
   };
   const input = {
     group: { id: "group", name: "G" } as CommunityConversation,
@@ -241,6 +252,20 @@ describe("repairing gaps", () => {
     expect(t.model.history.ids()).toEqual(
       [1, 2, 3, 4, 5, 6, 7, 8, 9].map((seq) => `post${seq}`),
     );
+    expect(
+      vi.mocked(page).mock.calls.filter((c) => c[2] === "after"),
+    ).toHaveLength(1);
+  });
+  it("refetches visible posts that were loaded before changes sync missed", async () => {
+    const t = fixture({
+      readSeq: 4,
+      lastSeq: 4,
+      rows: [1, 2, 3, 4],
+      stale: [3, 4],
+    });
+    vi.mocked(page).mockResolvedValue(win([3, 4]));
+    await t.open();
+    expect(page).toHaveBeenCalledWith(t.runtime, "group", "after", 2);
     expect(
       vi.mocked(page).mock.calls.filter((c) => c[2] === "after"),
     ).toHaveLength(1);

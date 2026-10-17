@@ -18,6 +18,7 @@ import {
   page,
   setState,
   textSource,
+  postRow,
 } from "./commands.ts";
 import { members, posts } from "./module.ts";
 import type { PostView } from "./module.ts";
@@ -64,7 +65,7 @@ export class ConversationController extends StateStore<ConversationState> {
   private generation = 0;
   private textGeneration = 0;
   private canRead: boolean | undefined;
-  /** Gaps already backfilled automatically; a failure leaves the manual action. */
+  /** Holes being or already backfilled automatically; a failure leaves the manual action. */
   private readonly repaired = new Set<string>();
   private readonly stops: Array<() => void>;
   constructor(
@@ -330,21 +331,37 @@ export class ConversationController extends StateStore<ConversationState> {
     }
   };
   /**
-   * Missing posts between two loaded ones are fetched as soon as the reader sees the
-   * gap. Sync never redelivers rows it skipped before a window covered them, so
-   * without this the gap would persist until the reader asked for it.
+   * Posts the stored coverage does not vouch for (never loaded, evicted, or loaded
+   * before changes the replica missed) are fetched as soon as the reader sees them.
+   * A hole that closes and opens again is repaired again; a failed repair keeps
+   * the manual action.
    */
   private repairGaps(): void {
     if (this.state.loading || !this.online()) return;
-    const gap = this.history
+    // A visible post shows the gap below it, so that gap counts as visible too.
+    const seqs = this.history
       .visible()
-      .map((row) => row.item.gap)
-      .find(
-        (value) => value && !this.repaired.has(`${value.from}:${value.to}`),
-      );
-    if (!gap) return;
-    this.repaired.add(`${gap.from}:${gap.to}`);
-    void this.load("after", gap.from - 1);
+      .filter((row) => !row.item.post.pending && !row.item.post.failed)
+      .map((row) => [
+        row.item.gap?.from ?? row.item.post.seq,
+        row.item.post.seq,
+      ])
+      .reduce<number[]>((all, pair) => all.concat(pair), []);
+    if (!seqs.length) return;
+    const holes = this.runtime
+      .holes(
+        `conv:${this.input.group.id}`,
+        "post",
+        Math.min(...seqs),
+        Math.max(...seqs),
+      )
+      .map(([lo, hi]) => `${lo}:${hi}`);
+    for (const key of this.repaired)
+      if (!holes.includes(key)) this.repaired.delete(key);
+    const hole = holes.find((key) => !this.repaired.has(key));
+    if (!hole) return;
+    this.repaired.add(hole);
+    void this.load("after", Number(hole.split(":")[0]) - 1);
   }
   view = async (post: ChatPost, edit: boolean): Promise<void> => {
     const generation = ++this.textGeneration;
@@ -451,15 +468,10 @@ export class ConversationController extends StateStore<ConversationState> {
       this.patch({ textView: undefined });
     });
   private storePost(post: ChatPost): Promise<void> {
-    return this.runtime.loadRows(`conv:${this.input.group.id}`, [
-      {
-        type: "post",
-        id: post.id,
-        rev: post.rev,
-        deleted: post.deletedAt !== null,
-        data: post,
-      },
-    ]);
+    return this.runtime.loadRows(`conv:${this.input.group.id}`, {
+      kind: "rows",
+      rows: [postRow(post)],
+    });
   }
   setReply = (reply?: PostView): void => this.patch({ reply });
   setSettings = (settings: boolean): void => this.patch({ settings });

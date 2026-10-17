@@ -166,8 +166,9 @@ export class Conversations {
   page(
     user: string,
     args: ArgsOf<typeof ai.message.page>,
-  ): { messages: AiMessage[]; more: boolean } {
+  ): { messages: AiMessage[]; more: boolean; rev: number } {
     this.requireConversation(user, args.conversation);
+    const rev = this.context.options.uow.revision;
     const values = this.context.repo.messages(
       args.conversation,
       args.before,
@@ -182,7 +183,7 @@ export class Conversations {
       messages.unshift(preview);
       size += bytes;
     }
-    return { messages, more: !!messages[0] && messages[0].seq > 1 };
+    return { messages, more: !!messages[0] && messages[0].seq > 1, rev };
   }
   fork(user: string, id: string): AiConversation {
     const m = this.context.repo.message(id);

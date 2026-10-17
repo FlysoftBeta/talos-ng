@@ -62,32 +62,62 @@ Scope providers (`match, access, list, select`) and entity serialisers register 
 
 ## Windowed types
 
-Posts (and AI messages) are too large to mirror. The client keeps contiguous **intervals** by
-sequence number (`IntervalSet`: closed, canonical, merged on overlap and adjacency). Deltas
-cover the whole scope; the client applies rows inside held windows and consecutive
-extensions of any held window, and ignores rows in gaps. Extending every window (not only
-the newest) matters when a history page creates a newer window while a pull is buffered:
-the pulled run between the two windows bridges them, because the advanced cursor never
-delivers it again. A conversation fetches a gap between two loaded posts as soon as it is
-visible online (once per gap; the manual action remains after a failure), which repairs
-holes left by deltas that arrived before a page certified the window below them. If more than a threshold of
-changes accumulated, the server answers `reset` for that type and the client keeps only what
-it re-fetches through explicit page calls (`mergePage` certifies a fetched range; an empty
-complete page certifies absence). Windowed rows are never seeded by deltas into an empty
-window. Sequence numbers must be stable per row id. Pages are bounded in rows and serialised
-bytes so a header never overflows; large bodies are fetched separately as binary chunks.
+Posts (and AI messages) are too large to mirror. The client keeps windows of them by
+sequence number, and what it knows is stored as explicit **coverage**, never implied by a
+cursor. Sequence numbers must be stable per row id. Pages are bounded in rows and
+serialised bytes so a header never overflows; large bodies are fetched separately as
+binary chunks.
 
-## Applying pulls (`planApply`)
+- A pull lists the scopes holding windows (`windowed`); every other scope gets no windowed
+  rows. Each scope page says whether it carries them (`windowed: true`), and so does each
+  push: the server keeps the set from the pull that installed the subscription. A `reset`
+  for a type means its rows were withheld because too many changed.
+- A window page (`chat.post.page`, `ai.message.page`) returns the server revision `rev` it
+  was read at; it vouches for every sequence number from its first to its last post as of
+  `rev` (an absent row there means no row existed). A row read individually, such as a
+  write result, vouches for its own sequence number as of its own revision.
 
-The planner turns a complete pull, or a buffered ordered chain of pages, into operations an
-executor runs in **one transaction**: conditional `put`/`delete` (only if `row.rev` is newer
-than the held revision; a missing revision compares below zero), `dropType`, `setWindow`,
-`setCursor`. Deletion revisions are kept so old history pages cannot resurrect deleted rows.
-An incomplete chain (`more` on the last page) produces no operations; on disconnect buffered
-pages are discarded and the pull restarts from the durable cursor. The cursor is persisted
-only with the rows. The caller serialises planning per scope. Conditional operations (not
-injected storage reads) keep revision checks transactional and work with sync or async
-executors. Memory grows with the whole pull; servers use `reset` to bound large types.
+## Scope replicas (`mergeReplica`)
+
+A scope replica is its rows plus its coverage, persisted in one IndexedDB transaction:
+
+- `revs`: revision interval set whose every change to the scope's mirrored types arrived;
+  `0` is present once a chain from the empty start arrived. The request cursor is the top
+  of the run from `0` (`cursorOf`), the scope is complete when `0` is held (`isComplete`).
+- Per windowed type, `revs` (revisions whose changes of that type arrived: only chains
+  marked `windowed` without a reset of it add them) and `known`: sorted ranges
+  `[lo, hi, at]` meaning the stored state of each sequence number is at least the server
+  state at `at`. Each `at` is closed under the type's `revs` (it advances through every
+  run of received revisions after it). A sequence number is current when its `at` reaches
+  the scope cursor; every other one is a **hole** (`holes(coverage, type, lo, hi)`): never
+  loaded, evicted, withheld by a reset, or loaded before changes the replica did not get.
+  Nothing outside a hole can be missing, so loss is never silent.
+
+Every inbound change goes through the one pure merge, `mergeReplica(replica, input)`:
+
+- `chain {from, pages}`: a complete pull or push chain continuing the server's stream from
+  `from`. All its rows merge; `from+1..top` joins `revs` (and the windowed types' `revs`
+  when the pages carry them); every windowed row vouches for itself.
+- `page {type, rows, lo, hi, rev}` and `rows {rows}`: window pages and individual reads.
+- `evict {type, ids}`: forgets windowed rows and their sequence numbers. It leaves a `cut`
+  at the highest revision the replica knew for them, so a late older fact cannot be
+  closed over revisions whose changes were thrown away.
+- `purge`: revocation or first admission for another account forgets the whole scope.
+
+Rows resolve by revision; a windowed tombstone is final (mirrored rows may return).
+Remote inputs only add facts (row union by that order, interval unions, pointwise maximum
+of `at`), so they commute, associate and are idempotent: the main pull, window pages,
+backfills, pushes and other tabs' commits reach the same replica in any order and any
+number of times. Eviction and purge are the explicit removals. Incomplete chains are
+buffered by the engine and never merged; a chain's validation (cursor order, row
+revisions) rejects it whole.
+
+`replica.test.ts` checks this with randomized interleavings of server writes, pulls,
+window pages, hole backfills, write results, pushes to two tabs, evictions and reloads
+against a server log: after every step each server row at the cursor is stored or inside a
+hole, the replica converges once in-flight answers land and the holes are fetched, and
+any permutation with repetitions of the merged inputs gives the same replica. Restoring
+the old rule that only the newest window may grow fails both properties.
 
 ## Conflict rules
 
@@ -167,8 +197,15 @@ Patches are serialisable data, not closures. Queued methods have a pure local re
 
 One state machine: `offline, connecting, authenticating, syncing(progress), live`, with
 independent `locked` and `updating` flags. It owns session resume, pull on connect, buffered
-pull chains committed atomically (rows, tombstones, admitted scopes, cursors, last-sync
-time), delta application, outbox flush, retention downloads and quota eviction. Persisted
+pull chains merged atomically per scope (rows and coverage, admitted scopes, last-sync
+time), delta application, outbox flush, retention downloads and quota eviction.
+
+**One writer per scope.** Every merge (pull and push commits, window pages, eviction)
+reads the scope replicas, merges and writes them in one readwrite transaction, inside the
+Web Locks of the touched scopes (`talos-sync:<scope>`, taken in sorted order, so tabs
+cannot deadlock). Without `navigator.locks` the transaction alone serializes writers.
+Correctness does not depend on the lock: a merge is a pure function of the stored replica
+and its input. Persisted
 per-user scope admission stops one user's cached shared data projecting into another user's
 session. Revision checks stop stale push/pull data regressing state. Navigator `onLine` is
 only a negative hint; going offline interrupts the carrier and leaves reconnect to the link
@@ -181,10 +218,10 @@ base advances with each commit, and revocations reported by the pull stay with t
 commit (a later page may regrant the scope). Until the final commit a durable
 `partialSync` marker keeps `cacheReady` false, also across a reload, because scopes then
 sit at different revisions. A pull also lists the scopes holding windows (`windowed`);
-the server omits windowed rows of every other scope, which the client would discard
-anyway, so a large conversation's history no longer pages through its first sync. A
-page that opens a window during such a pull restarts it before commit (the omitted rows
-may be newer than the page). Requests without `windowed` receive every row.
+the server omits windowed rows of every other scope, so a large conversation's history
+does not page through its first sync. A page that opens a window in a scope whose pushes
+do not carry windowed rows schedules a pull; until it lands, that window can only turn
+into holes, never into silent loss.
 
 The engine snapshot exposes this as `scopeSync` while a pull pages: each admitted scope is
 `waiting`, `loading` (rows buffered so far) or `ready` (already complete: committed earlier in
@@ -193,8 +230,11 @@ The activity centre shows it so the user sees which scopes can already be used. 
 register writes also count the earlier writes folded into them (`merged` on the outbox item)
 for the same display.
 
-Full pull chains and deltas share an application gate: a newer delta cannot advance a
-cursor past buffered historical rows. Revocations purge immediately and carry per-scope
+Each pushed page continues the scope's stream from where this connection's last final
+pull page or push for it ended (recorded on arrival, before any await), so pushes merge
+immediately, even while a pull is buffered: the cursor cannot pass revisions that did not
+arrive. A push without a known start merges its rows but proves no revisions and requests a
+pull. Revocations purge immediately and carry per-scope
 epochs that prevent an older pull or queued delta from restoring access. Generation fences
 also cover successful old-session replies. A failed pull or delta marks synchronization
 dirty, blocks cursor advancement and outbox flushing, and schedules a fresh pull with
@@ -202,19 +242,18 @@ dirty, blocks cursor advancement and outbox flushing, and schedules a fresh pull
 repair. Authentication, lock and version failures pause instead of retrying indefinitely.
 
 A pull starts from the current user's admitted scopes, not every cached scope in the shared
-IndexedDB database. First admission replaces inherited rows and windows before applying a
-complete snapshot from zero. At commit, compare each admitted scope's current cursor with
-the captured request base: another tab may advance it, while eviction may reset it. Either
-change aborts the transaction and restarts the pull, at most twice immediately before normal
-backoff. Progress counts the current attempt. This preserves strict page-chain validation
-without treating another account's cached cursor as the first page's lower bound.
-A delta targeting an admitted scope whose cursor was reset to zero also requests a full
-pull before advancing: incremental delivery cannot certify the evicted history.
+IndexedDB database. First admission purges inherited rows and coverage before merging a
+complete snapshot from zero. Request bases are the cursors the stored coverage proves when
+the pull starts; another tab committing the same scope meanwhile needs no restart, because
+both chains only add facts.
 
 Scope purges atomically persist per-user cleanup markers alongside row removal. Module
 cleanup retries after failed callbacks or restarts, even when the server no longer reports
 the scope as gone. A new grant cancels stale cleanup; callbacks and lease updates remain
 fenced to the owning session.
+
+An open conversation fetches the holes among its visible posts automatically (a hole
+that closes and opens again is fetched again; after a failure the manual action remains).
 
 Retention content (documents, conversations, audio the user keeps offline) is downloaded by
 background schedulers using resumable ranged fetches into the file store (see

@@ -65,8 +65,8 @@ export const appMigrations: readonly Migration[] = [
       scopes.onsuccess = () => {
         const row = scopes.result;
         if (!row) return;
-        if (/^(me|coll):/.test(row.value.scope))
-          row.update({ ...row.value, cursor: 0 });
+        // Forget the coverage too, so those scopes sync again from zero.
+        if (/^(me|coll):/.test(row.value.scope)) row.delete();
         row.continue();
       };
       const owners = tx.objectStore("file_owners").openCursor();
