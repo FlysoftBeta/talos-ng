@@ -86,7 +86,8 @@ try {
       var values = {
         'netbooks.search': [{query:'测试'},{books:[{id:'10001',title:'测试',author:'作者',abstract:'摘要'}],retryAt:6000,serverTime:1000}],
         'netbooks.download': [{book:'10001',collection:id},{job:id,joined:true}],
-        'media.search': [{query:'测试',limit:20},{tracks:[mediaTrack]}],
+        'media.search': [{query:'测试',limit:20},{tracks:[mediaTrack],collections:[{kind:'playlist',id:'PL1',title:'歌单',subtitle:'测试'}],next:20}],
+        'media.collection.open': [{kind:'playlist',id:'PL1'},{tracks:[mediaTrack],collections:[],next:null}],
         'media.track.resolve': [{source:'fake',providerId:'one'},{track:mediaTrack}],
         'media.library.get': [{},{tracks:[mediaTrack],playlists:[mediaPlaylist],state:mediaState,maxVolume:0.5}],
         'media.track.play': [{track:id},{track:mediaTrack,download:ticket,job:null,maxVolume:0.5}],
