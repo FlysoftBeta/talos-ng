@@ -14,6 +14,9 @@
   font-variant-numeric: tabular-nums;
 }
 /* the 歌单 label lines up with the row text (row inset 8 + padding 8) */
+.media-nav-recent section {
+  margin-top: var(--s-4);
+}
 .media-nav-section {
   padding: var(--s-4) var(--s-3) 0;
 }
@@ -163,8 +166,9 @@
   font-weight: 500;
 }
 .media-track-artist {
-  flex: 0 1000 auto;
-  min-width: 0;
+  flex: 0 1 auto;
+  min-width: 5em;
+  max-width: 45%;
   margin-left: var(--s-2);
 }
 .media-track-artist,
@@ -218,7 +222,12 @@
   .media-track-copy {
     display: block;
   }
+  .media-track-main {
+    width: 100%;
+  }
   .media-track-artist {
+    max-width: none;
+    min-width: 0;
     margin: 1px 0 0;
   }
 }
@@ -482,6 +491,14 @@
 }
 .media-online-tabs > * {
   margin-right: 8px;
+}
+.media-online-tabs [aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft, var(--surface-2));
+  color: var(--accent);
+}
+.media-online-thumb-artist {
+  border-radius: 20px;
 }
 .media-online-item {
   display: flex;

@@ -220,7 +220,11 @@ export function MediaContent(): ReactElement {
   return (
     <MediaContentView
       title={sourceTitle(source)}
-      count={body === "tracks" || body === "empty" ? tracks.length : undefined}
+      count={
+        !hitsOnly && (body === "tracks" || body === "empty")
+          ? tracks.length
+          : undefined
+      }
       error={shownError}
       footer={footer}
     >
@@ -270,7 +274,7 @@ export function MediaContent(): ReactElement {
               ? "连接后搜索音乐"
               : emptyTitle(source)
           }
-          emptyHint={emptyHints[source]}
+          emptyHint={opened ? "这个列表里没有可播放的单曲" : emptyHints[source]}
           error={search.error}
           onRetry={() => void search.search()}
         >

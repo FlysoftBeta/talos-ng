@@ -160,9 +160,15 @@ export function OnlineHitsView({
           }}
         >
           {c.thumbnail ? (
-            <img className="media-online-thumb" src={c.thumbnail} alt="" />
+            <img
+              className={`media-online-thumb media-online-thumb-${c.kind}`}
+              src={c.thumbnail}
+              alt=""
+            />
           ) : (
-            <div className="media-online-thumb" />
+            <div
+              className={`media-online-thumb media-online-thumb-${c.kind}`}
+            />
           )}
           <span className="media-online-name">{c.title}</span>
           <span className="media-online-hint">{c.subtitle}</span>

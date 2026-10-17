@@ -155,8 +155,10 @@ export function MediaListView({
             onClick={() => onSource(id)}
           />
         ))}
-        <RecentSection title="最近播放" items={recent} />
-        <RecentSection title="常听" items={frequent} />
+        <div className="media-nav-recent">
+          <RecentSection title="最近播放" items={recent} />
+          <RecentSection title="常听" items={frequent} />
+        </div>
         <div className="media-nav-section">
           <SectionHeader title="歌单" />
         </div>

@@ -33,7 +33,7 @@
   font-size: var(--fs-4);
   line-height: var(--lh-4);
 }
-.activity-hero span {
+.activity-hero div span {
   display: block;
   color: var(--muted);
   font-size: var(--fs-2);
