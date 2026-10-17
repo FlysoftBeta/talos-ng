@@ -32,6 +32,7 @@ const mediaManifest = JSON.parse(
   version: string;
   linux: { url: string; sha256: string };
   windows: { url: string; sha256: string };
+  plugin: { source: string; files: string[] };
 };
 const cache =
   process.env.TALOS_RUNTIME_CACHE ??
