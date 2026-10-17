@@ -374,21 +374,26 @@ it("cancels and awaits a provider request already admitted over Link before dele
     released = deferred<void>();
   const k = kernel(new Db(), {
     mediaProvider: {
-      search: async (_query, _limit, signal) => {
+      collection: async () => ({ tracks: [], collections: [], next: null }),
+      search: async (_input, signal) => {
         signal!.addEventListener("abort", () => aborted.resolve());
         entered.resolve();
         await released.promise;
-        return [
-          {
-            source: "test",
-            providerId: "late",
-            title: "late",
-            artists: [],
-            album: null,
-            durationMs: 1,
-            url: "test",
-          },
-        ];
+        return {
+          collections: [],
+          next: null,
+          tracks: [
+            {
+              source: "test",
+              providerId: "late",
+              title: "late",
+              artists: [],
+              album: null,
+              durationMs: 1,
+              url: "test",
+            },
+          ],
+        };
       },
       resolve: async () => {
         throw new Error("unused");

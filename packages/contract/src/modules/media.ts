@@ -95,6 +95,23 @@ const queue = z
   .object({ tracks: z.array(idSchema).max(500), ...stamp.shape })
   .strict();
 const result = z.object({ track: mediaTrackSchema }).strict();
+const pageResult = z
+  .object({
+    tracks: z.array(mediaTrackSchema),
+    collections: z.array(
+      z
+        .object({
+          kind: z.enum(["playlist", "artist"]),
+          id: z.string(),
+          title: z.string(),
+          subtitle: z.string(),
+        })
+        .strict(),
+    ),
+    /** Offset of the next page; null when there is none. */
+    next: z.number().int().nullable(),
+  })
+  .strict();
 const playlistResult = z.object({ playlist: mediaPlaylistSchema }).strict();
 export const media = Object.freeze({
   retention: Object.freeze({
@@ -125,9 +142,25 @@ export const media = Object.freeze({
       .object({
         query: z.string().trim().min(1).max(100),
         limit: z.number().int().min(1).max(50).default(20),
+        kind: z.enum(["song", "playlist", "artist"]).default("song"),
+        offset: z.number().int().min(0).max(1000).default(0),
       })
       .strict(),
-    result: z.object({ tracks: z.array(mediaTrackSchema) }).strict(),
+    result: pageResult,
+    auth: "user",
+    offline: "online",
+  }),
+  collection: defineMethod({
+    name: "media.collection.open",
+    args: z
+      .object({
+        kind: z.enum(["playlist", "artist"]),
+        id: z.string().regex(/^[\w-]{1,100}$/),
+        limit: z.number().int().min(1).max(50).default(20),
+        offset: z.number().int().min(0).max(1000).default(0),
+      })
+      .strict(),
+    result: pageResult,
     auth: "user",
     offline: "online",
   }),
@@ -291,6 +324,7 @@ export const media = Object.freeze({
   }),
 });
 export const mediaMethods = [
+  media.collection,
   media.retention.set,
   media.recordPlay,
   media.search,

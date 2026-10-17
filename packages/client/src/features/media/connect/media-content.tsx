@@ -30,6 +30,7 @@ import {
   TrackListView,
 } from "../view/media-content.tsx";
 import type { PlaylistPanelProps } from "../view/media-content.tsx";
+import { OnlineResultsView } from "../view/online-results.tsx";
 import { sourceTitle } from "../view/media-list.tsx";
 import { NowPlaying } from "./now-playing.tsx";
 import { useMediaPlayer } from "./player.tsx";
@@ -230,6 +231,18 @@ export function MediaContent(): ReactElement {
           <TrackRow key={t.id} index={i + 1} track={t} />
         ))}
       </TrackListView>
+      {isSearch ? (
+        <OnlineResultsView
+          kind={search.kind}
+          opened={search.opened?.title}
+          collections={search.collections}
+          hasMore={search.next !== null}
+          busy={search.busy}
+          onKind={(kind) => void search.search(kind)}
+          onOpen={(c) => void search.open(c)}
+          onMore={() => void search.loadMore()}
+        />
+      ) : null}
     </MediaContentView>
   );
 }

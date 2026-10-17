@@ -477,3 +477,23 @@
 .media-queue-current .row-title {
   color: var(--accent);
 }
+.media-online {
+  padding: 8px 16px;
+}
+.media-online-tabs {
+  margin-bottom: 8px;
+}
+.media-online-tabs > * {
+  margin-right: 8px;
+}
+.media-online-item {
+  display: flex;
+  padding: 10px 0;
+  cursor: pointer;
+}
+.media-online-item > span:first-child {
+  flex: 1;
+}
+.media-online-hint {
+  opacity: 0.6;
+}

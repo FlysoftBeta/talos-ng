@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { AppError } from "@talos/base";
 import type { CancellationSignal } from "@talos/base";
+import { isMusicEntry, nextOffset } from "./music-filter.ts";
 
 export interface ProviderTrack {
   source: string;
@@ -12,12 +13,34 @@ export interface ProviderTrack {
   durationMs: number;
   url: string;
 }
+export type SearchKind = "song" | "playlist" | "artist";
+export interface ProviderCollection {
+  kind: "playlist" | "artist";
+  id: string;
+  title: string;
+  subtitle: string;
+}
+/** One page of provider results; `next` is the offset of the following page, null at the end. */
+export interface ProviderPage {
+  tracks: ProviderTrack[];
+  collections: ProviderCollection[];
+  next: number | null;
+}
 export interface MediaProvider {
   search(
-    query: string,
-    limit: number,
+    input: { query: string; kind: SearchKind; offset: number; limit: number },
     signal?: CancellationSignal,
-  ): Promise<ProviderTrack[]>;
+  ): Promise<ProviderPage>;
+  /** The music tracks of a playlist or an artist, paged. */
+  collection(
+    input: {
+      kind: "playlist" | "artist";
+      id: string;
+      offset: number;
+      limit: number;
+    },
+    signal?: CancellationSignal,
+  ): Promise<ProviderPage>;
   resolve(
     source: string,
     providerId: string,
@@ -40,6 +63,64 @@ interface RawEntry {
   duration?: unknown;
   webpage_url?: unknown;
   entries?: unknown;
+  live_status?: unknown;
+  categories?: unknown;
+  playlist_count?: unknown;
+  url?: unknown;
+}
+const SEARCH_FILTER = {
+  playlist: "EgIQAw%253D%253D",
+  artist: "EgIQAg%253D%253D",
+} as const;
+const entryList = (output: Buffer): RawEntry[] => {
+  const value = JSON.parse(output.toString("utf8")) as RawEntry;
+  return Array.isArray(value.entries) ? (value.entries as RawEntry[]) : [];
+};
+function musicTracks(entries: RawEntry[]): ProviderTrack[] {
+  return entries
+    .filter(
+      (e) =>
+        typeof e.title === "string" &&
+        isMusicEntry({
+          title: e.title,
+          duration: e.duration,
+          liveStatus: e.live_status,
+          categories: e.categories,
+        }),
+    )
+    .map(parse)
+    .filter((v): v is ProviderTrack => !!v);
+}
+function collectionsOf(
+  entries: RawEntry[],
+  kind: "playlist" | "artist",
+): ProviderCollection[] {
+  const out: ProviderCollection[] = [];
+  for (const e of entries) {
+    if (typeof e.id !== "string" || typeof e.title !== "string") continue;
+    if (!/^[\w-]{1,100}$/.test(e.id)) continue;
+    // Playlist ids start with PL/OL/RD/UU; channel ids with UC. Anything else is a video.
+    if (kind === "playlist" ? !/^(PL|OL|RD|UU)/.test(e.id) : !/^UC/.test(e.id))
+      continue;
+    const owner =
+      typeof e.channel === "string"
+        ? e.channel
+        : typeof e.uploader === "string"
+          ? e.uploader
+          : "";
+    const count =
+      typeof e.playlist_count === "number" ? `${e.playlist_count} 首` : "";
+    out.push({
+      kind,
+      id: e.id,
+      title: e.title,
+      subtitle:
+        kind === "playlist"
+          ? [owner, count].filter(Boolean).join(" · ")
+          : "歌手",
+    });
+  }
+  return out;
 }
 function parse(raw: RawEntry): ProviderTrack | null {
   if (typeof raw.id !== "string" || typeof raw.title !== "string") return null;
@@ -106,25 +187,62 @@ export class YtDlpProvider implements MediaProvider {
     }
   }
   async search(
-    query: string,
-    limit: number,
+    input: { query: string; kind: SearchKind; offset: number; limit: number },
     signal?: CancellationSignal,
-  ): Promise<ProviderTrack[]> {
+  ): Promise<ProviderPage> {
+    const { query, kind, offset, limit } = input;
+    const target =
+      kind === "song"
+        ? `ytsearch${offset + limit}:${query}`
+        : `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=${SEARCH_FILTER[kind]}`;
     const output = await this.run(
       [
         "--flat-playlist",
         "--dump-single-json",
         "--playlist-items",
-        `1-${limit}`,
-        `ytsearch${limit}:${query}`,
+        `${offset + 1}-${offset + limit}`,
+        target,
       ],
       signal,
     );
-    const value = JSON.parse(output.toString("utf8")) as RawEntry;
-    return (Array.isArray(value.entries) ? value.entries : [])
-      .map((v) => parse(v as RawEntry))
-      .filter((v): v is ProviderTrack => !!v)
-      .slice(0, limit);
+    const entries = entryList(output);
+    return {
+      tracks: kind === "song" ? musicTracks(entries) : [],
+      collections: kind === "song" ? [] : collectionsOf(entries, kind),
+      next: nextOffset(offset, limit, entries.length),
+    };
+  }
+  async collection(
+    input: {
+      kind: "playlist" | "artist";
+      id: string;
+      offset: number;
+      limit: number;
+    },
+    signal?: CancellationSignal,
+  ): Promise<ProviderPage> {
+    if (!/^[\w-]{1,100}$/.test(input.id))
+      throw new AppError("E_INVALID", "音乐来源无效");
+    const url =
+      input.kind === "playlist"
+        ? `https://www.youtube.com/playlist?list=${input.id}`
+        : `https://www.youtube.com/channel/${input.id}/videos`;
+    const output = await this.run(
+      [
+        "--flat-playlist",
+        "--dump-single-json",
+        "--playlist-items",
+        `${input.offset + 1}-${input.offset + input.limit}`,
+        url,
+      ],
+      signal,
+    );
+    const entries = entryList(output);
+    return {
+      tracks: musicTracks(entries),
+      collections: [],
+      next: nextOffset(input.offset, input.limit, entries.length),
+    };
   }
   async resolve(
     source: string,
@@ -177,15 +295,68 @@ export class FakeMediaProvider implements MediaProvider {
       mime,
     });
   }
-  async search(query: string, limit: number): Promise<ProviderTrack[]> {
-    return [...this.values.values()]
-      .filter((v) =>
-        `${v.track.title} ${v.track.artists.join(" ")}`
-          .toLowerCase()
-          .includes(query.toLowerCase()),
-      )
-      .slice(0, limit)
-      .map((v) => v.track);
+  async search(input: {
+    query: string;
+    kind: SearchKind;
+    offset: number;
+    limit: number;
+  }): Promise<ProviderPage> {
+    const q = input.query.toLowerCase();
+    const all = [...this.values.values()].map((v) => v.track);
+    if (input.kind !== "song")
+      return {
+        tracks: [],
+        collections:
+          all.length && q
+            ? [
+                input.kind === "playlist"
+                  ? {
+                      kind: "playlist",
+                      id: "fake-list",
+                      title: "练习曲合集",
+                      subtitle: `${all.length} 首`,
+                    }
+                  : {
+                      kind: "artist",
+                      id: "fake-artist",
+                      title: "Talos 测试音频",
+                      subtitle: "歌手",
+                    },
+              ]
+            : [],
+        next: null,
+      };
+    const hits = all.filter((t) =>
+      `${t.title} ${t.artists.join(" ")}`.toLowerCase().includes(q),
+    );
+    const tracks = hits.slice(input.offset, input.offset + input.limit);
+    return {
+      tracks,
+      collections: [],
+      next:
+        input.offset + input.limit < hits.length
+          ? input.offset + input.limit
+          : null,
+    };
+  }
+  async collection(input: {
+    kind: "playlist" | "artist";
+    id: string;
+    offset: number;
+    limit: number;
+  }): Promise<ProviderPage> {
+    if (!input.id.startsWith("fake-"))
+      throw new AppError("E_NOT_FOUND", "没有找到曲目");
+    const all = [...this.values.values()].map((v) => v.track);
+    const tracks = all.slice(input.offset, input.offset + input.limit);
+    return {
+      tracks,
+      collections: [],
+      next:
+        input.offset + input.limit < all.length
+          ? input.offset + input.limit
+          : null,
+    };
   }
   async resolve(source: string, providerId: string): Promise<ProviderTrack> {
     const value = this.values.get(`${source}:${providerId}`);

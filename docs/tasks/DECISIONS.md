@@ -669,3 +669,10 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   hidden when unsupported. Media Session handlers are global, so stopping the launcher re-binds
   the music player's controls. The sticker picker is a floating panel anchored to the composer
   (above it, aligned to its button) instead of a centred modal.
+
+- **D-130 — Online music search is filtered after the provider page and paged by raw offset.**
+  The yt-dlp provider fetches `offset+1..offset+limit` flat entries; `music-filter.ts` drops
+  non-music (duration 45 s-20 min required, no live, spoken/promo titles or categories). The cursor
+  is the raw offset (`next`, null once a page is short), so filtering never stalls paging.
+  `media.search` takes `kind` (song/playlist/artist) and `offset`; `media.collection.open` lists
+  a playlist's or artist's tracks. Live provider behaviour is unverified (no network in CI).

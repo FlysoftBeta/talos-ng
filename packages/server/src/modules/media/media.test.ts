@@ -265,6 +265,29 @@ describe("media module", () => {
     expect(kernel.jobs.activeJobs("media.materialise")).toEqual([]);
   });
 
+  it("pages search results, lists playlists and artists, and opens their tracks", async () => {
+    const { kernel } = setup();
+    const { api } = await connect(kernel);
+    const first = await api.media.search({ query: "测试艺人", limit: 1 });
+    expect(first.tracks).toHaveLength(1);
+    expect(first.next).toBe(1);
+    const second = await api.media.search({
+      query: "测试艺人",
+      limit: 1,
+      offset: first.next!,
+    });
+    expect(second.tracks).toHaveLength(1);
+    expect(second.next).toBeNull();
+    for (const kind of ["playlist", "artist"] as const) {
+      const hits = await api.media.search({ query: "测试艺人", kind });
+      expect(hits.tracks).toEqual([]);
+      const c = hits.collections[0]!;
+      expect(c.kind).toBe(kind);
+      const opened = await api.media.collection.open({ kind, id: c.id });
+      expect(opened.tracks.length).toBeGreaterThan(0);
+    }
+  });
+
   it("searches, materialises with an object ref, and issues an audio ticket", async () => {
     const { kernel } = setup();
     const { api, user } = await connect(kernel);
@@ -612,9 +635,12 @@ it("commits discovery and its grace clock atomically without creating playlists 
     .mockImplementationOnce(() => {
       throw new Error("injected discovery failure");
     });
-  await expect(kernel.media.search("晨光", 20, user.id)).rejects.toThrow(
-    "injected discovery failure",
-  );
+  await expect(
+    kernel.media.search(
+      { query: "晨光", kind: "song", offset: 0, limit: 20 },
+      user.id,
+    ),
+  ).rejects.toThrow("injected discovery failure");
   expect(kernel.media.repo.tracks()).toEqual([]);
   expect(commits).not.toHaveBeenCalled();
   put.mockRestore();
@@ -634,10 +660,19 @@ it("commits discovery and its grace clock atomically without creating playlists 
     );
   // The provider is bounded per response, not by the user's accumulated discoveries.
   for (let offset = 0; offset < 501; offset += 50) {
-    const all = await provider.search("大量结果", 501);
-    const search = vi
-      .spyOn(provider, "search")
-      .mockResolvedValueOnce(all.slice(offset, offset + 50));
+    const all = (
+      await provider.search({
+        query: "大量结果",
+        kind: "song",
+        offset: 0,
+        limit: 501,
+      })
+    ).tracks;
+    const search = vi.spyOn(provider, "search").mockResolvedValueOnce({
+      tracks: all.slice(offset, offset + 50),
+      collections: [],
+      next: null,
+    });
     await api.media.search({ query: "大量结果", limit: 50 });
     search.mockRestore();
   }

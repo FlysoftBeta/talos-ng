@@ -12,6 +12,9 @@ it can fetch live or keeps for offline use.
 - Search (Enter or button) returns bounded results with title, artist and, when the source
   provides it, album. Search, playlist creation/deletion and sharing need a
   connection; preparing audio for a search result happens when it is played or retained.
+- Results are filtered to music (no podcasts, audiobooks, ringtones, ads, live streams, or clips under
+  45 s / over 20 min) and paged with 加载更多. Tabs 歌曲/歌单/歌手 search songs, online playlists and
+  artists; opening a playlist or artist lists its tracks (also paged).
 - Search does not create a playlist or save every result permanently. Save a song explicitly
   to a writable playlist, either from search results or from a playlist you can access. The
   add-song picker names that source; there is no all-system music catalog.

@@ -114,6 +114,7 @@ describe("media API availability", () => {
     expect(
       (await api.media.track.prepare({ track: track!.id })).download?.url,
     ).toContain("/dl/");
+    await api.media.collection.open({ kind: "artist", id: "fake-artist" });
     await api.media.favorite.set({
       track: track!.id,
       value: { v: true, ...stamp() },
@@ -188,6 +189,7 @@ describe("media API availability", () => {
     const id = createUlid()();
     const sample: Record<string, unknown> = {
       "media.search": { query: "x" },
+      "media.collection.open": { kind: "playlist", id: "fake-list" },
       "media.track.resolve": { source: "fake", providerId: "one" },
       "media.library.get": {},
       "media.track.play": { track: id },

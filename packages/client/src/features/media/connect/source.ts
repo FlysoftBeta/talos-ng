@@ -6,8 +6,14 @@ import {
 } from "../../../platform/react/context.tsx";
 import {
   errorMessage,
+  openCollection,
   playlistOfPage,
   searchTracks,
+} from "../model/actions.ts";
+import type {
+  MediaPage,
+  OnlineCollection,
+  SearchKind,
 } from "../model/actions.ts";
 import type { MediaData } from "../model/data.ts";
 
@@ -58,6 +64,13 @@ interface SearchState {
   user: string | undefined;
   query: string;
   results: MediaTrack[];
+  /** The 歌曲/歌单/歌手 tab of the results. */
+  kind: SearchKind;
+  collections: OnlineCollection[];
+  /** An opened playlist or artist whose tracks fill `results`; null while listing search hits. */
+  opened: OnlineCollection | null;
+  /** Offset of the next page, null when everything was loaded. */
+  next: number | null;
   busy: boolean;
   error: string;
   /** A search ran in this session (the 搜索结果 entry is shown). */
@@ -67,6 +80,10 @@ const blank = (user: string | undefined): SearchState => ({
   user,
   query: "",
   results: [],
+  kind: "song",
+  collections: [],
+  opened: null,
+  next: null,
   busy: false,
   error: "",
   searched: false,
@@ -83,27 +100,80 @@ function patch(user: string | undefined, value: Partial<SearchState>): void {
   listeners.forEach((listener) => listener());
 }
 
+const pageOf = (
+  page: MediaPage,
+  more: boolean,
+): Pick<SearchState, "results" | "collections" | "next"> => ({
+  results: more ? [...state.results, ...page.tracks] : page.tracks,
+  collections: more
+    ? [...state.collections, ...page.collections]
+    : page.collections,
+  next: page.next,
+});
+
 /** Search query and results, shared by the list pane (field) and the content pane (results). */
 export function useMediaSearch(): SearchState & {
   setQuery(query: string): void;
-  search(): Promise<void>;
+  search(kind?: SearchKind): Promise<void>;
+  open(collection: OnlineCollection | null): Promise<void>;
+  loadMore(): Promise<void>;
 } {
   const runtime = useRuntime(),
     user = useClientSnapshot().user?.id;
   const current = useSyncExternalStore(subscribe, read, read);
   const own = current.user === user ? current : blank(user);
+  const run = async (
+    start: Partial<SearchState>,
+    load: () => Promise<MediaPage>,
+    more: boolean,
+  ) => {
+    patch(user, { ...start, busy: true, searched: true });
+    try {
+      patch(user, { ...pageOf(await load(), more), error: "" });
+    } catch (e) {
+      patch(user, { error: errorMessage(e) });
+    } finally {
+      patch(user, { busy: false });
+    }
+  };
   return {
     ...own,
     setQuery: (query) => patch(user, { query }),
-    search: async () => {
+    search: async (kind) => {
       const query = state.user === user ? state.query : "";
       if (!query.trim()) return;
-      patch(user, { busy: true, searched: true });
+      const k = kind ?? (state.user === user ? state.kind : "song");
+      await run(
+        { kind: k, opened: null, results: [], collections: [], next: null },
+        () => searchTracks(runtime, query, k),
+        false,
+      );
+    },
+    open: async (collection) => {
+      if (!collection) {
+        const { query, kind } = state;
+        return run(
+          { opened: null, results: [], collections: [], next: null },
+          () => searchTracks(runtime, query, kind),
+          false,
+        );
+      }
+      await run(
+        { opened: collection, results: [], collections: [], next: null },
+        () => openCollection(runtime, collection),
+        false,
+      );
+    },
+    loadMore: async () => {
+      const at = state.next;
+      if (at === null || state.busy || state.user !== user) return;
+      const { opened, query, kind } = state;
+      patch(user, { busy: true });
       try {
-        patch(user, {
-          results: await searchTracks(runtime, query),
-          error: "",
-        });
+        const page = opened
+          ? await openCollection(runtime, opened, at)
+          : await searchTracks(runtime, query, kind, at);
+        patch(user, { ...pageOf(page, true), error: "" });
       } catch (e) {
         patch(user, { error: errorMessage(e) });
       } finally {

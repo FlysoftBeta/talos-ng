@@ -26,7 +26,18 @@ import {
 import { reconcileTracks, reclaimTracks } from "./lifecycle.ts";
 import { MediaRepo } from "./repo.ts";
 import { mediaMigrations } from "./schema.ts";
-import type { MediaProvider, ProviderTrack } from "./provider.ts";
+import type {
+  MediaProvider,
+  ProviderCollection,
+  ProviderTrack,
+  SearchKind,
+} from "./provider.ts";
+
+export interface MediaPage {
+  tracks: MediaTrack[];
+  collections: ProviderCollection[];
+  next: number | null;
+}
 export interface MediaOptions {
   assertOwnerWritable?(user: string): void;
   db: Db;
@@ -232,13 +243,25 @@ export class MediaService {
     });
   }
   async search(
-    query: string,
-    limit: number,
+    input: { query: string; kind: SearchKind; offset: number; limit: number },
     user: string,
     signal?: CancellationSignal,
-  ): Promise<MediaTrack[]> {
-    const values = await this.options.provider.search(query, limit, signal);
-    return this.ingest(values.slice(0, limit), user);
+  ): Promise<MediaPage> {
+    const page = await this.options.provider.search(input, signal);
+    return { ...page, tracks: this.ingest(page.tracks, user) };
+  }
+  async collection(
+    input: {
+      kind: "playlist" | "artist";
+      id: string;
+      offset: number;
+      limit: number;
+    },
+    user: string,
+    signal?: CancellationSignal,
+  ): Promise<MediaPage> {
+    const page = await this.options.provider.collection(input, signal);
+    return { ...page, tracks: this.ingest(page.tracks, user) };
   }
   /** Trusted provider ingestion; public resolve only reads a currently accessible track. */
   async resolve(

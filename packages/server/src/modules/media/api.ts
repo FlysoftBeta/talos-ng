@@ -65,14 +65,29 @@ export function registerMediaApi(
   };
   host.register(contract.media.search, async (ctx, args, _body, signal) => {
     enabled(ctx.user!);
-    return {
-      tracks: await service.search(
-        args.query,
-        args.limit ?? 20,
-        ctx.user!,
-        signal,
-      ),
-    };
+    return service.search(
+      {
+        query: args.query,
+        kind: args.kind ?? "song",
+        offset: args.offset ?? 0,
+        limit: args.limit ?? 20,
+      },
+      ctx.user!,
+      signal,
+    );
+  });
+  host.register(contract.media.collection, async (ctx, args, _body, signal) => {
+    enabled(ctx.user!);
+    return service.collection(
+      {
+        kind: args.kind,
+        id: args.id,
+        offset: args.offset ?? 0,
+        limit: args.limit ?? 20,
+      },
+      ctx.user!,
+      signal,
+    );
   });
   host.register(contract.media.resolve, (ctx, args) => {
     enabled(ctx.user!);

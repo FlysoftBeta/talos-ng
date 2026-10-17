@@ -86,16 +86,49 @@ export const validRetention = (days: number | "auto"): boolean =>
   days === "auto" || (Number.isInteger(days) && days >= 1 && days <= 365);
 
 // Commands
+export type SearchKind = "song" | "playlist" | "artist";
+export interface OnlineCollection {
+  kind: "playlist" | "artist";
+  id: string;
+  title: string;
+  subtitle: string;
+}
+export interface MediaPage {
+  tracks: MediaTrack[];
+  collections: OnlineCollection[];
+  next: number | null;
+}
+const PAGE_SIZE = 20;
+/** One page of online results for a kind; `offset` is the previous page's `next`. */
 export async function searchTracks(
   port: Pick<RuntimeCommandPort, "command">,
   query: string,
-): Promise<MediaTrack[]> {
+  kind: SearchKind = "song",
+  offset = 0,
+): Promise<MediaPage> {
   const value = await port.command(contract.media.search, {
     query: query.trim(),
-    limit: 20,
+    kind,
+    offset,
+    limit: PAGE_SIZE,
   });
   if ("queued" in value) throw new Error("搜索尚未完成");
-  return value.tracks;
+  return value;
+}
+/** One page of the tracks of an online playlist or artist. */
+export async function openCollection(
+  port: Pick<RuntimeCommandPort, "command">,
+  collection: Pick<OnlineCollection, "kind" | "id">,
+  offset = 0,
+): Promise<MediaPage> {
+  const value = await port.command(contract.media.collection, {
+    kind: collection.kind,
+    id: collection.id,
+    offset,
+    limit: PAGE_SIZE,
+  });
+  if ("queued" in value) throw new Error("加载尚未完成");
+  return value;
 }
 export function openPlaylist(
   port: Pick<RuntimeNavigationPort, "dispatch">,
