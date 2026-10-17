@@ -21,7 +21,6 @@ import { AdminPolicy } from "./policy/service.ts";
 import { AdminGroups } from "./groups/service.ts";
 import { AdminAnnouncements } from "./announcements/service.ts";
 import { AdminDiagnostics } from "./diagnostics/service.ts";
-import type { AdminDiagnosticsOptions } from "./diagnostics/service.ts";
 export interface AdminOptions {
   db: Db;
   uow: Uow;
@@ -36,7 +35,6 @@ export interface AdminOptions {
   tickets: TicketService;
   now?: () => number;
   serverLogs?: () => string;
-  performance?: AdminDiagnosticsOptions["performance"];
   onAdmissionChanged?: () => void;
 }
 export class AdminService {

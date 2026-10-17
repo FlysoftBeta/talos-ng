@@ -1,6 +1,5 @@
 import { Worker } from "node:worker_threads";
 import { AppError } from "@talos/base";
-import type { RawQueryStats } from "./query-stats.ts";
 
 /**
  * Worker threads that each hold a read-only SQLite connection to the WAL
@@ -56,9 +55,6 @@ interface Slot {
   pending: Map<number, Pending>;
 }
 
-const STATS = "replica.stats";
-const RESET = "replica.reset";
-
 export class ReplicaPool {
   private readonly slots: (Slot | undefined)[];
   private nextId = 1;
@@ -88,20 +84,6 @@ export class ReplicaPool {
     if (!slot)
       return Promise.reject(new AppError("E_UNAVAILABLE", "只读连接不可用"));
     return this.send<T>(slot, kind, input);
-  }
-  /** Raw statement statistics of every ready replica. */
-  async stats(): Promise<RawQueryStats[]> {
-    const live = this.slots.filter((slot): slot is Slot => !!slot?.ready);
-    const results = await Promise.allSettled(
-      live.map((slot) => this.send<RawQueryStats>(slot, STATS, null)),
-    );
-    return results.flatMap((result) =>
-      result.status === "fulfilled" ? [result.value] : [],
-    );
-  }
-  async reset(): Promise<void> {
-    const live = this.slots.filter((slot): slot is Slot => !!slot?.ready);
-    await Promise.allSettled(live.map((slot) => this.send(slot, RESET, null)));
   }
   status(): ReplicaStatus {
     let ready = 0,

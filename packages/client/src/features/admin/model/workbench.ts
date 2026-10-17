@@ -38,7 +38,6 @@ export const BUILT_IN_SECTIONS: readonly WorkbenchSection[] = [
     roles: ["root", "access_manager", "community_manager"],
   },
   { id: "incidents", title: "事件", roles: ["root", "operations"] },
-  { id: "performance", title: "性能", roles: ["root", "operations"] },
   { id: "audit", title: "审计", roles: ["root"] },
   { id: "debug", title: "调试", roles: ["root"] },
 ];

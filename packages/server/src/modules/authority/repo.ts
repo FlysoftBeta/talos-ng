@@ -80,8 +80,7 @@ export class AuthorityRepo {
       `SELECT * FROM authority_grants
        WHERE (principal_type='user' AND principal=?)
           OR (principal_type='group' AND principal IN (SELECT value FROM json_each(?)))
-          OR id IN (SELECT grant_id FROM authority_grant_projections WHERE user_id=?)
-       ORDER BY rev,id`,
+          OR id IN (SELECT grant_id FROM authority_grant_projections WHERE user_id=?)`,
       user,
       JSON.stringify(groups),
       user,
@@ -93,6 +92,27 @@ export class AuthorityRepo {
     return this.db.all(
       "SELECT grant_id,rev,deleted FROM authority_grant_projections WHERE user_id=?",
       user,
+    );
+  }
+  /** The grant row (live or deleted) for one resource/principal pair. */
+  grantFor(
+    resource: string,
+    principalType: string,
+    principal: string,
+  ): Grant | undefined {
+    return this.db.get(
+      "SELECT * FROM authority_grants WHERE resource=? AND principal_type=? AND principal=?",
+      resource,
+      principalType,
+      principal,
+    );
+  }
+  /** Grants (live or deleted) addressed to one principal. */
+  grantsTo(principalType: string, principal: string): Grant[] {
+    return this.db.all(
+      "SELECT * FROM authority_grants WHERE principal=? AND principal_type=? ORDER BY rev,id",
+      principal,
+      principalType,
     );
   }
   grants(resource: string): Grant[] {
@@ -130,13 +150,10 @@ export class AuthorityRepo {
     value: string,
     rev: number,
   ): { user_id: string; grant_id: string }[] {
-    const grants = this.allGrants().filter(
-      (g) =>
-        !g.deleted &&
-        (field === "resource"
-          ? g.resource === value
-          : g.principal_type === "user" && g.principal === value),
-    );
+    const grants =
+      field === "resource"
+        ? this.grants(value)
+        : this.grantsTo("user", value).filter((g) => !g.deleted);
     const projections: { user_id: string; grant_id: string }[] = [];
     for (const grant of grants) {
       this.putGrant({ ...grant, deleted: 1, rev });

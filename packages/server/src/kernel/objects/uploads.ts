@@ -60,7 +60,7 @@ export class UploadService {
             db.exec(`CREATE TABLE IF NOT EXISTS uploads (
       id TEXT PRIMARY KEY, owner TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL,
       sha256 TEXT, object_id TEXT REFERENCES objects(id), updated INTEGER NOT NULL
-    ) STRICT; CREATE INDEX IF NOT EXISTS uploads_updated ON uploads(updated);`),
+    ) STRICT; CREATE INDEX IF NOT EXISTS uploads_updated ON uploads(updated); CREATE INDEX IF NOT EXISTS uploads_object ON uploads(object_id);`),
         },
       ],
       this.clock,

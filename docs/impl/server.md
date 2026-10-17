@@ -39,8 +39,7 @@ eviction, backups) runs from one serialised `maintain` pass.
 ## Kernel services
 
 `config` (file + `TALOS_*` environment, validated at boot, secrets never logged), `db`
-(adapter, migrations, nestable synchronous `tx`, read `snapshot`, online `backupTo`,
-statement timing), `performance` (statement statistics, event-loop delay, replica status), `uow`, `rev` (global
+(adapter, migrations, nestable synchronous `tx`, read `snapshot`, online `backupTo`), `uow`, `rev` (global
 revision counter), `syncHub` (`sync.md`), `events` (connection registry, per-user/scope
 fan-out), `jobs` (`jobs.md`), `objects` and `uploads` (`objects.md`), `authz`, `audit`,
 `incidents`, `clock`, `log`, and the transport (`link.md`).
@@ -123,7 +122,6 @@ paths resolve beside the config file. Data directory: `data/talos.db` (+WAL), `d
 | `TALOS_AI_MODELS_FILE`, `TALOS_AI_CONFIG` | AI provider configuration (`modules.md`) |
 | `TALOS_BINARIES` | JSON map of helper binary paths (`pdfrender`, `yt-dlp`) |
 | `TALOS_DB_READERS` | sync replica workers, integer 0–32; default `min(4, cpus − 1)`; `0` computes every pull on the main thread |
-| `TALOS_SLOW_QUERY_MS` | slow statement/transaction threshold in ms, default `50` (see `ops-performance.md`) |
 | `TALOS_PDFRENDER`, `TALOS_MEDIA_CACHE` | renderer binary override; yt-dlp download cache at package time |
 
 `pnpm dev` runs the real dev server plus Vite behind a same-origin proxy for `/link`, `/dl`,

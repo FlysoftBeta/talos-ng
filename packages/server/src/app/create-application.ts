@@ -47,7 +47,6 @@ import { ObjectLedger } from "../kernel/objects/objects.ts";
 import { UploadService } from "../kernel/objects/uploads.ts";
 import { TicketService } from "../kernel/objects/tickets.ts";
 import { systemClock } from "../kernel/config/clock.ts";
-import { PerformanceMonitor } from "../kernel/diagnostics/performance.ts";
 import type { Clock } from "../kernel/config/clock.ts";
 export interface KernelOptions {
   db: Db;
@@ -71,8 +70,6 @@ export interface KernelOptions {
    * background work. Only read paths (sync snapshots) are served from it.
    */
   replica?: boolean;
-  /** Statement timing and event-loop delay; created here when absent (not for replicas). */
-  performance?: PerformanceMonitor;
   /** Computes sync pages off the main thread; absent, pulls run locally. */
   syncReplicas?: (user: string, request: SyncRequest) => Promise<SyncSnapshot>;
 }
@@ -102,7 +99,6 @@ export interface Kernel {
   host: LinkHost;
   audit: Audit;
   incidents: Incidents;
-  performance: PerformanceMonitor | undefined;
   maintain(): Promise<void>;
   close(): Promise<void>;
 }
@@ -112,12 +108,6 @@ export function createKernel(options: KernelOptions): Kernel {
   const { db, store } = options;
   const clock = options.clock ?? systemClock;
   const now = () => clock.now();
-  const ownPerformance =
-    !options.performance && !options.replica
-      ? new PerformanceMonitor({ slowMs: 50, now })
-      : undefined;
-  if (ownPerformance) db.observe(ownPerformance.queries);
-  const performance = options.performance ?? ownPerformance;
   const incidents = new Incidents(db, now, 1000, options.build);
   const report = (error: unknown) => {
     incidents.report(error);
@@ -325,7 +315,6 @@ export function createKernel(options: KernelOptions): Kernel {
   );
   const admin = new AdminService({
     serverLogs: options.serverLogs,
-    performance,
     onAdmissionChanged: reauthenticate,
     db,
     uow,
@@ -488,14 +477,7 @@ export function createKernel(options: KernelOptions): Kernel {
     host,
     audit,
     incidents,
-    performance,
     maintain: lifecycle.maintain,
-    close: async () => {
-      try {
-        await lifecycle.close();
-      } finally {
-        ownPerformance?.close();
-      }
-    },
+    close: lifecycle.close,
   };
 }

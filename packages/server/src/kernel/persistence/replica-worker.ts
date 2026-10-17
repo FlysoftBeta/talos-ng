@@ -1,7 +1,6 @@
 import { parentPort } from "node:worker_threads";
 import { AppError } from "@talos/base";
 import type { Db } from "./db.ts";
-import type { QueryStats } from "./query-stats.ts";
 import type { ReplicaReply, ReplicaRequest } from "./replica-pool.ts";
 
 /**
@@ -10,7 +9,6 @@ import type { ReplicaReply, ReplicaRequest } from "./replica-pool.ts";
  */
 export function serveReplica(
   db: Db,
-  stats: QueryStats,
   handlers: Readonly<Record<string, (input: unknown) => unknown>>,
 ): void {
   const port = parentPort;
@@ -18,14 +16,9 @@ export function serveReplica(
   port.on("message", (request: ReplicaRequest) => {
     let reply: ReplicaReply;
     try {
-      let value: unknown;
-      if (request.kind === "replica.stats") value = stats.export();
-      else if (request.kind === "replica.reset") value = stats.reset();
-      else {
-        const handler = handlers[request.kind];
-        if (!handler) throw new AppError("E_NOT_FOUND", "只读任务不存在");
-        value = db.snapshot(() => handler(request.input));
-      }
+      const handler = handlers[request.kind];
+      if (!handler) throw new AppError("E_NOT_FOUND", "只读任务不存在");
+      const value = db.snapshot(() => handler(request.input));
       reply = { type: "reply", id: request.id, ok: true, value };
     } catch (error) {
       const known = error instanceof AppError;

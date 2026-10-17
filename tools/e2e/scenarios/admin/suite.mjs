@@ -127,7 +127,6 @@ export async function adminSuite(browser, server, { legacy = false } = {}) {
         ["群组", "admin.groups"],
         ["系统", "admin.system"],
         ["事件", "admin.incidents"],
-        ["性能", "admin.performance"],
         ["审计", "admin.audit"],
       ]) {
         await click(cdp, section);

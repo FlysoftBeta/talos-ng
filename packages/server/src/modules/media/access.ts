@@ -24,6 +24,22 @@ export class MediaAccess {
           : groups.includes(g.principal),
       );
   }
+  /**
+   * Playlists the user may open. Access needs ownership or a grant, so only
+   * owned and granted playlists are candidates (newest revision first).
+   */
+  playlists(user: string): MediaPlaylist[] {
+    return this.service.repo
+      .playlistsFor(
+        user,
+        this.authority
+          .grantedResources(user, "coll:")
+          .map((resource) => resource.slice(5)),
+      )
+      .sort((a, b) => b.rev - a.rev || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((row) => JSON.parse(row.body) as MediaPlaylist)
+      .filter((p) => this.playlist(user, p));
+  }
   track(user: string, id: string): boolean {
     const row = this.service.repo.track(id);
     return (

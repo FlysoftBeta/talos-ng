@@ -104,11 +104,7 @@ export function registerMediaSync(
         !!p && !p.deleted && allowed(u, JSON.parse(p.body) as MediaPlaylist)
       );
     },
-    list: (u) =>
-      repo
-        .playlists()
-        .filter((p) => allowed(u, JSON.parse(p.body) as MediaPlaylist))
-        .map((p) => `coll:${p.id}`),
+    list: (u) => access.playlists(u).map((p) => `coll:${p.id}`),
     select: (s, n, l) => select(coll(s.slice(5)), n, l),
   });
   for (const type of [

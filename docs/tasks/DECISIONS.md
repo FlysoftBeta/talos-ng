@@ -599,27 +599,24 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   ordered. Supersedes the explicit-only `coalesce` helper, which is removed. Wire format and
   stored outbox changed without migration (nothing released).
 
-- **D-124 — One writer, read-only sync replicas, always-on statement tracing.** Supersedes
+- **D-124 — One writer, read-only sync replicas, query plans as a gate.** Supersedes
   D-006 for reads. All writes and transactions stay on the main thread's single
   `better-sqlite3` connection; sync pull pages are computed by `TALOS_DB_READERS` worker
   threads (default `min(4, cpus − 1)`) that load the same `server.js`, open the WAL database
   read-only and build the module graph over it, so providers and serialisers are shared
-  code, not a second implementation. Each task is one read transaction (consistent snapshot,
-  read-your-writes for commits made before the task). Subscription state stays on the main
-  thread; a commit racing a snapshot leaves the touched scopes incomplete with `repull`, and
-  the retry runs locally, so live delivery cannot miss a row. Unavailable or hung replicas
-  fall back to local computation. Releases need no new files (the bundle is its own worker
-  entry; both addons already load per thread). Every statement and transaction is timed into
-  normalized-SQL histograms with a slow log (`TALOS_SLOW_QUERY_MS`, default 50 ms) exposed
-  as `admin.performance.get` and the workbench 性能 section. Measured with
-  `bin/testing/sync-load.ts`, the hot spots fixed with it were per-pull empty units of work,
-  per-commit access re-evaluation and re-authentication of every subscriber (skipped for
-  `accessNeutral` row types; admission changes outside units of work now re-authenticate
-  explicitly), full scans in community/library/authority providers, per-row re-reads, sliding
-  session writes on every authentication (coalesced to once a minute; device activity every
-  5 s), the lazily rebuilt recursive zod JSON schema (now one walk) and duplicate result
-  validation. Index added to the initial schema (`library_collections(owner, rev)`), no
-  migration (nothing released).
+  code. Each task is one read transaction (consistent snapshot, read-your-writes for commits
+  made before the task). Subscription state stays on the main thread; a commit racing a
+  snapshot leaves the touched scopes incomplete with `repull`, and the retry runs locally.
+  Unavailable or hung replicas fall back to local computation; releases need no new files.
+  Slow queries are found by `EXPLAIN QUERY PLAN`, not runtime tracing: a gate test explains
+  every statement of a pull/fan-out/post workflow and fails on scans of growing tables or
+  temporary sorts. Fixes: revision indexes extended with their tie-breaker column, indexes
+  for foreign-key children and point lookups, owner/grant/membership-driven access lists
+  instead of whole-table filters; plus per-pull empty units of work, per-commit access
+  re-evaluation and re-authentication for `accessNeutral` row types, sliding session writes
+  on every authentication, and the lazily rebuilt recursive zod JSON schema. Indexes are in
+  the initial schemas (nothing released, no migration; the importer writes through them).
+
 - **D-125 — Recent and frequent views rank by frecency, kept locally.** One pure module
   (`client/src/core/ranking`) scores each item as an exponentially decayed visit count
   (14-day half-life; visits within 30 s count once) and cuts lists where the score stops

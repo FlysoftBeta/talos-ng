@@ -1,7 +1,6 @@
 import type { MediaPolicy } from "../admin/ports.ts";
 import { AppError } from "@talos/base";
 import { contract } from "@talos/contract";
-import type { MediaPlaylist } from "@talos/contract";
 import type { LinkHost } from "../../kernel/transport/link-host.ts";
 import type { TicketService } from "../../kernel/objects/tickets.ts";
 import type { SyncHub } from "../../kernel/sync/sync-hub.ts";
@@ -91,10 +90,7 @@ export function registerMediaApi(
       ...state.queue,
       ...Object.keys(state.favorites),
     ]);
-    const playlists = service.repo
-      .playlists()
-      .map((r) => JSON.parse(r.body) as MediaPlaylist)
-      .filter((p) => access.playlist(ctx.user!, p));
+    const playlists = access.playlists(ctx.user!);
     for (const p of playlists) for (const id of p.tracks) ids.add(id);
     return {
       tracks: [...ids]

@@ -4,7 +4,6 @@ import { isMainThread, workerData } from "node:worker_threads";
 import { AppError } from "@talos/base";
 import { createFsObjectStore } from "@talos/objectstore";
 import { Db } from "../kernel/persistence/db.ts";
-import { QueryStats } from "../kernel/persistence/query-stats.ts";
 import { ReplicaPool } from "../kernel/persistence/replica-pool.ts";
 import { serveReplica } from "../kernel/persistence/replica-worker.ts";
 import type {
@@ -28,7 +27,6 @@ export interface SyncReplicaData {
   db: string;
   root: string;
   build: string;
-  slowMs: number;
 }
 
 /** True inside a replica worker started by `startSyncReplicas`. */
@@ -42,9 +40,7 @@ export function isSyncReplica(): boolean {
 /** Worker entry: build the read-only module graph and answer snapshot tasks. */
 export function runSyncReplica(): void {
   const data = workerData as SyncReplicaData;
-  const stats = new QueryStats({ slowMs: data.slowMs });
   const db = new Db(data.db, 5000, true);
-  db.observe(stats, "reader");
   const kernel = createKernel({
     db,
     store: createFsObjectStore({ root: data.root }),
@@ -52,7 +48,7 @@ export function runSyncReplica(): void {
     backgroundTasks: false,
     replica: true,
   });
-  serveReplica(db, stats, {
+  serveReplica(db, {
     [SNAPSHOT]: (input) => {
       const { user, request } = input as { user: string; request: SyncRequest };
       return kernel.syncHub.snapshot(user, request);
@@ -72,7 +68,6 @@ export function startSyncReplicas(options: {
   db: string;
   root: string;
   build: string;
-  slowMs: number;
   /** Computes locally while no replica is available. */
   local: () => SyncHub;
   reportError?(error: unknown): void;
@@ -91,7 +86,6 @@ export function startSyncReplicas(options: {
       db: options.db,
       root: options.root,
       build: options.build,
-      slowMs: options.slowMs,
     } satisfies SyncReplicaData,
     reportError: options.reportError,
   });

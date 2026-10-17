@@ -174,22 +174,8 @@ export class AuthorityService {
   }): void {
     this.options.uow.write((ctx) => {
       const grantId =
-        this.repo
-          .grants(input.resource)
-          .find(
-            (grant) =>
-              grant.principal_type === input.principalType &&
-              grant.principal === input.principal,
-          )?.id ??
-        this.repo
-          .allGrants()
-          .find(
-            (grant) =>
-              grant.resource === input.resource &&
-              grant.principal_type === input.principalType &&
-              grant.principal === input.principal,
-          )?.id ??
-        this.id();
+        this.repo.grantFor(input.resource, input.principalType, input.principal)
+          ?.id ?? this.id();
       this.repo.putGrant({
         id: grantId,
         resource: input.resource,
@@ -220,9 +206,7 @@ export class AuthorityService {
   }
   /** Called inside the community membership transaction, after membership changes. */
   membershipChanged(user: string, group: string, ctx: WriteContext): void {
-    for (const grant of this.repo.allGrants()) {
-      if (grant.principal_type !== "group" || grant.principal !== group)
-        continue;
+    for (const grant of this.repo.grantsTo("group", group)) {
       this.repo.projectGrant(
         user,
         grant.id,

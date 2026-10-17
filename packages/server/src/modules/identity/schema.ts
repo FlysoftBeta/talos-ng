@@ -7,7 +7,9 @@ export const identityMigrations: readonly Migration[] = [
 CREATE TABLE secrets(name TEXT PRIMARY KEY,value TEXT NOT NULL) STRICT;
 CREATE TABLE users(id TEXT PRIMARY KEY,handle TEXT NOT NULL UNIQUE,name TEXT NOT NULL,roles TEXT NOT NULL CHECK(json_valid(roles)),features TEXT NOT NULL CHECK(json_valid(features)),banned INTEGER NOT NULL DEFAULT 0 CHECK(banned IN (0,1)),created INTEGER NOT NULL,rev INTEGER NOT NULL,deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN (0,1))) STRICT;
 CREATE INDEX users_rev ON users(id,rev);
+CREATE INDEX users_handle_nocase ON users(handle COLLATE NOCASE);
 CREATE TABLE user_pins(hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id)) STRICT;
+CREATE INDEX user_pins_user ON user_pins(user_id);
 CREATE TABLE devices(id TEXT PRIMARY KEY,label TEXT NOT NULL,last_seen INTEGER NOT NULL,failures INTEGER NOT NULL DEFAULT 0,blocked_until INTEGER NOT NULL DEFAULT 0,whitelisted INTEGER NOT NULL DEFAULT 0 CHECK(whitelisted IN (0,1)),bound_user TEXT REFERENCES users(id),locked INTEGER NOT NULL DEFAULT 0 CHECK(locked IN (0,1))) STRICT;
 CREATE TABLE sessions(hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),device_id TEXT NOT NULL REFERENCES devices(id),created INTEGER NOT NULL,expires INTEGER NOT NULL,UNIQUE(user_id,device_id)) STRICT;
 CREATE INDEX sessions_expiry ON sessions(expires);

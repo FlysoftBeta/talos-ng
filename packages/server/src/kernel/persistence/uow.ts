@@ -40,7 +40,7 @@ export class Uow {
     return this.db.get<{ rev: number }>("SELECT rev FROM _revision WHERE id=1")!
       .rev;
   }
-  write<T>(fn: (ctx: WriteContext) => T, label?: string): T {
+  write<T>(fn: (ctx: WriteContext) => T): T {
     // Nested writes join the existing unit, but failed nested work gets its own
     // savepoint and cannot leak changes/effects into the parent.
     const parent = this.active;
@@ -66,7 +66,7 @@ export class Uow {
       } finally {
         this.active = parent;
       }
-    }, label);
+    });
     if (parent) {
       for (const change of changes.values())
         parent.changed(change.scope, change.type, change.id);

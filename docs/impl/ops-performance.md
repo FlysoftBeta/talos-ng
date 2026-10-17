@@ -39,48 +39,30 @@ for the real server boot. Windows uses the same sync pass and skips unsupported 
 fsync. Historical before/after measurements are process material in the (untracked)
 `archive/`.
 
-## Server: statement tracing and slow queries
+## Server: query plans
 
-Every SQLite statement and every outer transaction is timed on the writer and on each sync
-replica. Statements are aggregated by **normalized SQL** (literals become `?`, placeholder and
-tuple lists collapse to `?…`), transactions by their **call site** (`Posts.send @
-modules/chat/posts/service.ts:42`; `server.js:<line>` plus the function name in a release).
-Per shape: count, total, p50/p95 (log-bucketed, within a quarter power of two), maximum and
-the number of slow executions; at most 400 shapes are tracked and the rest counted as
-dropped. Bound parameters are never recorded.
+Hot statements are checked with `EXPLAIN QUERY PLAN`, not timed at run time. The gate
+`packages/server/src/app/query-plans.test.ts` records every statement prepared while a user
+pulls, a post fans out and the user pulls again, explains each one and fails on a `SCAN` of a
+table that grows with users or content, or on a temporary B-tree for `ORDER BY`
+(`UNION` results excepted). Known bounded scans are listed there with their reason.
 
-- **Threshold:** `slowQueryMs` / `TALOS_SLOW_QUERY_MS` (default 50 ms). A slow execution is
-  kept in a ring of the last 50 and written to the server log as `慢查询` (warn) at most once
-  per shape and minute.
-- **Event loop:** main-thread delay (p50/p99/max of a 10 ms timer histogram) and utilisation;
-  a long synchronous transaction or pull shows up here even when no single statement is slow.
-- **Admins:** workbench section 性能 (`admin.performance.get`, operations role) shows the
-  window since the last reset: summary, statements by total time, recent slow queries and
-  replica status. 重新计时 returns the closed window and starts a new one (audited).
+Rules the schema follows: a revision-paged query `WHERE <scope>=? AND rev>? ORDER BY
+rev,<id> LIMIT ?` needs an index on `(<scope>, rev, <id>)`, otherwise SQLite sorts the
+scope's rows for the tie-breaker; foreign-key children need an index on the referencing
+column or every parent delete scans them; access lists (conversations, collections,
+playlists) start from the user's memberships, ownerships and grants instead of filtering
+every row.
 
-How to read it: high `count` with small p50 on a point lookup is an N+1 inside a loop (look
-at the transactions or callers that run it); a large p50 on `... ORDER BY rev,id` without a
-`WHERE` is a full scan; transactions far slower than their statements are JavaScript work
-inside the unit of work. Verify a suspected missing index with `EXPLAIN QUERY PLAN` on a copy
-of the database.
+To check a statement by hand, open a copy of a production database with `sqlite3` and run
+`EXPLAIN QUERY PLAN <statement>` with literal values; `SEARCH ... USING INDEX` is the
+goal, `SCAN` on a large table or `USE TEMP B-TREE` is a finding.
 
-## Server load measurement
+## Server: sync replicas under load
 
-`node --import tsx packages/server/bin/testing/sync-load.ts --data .tmp/load [--users 400]
-[--groups 40] [--members 40] [--posts 40] [--readers N] [--writes 200]` seeds a community
-once into the data directory (users with known PINs, groups, posts; reused on later runs),
-starts the real server as a child process, logs every user in over WebSocket and prints, per
-phase, client latencies, the event-loop figures and the top statements from
-`admin.performance.get`: login, initial sync of all clients at once, reconnect pulls with
-cursors, and live posts while everyone is subscribed. `LOAD_SERVER_NODE_OPTIONS="--cpu-prof
---cpu-prof-dir=..."` profiles the server. Clients share the machine with the server, so
-absolute numbers are pessimistic; compare runs on the same host.
-
-### Current numbers (4-core Linux VM, Node 22, clients on the same host)
-
-Seed: 400 users, 40 groups × 40 members, 40 posts per group; every user is also a member of
-the two system conversations, so an initial sync carries ~800 member rows per client.
-Client wall time for all 400 clients at once, and main event-loop p99:
+Measured once with an ad-hoc load script (400 users, 40 groups × 40 members, 40 posts per
+group, every user also in the two system conversations; 4-core VM, clients on the same
+host). Client wall time for all 400 clients at once and main event-loop p99:
 
 | Phase | 0 replicas | 3 replicas |
 | --- | --: | --: |
@@ -88,9 +70,7 @@ Client wall time for all 400 clients at once, and main event-loop p99:
 | Reconnect pull with cursors | 1.4 s (loop p99 1.1 s) | 0.31 s (loop p99 0.12 s) |
 | 200 posts sent at once, all subscribed | 1.26 s | 1.37 s |
 
-Before the hot-spot fixes the same seed did not complete: the main thread blocked longer
-than the 45 s link dead-timeout and clients disconnected. At 60 users / 8 groups the fixes
-alone took the initial sync from 10.3 s to 3.9 s, a reconnect pull round from 12.0 s to
-0.39 s and 30 posts from 6.6 s to 0.32 s. Remaining main-thread cost under load is result
-validation and frame encoding of large pull responses and per-connection delta encoding;
-the initial-sync volume is dominated by the system conversations' member lists.
+Before the fan-out and provider fixes the same seed did not complete (main thread blocked
+past the 45 s link dead-timeout). Remaining main-thread cost under load is result
+validation and frame encoding of large pull responses; initial-sync volume is dominated by
+the system conversations' member lists.

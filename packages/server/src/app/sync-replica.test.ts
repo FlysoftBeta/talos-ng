@@ -34,12 +34,11 @@ it("serves sync pulls from read-only replica workers with the writer's results",
   });
   let device: string | null = null;
   try {
-    const performance = server.kernel.performance!;
     for (let i = 0; i < 300; i++) {
-      if ((await performance.report()).replicas?.ready === 2) break;
+      if (server.replicas()?.ready === 2) break;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    expect((await performance.report(true)).replicas?.ready).toBe(2);
+    expect(server.replicas()?.ready).toBe(2);
     const welcomed = deferred<void>();
     client.onWelcome(() => welcomed.resolve());
     client.start();
@@ -68,16 +67,9 @@ it("serves sync pulls from read-only replica workers with the writer's results",
     ).toBe(true);
     const local = server.kernel.syncHub.snapshot(user, { cursors }).response;
     expect(second).toEqual(local);
-    const report = await performance.report();
-    expect(report.replicas?.completed).toBeGreaterThanOrEqual(2);
-    expect(
-      report.queries.statements.some(
-        (row) => row.source === "reader" && row.count > 0,
-      ),
-    ).toBe(true);
-    expect(
-      report.queries.statements.some((row) => row.source === "writer"),
-    ).toBe(true);
+    // Both pulls were answered by replicas, not the local fallback.
+    expect(server.replicas()?.completed).toBeGreaterThanOrEqual(2);
+    expect(server.replicas()?.failed).toBe(0);
   } finally {
     client.stop();
     await server.close();

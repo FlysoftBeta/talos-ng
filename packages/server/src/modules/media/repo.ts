@@ -81,6 +81,14 @@ export class MediaRepo {
   playlist(id: string): MediaRow | undefined {
     return this.db.get("SELECT * FROM media_playlists WHERE id=?", id);
   }
+  /** Live playlists owned by `owner` or among `ids`, unordered. */
+  playlistsFor(owner: string, ids: readonly string[]): MediaRow[] {
+    return this.db.all(
+      "SELECT * FROM media_playlists WHERE deleted=0 AND (owner=? OR id IN (SELECT value FROM json_each(?)))",
+      owner,
+      JSON.stringify(ids),
+    );
+  }
   playlists(): MediaRow[] {
     return this.db.all(
       "SELECT * FROM media_playlists WHERE deleted=0 ORDER BY rev DESC,id",

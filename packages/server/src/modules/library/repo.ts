@@ -49,6 +49,16 @@ export class LibraryRepo {
   collections(): RecordRow[] {
     return this.db.all("SELECT * FROM library_collections ORDER BY rev,id");
   }
+  /**
+   * Live collections whose items include the document: a superset of those
+   * listing it in their body (the body never lists a document without an item).
+   */
+  collectionsWithItem(doc: string): RecordRow[] {
+    return this.db.all(
+      "SELECT c.* FROM library_items i JOIN library_collections c ON c.id=i.collection WHERE i.id=? AND i.deleted=0 AND c.deleted=0 ORDER BY c.rev,c.id",
+      doc,
+    );
+  }
   ownedCollections(owner: string): RecordRow[] {
     return this.db.all(
       "SELECT * FROM library_collections WHERE owner=? ORDER BY rev,id",

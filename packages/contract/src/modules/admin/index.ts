@@ -1,10 +1,6 @@
 import { adminAnnouncementMethods } from "./announcements.ts";
 import { adminDeviceMethods } from "./devices.ts";
-import {
-  adminAuditMethods,
-  adminIncidentMethods,
-  adminPerformanceMethods,
-} from "./diagnostics.ts";
+import { adminAuditMethods, adminIncidentMethods } from "./diagnostics.ts";
 import { adminGroupMethods } from "./groups.ts";
 import { adminInvitationMethods } from "./invitations.ts";
 import { adminSettingsMethods } from "./settings.ts";
@@ -17,7 +13,6 @@ export type { AdminDevice } from "./devices.ts";
 export { adminGroupSchema } from "./groups.ts";
 export type { AdminGroup } from "./groups.ts";
 export type { AdminSettings } from "./settings.ts";
-export type { AdminPerformance } from "./diagnostics.ts";
 export { ADMIN_ACTION_ROLES, adminActionRole } from "./actions.ts";
 export type { AdminAction } from "./actions.ts";
 
@@ -30,7 +25,6 @@ export const admin = Object.freeze({
   settings: adminSettingsMethods,
   audit: adminAuditMethods,
   incident: adminIncidentMethods,
-  performance: adminPerformanceMethods,
 });
 export const adminMethods = Object.freeze([
   admin.user.list,
@@ -62,5 +56,4 @@ export const adminMethods = Object.freeze([
   admin.incident.detail,
   admin.incident.download,
   admin.incident.selfTest,
-  admin.performance.get,
 ]);

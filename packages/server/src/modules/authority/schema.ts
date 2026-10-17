@@ -17,6 +17,7 @@ CREATE INDEX authority_grants_rev ON authority_grants(principal,rev);
       db.exec(`
 CREATE TABLE authority_grant_projections(user_id TEXT NOT NULL,grant_id TEXT NOT NULL REFERENCES authority_grants(id),rev INTEGER NOT NULL,deleted INTEGER NOT NULL CHECK(deleted IN(0,1)),PRIMARY KEY(user_id,grant_id)) STRICT;
 CREATE INDEX authority_grant_projections_rev ON authority_grant_projections(user_id,rev);
+CREATE INDEX authority_grant_projections_grant ON authority_grant_projections(grant_id);
 `);
     },
   },

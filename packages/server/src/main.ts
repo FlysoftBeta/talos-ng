@@ -17,14 +17,16 @@ import type { Kernel } from "./app/create-application.ts";
 import { Logger } from "./kernel/diagnostics/log.ts";
 import { startHttpGateway } from "./kernel/transport/httpGateway.ts";
 import { availableParallelism } from "node:os";
-import { PerformanceMonitor } from "./kernel/diagnostics/performance.ts";
 import { startSyncReplicas } from "./app/sync-replica.ts";
 import type { SyncReplicas } from "./app/sync-replica.ts";
+import type { ReplicaStatus } from "./kernel/persistence/replica-pool.ts";
 import type { SyncRequest } from "./kernel/sync/sync-hub.ts";
 import type { HttpGateway } from "./kernel/transport/httpGateway.ts";
 export interface RunningServer {
   readonly kernel: Kernel;
   readonly addresses: HttpGateway["addresses"];
+  /** Sync replica pool status; null when pulls run on the main thread. */
+  replicas(): ReplicaStatus | null;
   close(): Promise<void>;
 }
 export async function startServer(
@@ -56,20 +58,6 @@ export async function startServer(
     await unlock();
     throw error;
   }
-  const slowLogged = new Map<string, number>();
-  const performance = new PerformanceMonitor({
-    slowMs: config.slowQueryMs,
-    onSlow: (query) => {
-      // At most one line per statement shape and minute; the admin view has all.
-      const key = `${query.source}:${query.kind}:${query.sql}`;
-      const last = slowLogged.get(key);
-      if (last !== undefined && query.at - last < 60_000) return;
-      if (slowLogged.size > 1000) slowLogged.clear();
-      slowLogged.set(key, query.at);
-      log.write("warn", "慢查询", { ...query });
-    },
-  });
-  db.observe(performance.queries);
   let replicas: SyncReplicas | undefined;
   const readers =
     config.dbReaders ?? Math.min(4, Math.max(0, availableParallelism() - 1));
@@ -113,7 +101,6 @@ export async function startServer(
       },
       db,
       store,
-      performance,
       ...(options.replicaEntry && readers > 0
         ? {
             syncReplicas: (user: string, request: SyncRequest) =>
@@ -146,11 +133,9 @@ export async function startServer(
         db: layout.db,
         root: layout.root,
         build: assets.manifest.build,
-        slowMs: config.slowQueryMs,
         local: () => ready.syncHub,
         reportError: (error) => ready.incidents.report(error),
       });
-      performance.attachReplicas(replicas.pool);
     }
     gateway = await startHttpGateway({
       ports: config.ports,
@@ -223,7 +208,6 @@ export async function startServer(
         await gateway?.close();
       } finally {
         await replicas?.pool.close();
-        performance.close();
         db.close();
         await unlock();
       }
@@ -252,6 +236,7 @@ export async function startServer(
   return {
     kernel: ready,
     addresses: http.addresses,
+    replicas: () => replicas?.pool.status() ?? null,
     close(): Promise<void> {
       if (!closing)
         closing = (async () => {
@@ -268,7 +253,6 @@ export async function startServer(
             } finally {
               // Replicas hold WAL snapshots; close them before the checkpoint.
               await replicas?.pool.close();
-              performance.close();
               db.close();
               await unlock();
             }

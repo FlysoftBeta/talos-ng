@@ -18,8 +18,8 @@ CREATE TABLE community_members (
  conversation TEXT NOT NULL REFERENCES community_conversations(id), user TEXT NOT NULL, hidden INTEGER NOT NULL CHECK(hidden IN(0,1)),
  joined INTEGER NOT NULL, rev INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN(0,1)), PRIMARY KEY(conversation,user)
 ) STRICT;
-CREATE INDEX community_members_user_rev ON community_members(user,rev);
-CREATE INDEX community_members_conv_rev ON community_members(conversation,rev);
+CREATE INDEX community_members_user_rev ON community_members(user,rev,conversation);
+CREATE INDEX community_members_conv_rev ON community_members(conversation,rev,user);
 `);
     },
   },

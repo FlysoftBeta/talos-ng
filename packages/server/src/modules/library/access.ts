@@ -35,7 +35,7 @@ export class LibraryAccess {
     if (!row || row.deleted || !this.enabled(user)) return false;
     if (row.owner === user) return true;
     return this.service.repo
-      .collections()
+      .collectionsWithItem(id)
       .some(
         (row) =>
           !row.deleted &&
@@ -47,7 +47,7 @@ export class LibraryAccess {
     if (!this.document(user, id)) return false;
     if (this.service.document(id).owner === user) return true;
     return this.service.repo
-      .collections()
+      .collectionsWithItem(id)
       .some(
         (row) =>
           !row.deleted &&

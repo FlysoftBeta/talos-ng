@@ -9,6 +9,7 @@ CREATE TABLE ops_settings(id INTEGER PRIMARY KEY CHECK(id=1),value TEXT NOT NULL
 INSERT INTO ops_settings VALUES(1,'{"retention":5,"daily":true,"cloudEnabled":false,"autoCheck":false,"manifestUrl":""}');
 CREATE TABLE ops_backups(id TEXT PRIMARY KEY,created INTEGER NOT NULL,size INTEGER NOT NULL) STRICT;
 CREATE TABLE ops_office(id TEXT PRIMARY KEY,name TEXT NOT NULL,application TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('word','powerpoint','excel')),object_id TEXT NOT NULL REFERENCES objects(id),size INTEGER NOT NULL,created INTEGER NOT NULL) STRICT;
+CREATE INDEX ops_office_object ON ops_office(object_id);
 `),
   },
 ];

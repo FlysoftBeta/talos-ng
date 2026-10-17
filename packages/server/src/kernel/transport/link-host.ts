@@ -326,7 +326,7 @@ export class LinkHost {
           if (value && typeof (value as { then?: unknown }).then === "function")
             throw new AppError("E_INTERNAL", "离线方法必须同步提交");
           return save(validate(value));
-        }, call.method);
+        });
       else
         result = save(
           validate(

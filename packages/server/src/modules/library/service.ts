@@ -394,7 +394,7 @@ export class LibraryService {
       this.options.objects.removeRef(row!.source!, "library.source", id);
       if (doc.pack)
         this.options.objects.removeRef(doc.pack.id, "library.pack", id);
-      for (const collection of this.repo.collections()) {
+      for (const collection of this.repo.collectionsWithItem(id)) {
         const data = JSON.parse(collection.body) as LibraryCollection;
         if (!collection.deleted && data.docs.includes(id))
           this.setItems(
@@ -513,7 +513,7 @@ export class LibraryService {
     changed: (scope: string, type: string, id: string) => void,
   ): void {
     changed(`me:${owner}`, "libraryDoc", id);
-    for (const row of this.repo.collections()) {
+    for (const row of this.repo.collectionsWithItem(id)) {
       const collection = JSON.parse(row.body) as LibraryCollection;
       if (!row.deleted && collection.docs.includes(id))
         changed(`coll:${collection.id}`, "libraryDoc", id);

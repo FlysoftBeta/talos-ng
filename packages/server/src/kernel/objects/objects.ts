@@ -49,6 +49,7 @@ export class ObjectLedger {
         object_id TEXT NOT NULL REFERENCES objects(id), owner_kind TEXT NOT NULL,
         owner_id TEXT NOT NULL, PRIMARY KEY(object_id,owner_kind,owner_id)
       ) STRICT;
+      CREATE INDEX IF NOT EXISTS object_refs_owner ON object_refs(owner_kind,owner_id);
     `),
         },
       ],

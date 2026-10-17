@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   rev INTEGER NOT NULL,
   deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN (0,1))
 ) STRICT;
-CREATE INDEX IF NOT EXISTS jobs_owner_rev ON jobs(owner, rev);
+CREATE INDEX IF NOT EXISTS jobs_owner_rev ON jobs(owner, rev, id);
 CREATE INDEX IF NOT EXISTS jobs_pending ON jobs(kind,state,run_after);
 `;
 
