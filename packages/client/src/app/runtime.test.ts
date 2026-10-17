@@ -375,7 +375,7 @@ describe("authentication race and privacy boundaries", () => {
       failed: 0,
       operations: [],
     });
-    expect(runtime.getSnapshot().nav.area).toBe("chat");
+    expect(runtime.getSnapshot().nav.area).toBe("recent");
     expect(runtime.settingMark("theme")).toBeUndefined();
     expect(await db.table("outbox").get(user.id)).toHaveLength(1);
   });
