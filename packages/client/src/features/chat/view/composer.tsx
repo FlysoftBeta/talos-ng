@@ -1,4 +1,5 @@
-import type { ReactElement, ComponentType } from "react";
+import { useRef } from "react";
+import type { ReactElement, ComponentType, RefObject } from "react";
 import { Button, IconButton } from "../../../ui/actions/index.ts";
 import { Dialog } from "../../../ui/overlays/index.ts";
 import { Icon } from "../../../ui/icon/index.ts";
@@ -15,6 +16,8 @@ export type ComposerViewProps = ReturnType<
     open: boolean;
     onClose(): void;
     onPick(sticker: ChatSticker): Promise<void>;
+    anchor: RefObject<HTMLElement | null>;
+    clear: RefObject<HTMLElement | null>;
   }>;
 };
 export function ComposerView({
@@ -48,8 +51,10 @@ export function ComposerView({
   onFile,
   StickerPicker,
 }: ComposerViewProps): ReactElement {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const field = useRef<HTMLElement>(null);
   return (
-    <section className="chat-composer" aria-label="消息编辑器">
+    <section ref={field} className="chat-composer" aria-label="消息编辑器">
       <SharedComposer
         data-testid="chat.composer.input"
         value={text}
@@ -96,10 +101,13 @@ export function ComposerView({
         actions={
           <>
             <IconButton
+              ref={trigger}
               label="贴纸"
               icon="sticker"
+              aria-expanded={stickers}
+              pressed={stickers ? true : undefined}
               disabled={!!restricted}
-              onClick={() => setStickers(true)}
+              onClick={() => setStickers(!stickers)}
             />
             <IconButton
               label="图片"
@@ -181,6 +189,8 @@ export function ComposerView({
         open={stickers}
         onClose={() => setStickers(false)}
         onPick={pick}
+        anchor={trigger}
+        clear={field}
       />
     </section>
   );

@@ -10,6 +10,8 @@ export function useFloating({
   onClose,
   align = "start",
   matchWidth = false,
+  side = "auto",
+  clear,
   focus = false,
   escapeBubbles = false,
 }: {
@@ -19,6 +21,10 @@ export function useFloating({
   onClose: () => void;
   align?: "start" | "end" | "center";
   matchWidth?: boolean;
+  /** "above" prefers the top side and only falls below when there is clearly more room. */
+  side?: "auto" | "above";
+  /** Element the surface must not cover: it replaces the anchor's vertical extent. */
+  clear?: RefObject<HTMLElement | null>;
   focus?: boolean;
   escapeBubbles?: boolean;
 }): void {
@@ -77,12 +83,21 @@ export function useFloating({
       node.style.maxWidth = `${Math.max(0, win.innerWidth - 16)}px`;
       if (matchWidth)
         node.style.width = `${Math.min(rect.right - rect.left, win.innerWidth - 16)}px`;
+      const avoid = clear?.current?.getBoundingClientRect();
       const position = placeFloating(
-        rect,
+        avoid
+          ? {
+              left: rect.left,
+              right: rect.right,
+              top: avoid.top,
+              bottom: avoid.bottom,
+            }
+          : rect,
         node.getBoundingClientRect().width,
         node.scrollHeight + 2,
         { width: win.innerWidth, height: win.innerHeight },
         align,
+        side,
       );
       node.style.left = `${position.left}px`;
       node.style.top = `${position.top}px`;
@@ -131,7 +146,17 @@ export function useFloating({
       doc.removeEventListener("focusin", away, true);
       doc.removeEventListener("keydown", key, true);
     };
-  }, [open, anchor, surface, align, matchWidth, focus, escapeBubbles]);
+  }, [
+    open,
+    anchor,
+    surface,
+    clear,
+    align,
+    side,
+    matchWidth,
+    focus,
+    escapeBubbles,
+  ]);
 }
 
 /** Roving menu/listbox focus; disabled options are never keyboard destinations. */

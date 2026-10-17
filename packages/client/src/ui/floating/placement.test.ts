@@ -13,6 +13,16 @@ describe("floating viewport placement", () => {
       ),
     ).toEqual({ left: 8, top: 236, maxHeight: 320 });
   });
+  it("prefers the top side when asked and the anchor has room above", () => {
+    const anchor = { left: 20, right: 60, top: 300, bottom: 340 };
+    const view = { width: 600, height: 500 };
+    expect(placeFloating(anchor, 240, 100, view).top).toBe(344);
+    expect(placeFloating(anchor, 240, 100, view, "start", "above")).toEqual({
+      left: 20,
+      top: 196,
+      maxHeight: 288,
+    });
+  });
   it("uses the larger side and caps a tall scrollable surface", () => {
     expect(
       placeFloating(

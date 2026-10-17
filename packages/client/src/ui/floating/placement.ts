@@ -11,12 +11,16 @@ export function placeFloating(
   height: number,
   viewport: { width: number; height: number },
   align: "start" | "end" | "center" = "start",
+  side: "auto" | "above" = "auto",
 ): { left: number; top: number; maxHeight: number } {
   const margin = 8,
     gap = 4;
   const below = Math.max(0, viewport.height - margin - anchor.bottom - gap);
   const above = Math.max(0, anchor.top - gap - margin);
-  const up = height > below && above > below;
+  const up =
+    side === "above"
+      ? above >= Math.min(height, 160) || above > below
+      : height > below && above > below;
   const maxHeight = Math.min(320, up ? above : below);
   const left =
     align === "end"

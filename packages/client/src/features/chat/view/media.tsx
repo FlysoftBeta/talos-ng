@@ -1,4 +1,5 @@
-import type { ReactElement, ComponentType } from "react";
+import { useRef } from "react";
+import type { ReactElement, ComponentType, RefObject } from "react";
 import type { ChatFile, ChatPost, ChatSticker } from "@talos/contract";
 import type {
   CachedImageController,
@@ -6,6 +7,11 @@ import type {
 } from "../model/media.ts";
 import { Button } from "../../../ui/actions/index.ts";
 import { Dialog } from "../../../ui/overlays/index.ts";
+import { Portal } from "../../../ui/floating/layers.tsx";
+import {
+  useFloating,
+  moveFloatingFocus,
+} from "../../../ui/floating/use-floating.ts";
 import { FileButton } from "../../../ui/inputs/index.ts";
 import { Icon } from "../../../ui/icon/index.ts";
 import { StatePanel } from "../../../ui/feedback/index.ts";
@@ -23,6 +29,10 @@ export interface StickerPickerProps {
   open: boolean;
   onClose(): void;
   onPick(sticker: ChatSticker): Promise<void>;
+  /** The button that opens the panel; the panel aligns to it. */
+  anchor: RefObject<HTMLElement | null>;
+  /** The composer field; the panel sits above it and never covers it. */
+  clear: RefObject<HTMLElement | null>;
 }
 export interface OriginalViewerProps {
   post: ChatPost | undefined;
@@ -93,6 +103,8 @@ export function StickerPickerView({
   open,
   onClose,
   onPick,
+  anchor,
+  clear,
   CachedImage,
   stickers,
   pack,
@@ -112,52 +124,72 @@ export function StickerPickerView({
     size: () => 96,
     estimate: 96,
   });
+  const surface = useRef<HTMLDivElement>(null);
+  useFloating({
+    open,
+    anchor,
+    surface,
+    clear,
+    side: "above",
+    onClose,
+    focus: true,
+  });
+  if (!open) return <></>;
   return (
-    <Dialog open={open} size="lg" title="发送贴纸" onClose={onClose}>
-      <div className="tabs chat-pack-tabs" role="tablist" aria-label="贴纸包">
-        {["recent", ...packs].map((name) => (
-          <button
-            key={name}
-            role="tab"
-            aria-selected={pack === name}
-            onClick={() => setPack(name)}
-          >
-            {name === "recent" ? "最近使用" : name}
-          </button>
-        ))}
+    <Portal>
+      <div
+        ref={surface}
+        tabIndex={-1}
+        onKeyDown={moveFloatingFocus}
+        className="floating-surface chat-sticker-panel"
+        role="dialog"
+        aria-label="发送贴纸"
+      >
+        <div className="tabs chat-pack-tabs" role="tablist" aria-label="贴纸包">
+          {["recent", ...packs].map((name) => (
+            <button
+              key={name}
+              role="tab"
+              aria-selected={pack === name}
+              onClick={() => setPack(name)}
+            >
+              {name === "recent" ? "最近使用" : name}
+            </button>
+          ))}
+        </div>
+        {error && <StatePanel state="error" hint={error} compact />}
+        {!selected.length ? (
+          <StatePanel
+            state={!can.ok && !stickers.length ? "offline" : "empty"}
+            title={pack === "recent" ? "还没有最近使用的贴纸" : undefined}
+            hint="从贴纸包中选择一张贴纸"
+          />
+        ) : (
+          <VirtualScroller
+            scroller={scroller}
+            label="贴纸"
+            style={{ height: 240 }}
+            renderItem={(row) => (
+              <div className="chat-sticker-row">
+                {row.map((sticker) => (
+                  <button
+                    className="chat-sticker"
+                    data-testid="chat.sticker"
+                    key={sticker.id}
+                    aria-label={`发送贴纸：${sticker.name}`}
+                    onClick={() => {
+                      void onPick(sticker);
+                    }}
+                  >
+                    <CachedImage file={sticker.file} label={sticker.name} />
+                  </button>
+                ))}
+              </div>
+            )}
+          />
+        )}
       </div>
-      {error && <StatePanel state="error" hint={error} compact />}
-      {!selected.length ? (
-        <StatePanel
-          state={!can.ok && !stickers.length ? "offline" : "empty"}
-          title={pack === "recent" ? "还没有最近使用的贴纸" : undefined}
-          hint="从贴纸包中选择一张贴纸"
-        />
-      ) : (
-        <VirtualScroller
-          scroller={scroller}
-          label="贴纸"
-          style={{ height: 384 }}
-          renderItem={(row) => (
-            <div className="chat-sticker-row">
-              {row.map((sticker) => (
-                <button
-                  className="chat-sticker"
-                  data-testid="chat.sticker"
-                  key={sticker.id}
-                  aria-label={`发送贴纸：${sticker.name}`}
-                  onClick={() => {
-                    void onPick(sticker);
-                  }}
-                >
-                  <CachedImage file={sticker.file} label={sticker.name} />
-                </button>
-              ))}
-            </div>
-          )}
-        />
-      )}
-    </Dialog>
+    </Portal>
   );
 }
 const stickerRowKey = (row: readonly ChatSticker[]): string =>
