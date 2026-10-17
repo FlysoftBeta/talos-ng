@@ -620,3 +620,14 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   5 s), the lazily rebuilt recursive zod JSON schema (now one walk) and duplicate result
   validation. Index added to the initial schema (`library_collections(owner, rev)`), no
   migration (nothing released).
+- **D-125 — Recent and frequent views rank by frecency, kept locally.** One pure module
+  (`client/src/core/ranking`) scores each item as an exponentially decayed visit count
+  (14-day half-life; visits within 30 s count once) and cuts lists where the score stops
+  being meaningful (absolute floor plus a fraction of the top score, with a hard maximum),
+  so list length follows the data. Opens of conversations, books, booklists, songs and
+  playlists are recorded as one compact `[score, at]` counter per item in a single per-user
+  kv document (IndexedDB, no Blobs, bounded to 300 entries, debounced save). Not synced:
+  the access counters are a per-device convenience, and cross-device merge would need a
+  server contract and scope for little value; rows already synced (favourites, queue,
+  retention `lastUsed`) are unchanged. Music and reading panels list recent plus frequent
+  items; the chat landing page hosts the global panel across all five kinds.

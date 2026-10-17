@@ -7,3 +7,5 @@ export {
   useMediaPlayer,
 } from "./connect/player.tsx";
 export { MediaBackground } from "./connect/background.tsx";
+export { useMedia } from "./connect/use-media.ts";
+export { playlistPageId } from "./model/actions.ts";

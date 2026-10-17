@@ -11,7 +11,12 @@ import {
   PaneTools,
   SectionHeader,
 } from "../../../ui/layout/index.ts";
-import { ListRow, StatePanel } from "../../../ui/feedback/index.ts";
+import {
+  ListRow,
+  RecentSection,
+  StatePanel,
+} from "../../../ui/feedback/index.ts";
+import type { RecentItemView } from "../../../ui/feedback/index.ts";
 import "./media.css";
 
 export type MediaSourceId = "recent" | "favorite" | "search";
@@ -58,6 +63,8 @@ export function MediaListView({
   onCreate,
   onOpenPlaylist,
   creating,
+  recent,
+  frequent,
 }: {
   query: string;
   onQuery(value: string): void;
@@ -76,6 +83,10 @@ export function MediaListView({
   createReason: string | undefined;
   onCreate(): void;
   onOpenPlaylist(id: string): void;
+  /** Recently played songs and playlists. */
+  recent: readonly RecentItemView[];
+  /** Songs and playlists played often, not already under recent. */
+  frequent: readonly RecentItemView[];
   creating:
     | {
         title: string;
@@ -144,6 +155,8 @@ export function MediaListView({
             onClick={() => onSource(id)}
           />
         ))}
+        <RecentSection title="最近播放" items={recent} />
+        <RecentSection title="常听" items={frequent} />
         <div className="media-nav-section">
           <SectionHeader title="歌单" />
         </div>
