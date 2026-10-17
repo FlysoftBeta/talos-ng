@@ -90,7 +90,7 @@ server's preflight validation and the launcher's final validation use identical 
   inflation); paths reject traversal, drive prefixes, control bytes, symlinks, duplicate or
   case-colliding names, Windows device names and trailing dots/spaces. SHA-256 establishes
   integrity, not publisher identity; uploads need a root session and cloud manifests/downloads
-  require HTTPS without redirects and with bounded bodies and deadlines.
+  require HTTPS; at most 5 redirects are followed (GitHub latest/download redirects to its object host), each HTTPS only, with bounded bodies and deadlines.
 - **Candidate confirmation**: after apply, the new release must be confirmed (`ops.update.confirm`
   by root after checking the client; only the current child can confirm itself) within the original
   three-minute deadline, which a launcher restart never resets. A candidate
@@ -113,10 +113,14 @@ server's preflight validation and the launcher's final validation use identical 
 
 ## Assembly (`pnpm package`)
 
-Builds every workspace artifact and writes to ignored `dist/release/`: full installs
-(`.zip` for Windows, `.tar.gz` for Linux, recording native executable modes), per-platform
-`-update.zip` with `release.json`, and a `.zip.json` cloud manifest (`{v, build, url, size,
-sha256}`) to publish beside the ZIP over HTTPS. `--target <id>` or `TALOS_PACKAGE_TARGET`
+Builds every workspace artifact and writes to ignored `dist/release/`: `full/` holds the
+installs (`.zip` for Windows, `.tar.gz` for Linux, recording native executable modes);
+`update/` holds the per-platform `-update.zip` with `release.json` and a `.zip.json` cloud
+manifest (`{v, build, url, size, sha256}`, relative url). CI uploads the two directories as
+separate artifacts (`talos-update-<target>`, `talos-full-<target>`). On a tag the release job
+also publishes a fixed-name `talos-<platform>-update.json` whose url is the absolute versioned
+asset, so `releases/latest/download/talos-<platform>-update.json` always names the newest
+update; the server uses it when no manifest URL is configured (cloud updates stay opt-in). `--target <id>` or `TALOS_PACKAGE_TARGET`
 builds one. Only Node scripts do downloads and archive work (no tar/unzip/curl). yt-dlp is a
 pinned version with per-platform SHA-256 verified at package time. Installs include default
 config, `start.cmd`/`start.sh`, `migrate.cmd`/`migrate.sh`, opt-in Task Scheduler / systemd user-service helpers, licences

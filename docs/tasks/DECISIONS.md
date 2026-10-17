@@ -676,3 +676,11 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   is the raw offset (`next`, null once a page is short), so filtering never stalls paging.
   `media.search` takes `kind` (song/playlist/artist) and `offset`; `media.collection.open` lists
   a playlist's or artist's tracks. Live provider behaviour is unverified (no network in CI).
+- **D-131 — Update packs and full installs ship as separate artifacts; releases expose a fixed latest manifest.**
+  `pnpm package` writes `dist/release/update/` and `dist/release/full/`; CI uploads
+  `talos-update-<target>` and `talos-full-<target>`. The release job adds
+  `talos-<platform>-update.json` (absolute versioned asset url) so
+  `https://github.com/FlysoftBeta/talos-ng/releases/latest/download/talos-<platform>-update.json`
+  is a stable endpoint. The updater follows up to 5 HTTPS-only redirects (GitHub answers 302 to
+  its object host) and defaults to that URL for the installed target when `manifestUrl` is empty;
+  `cloudEnabled` remains opt-in.

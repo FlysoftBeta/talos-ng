@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { digest, hostTarget, writeZip } from "@talos/launcher";
 import type { OpsSettings } from "../repo.ts";
-import { Updates, fetchBytes } from "./service.ts";
+import { Updates, defaultManifestUrl, fetchBytes } from "./service.ts";
 import type { FetchBytes, UpdateBridge } from "./service.ts";
 
 const dirs: string[] = [];
@@ -116,10 +116,6 @@ describe("update manifest and check", () => {
       code: "E_UNAVAILABLE",
     });
     expect(off.updates.status().phase).toBe("idle");
-    const noUrl = await fixture({ settings: { manifestUrl: "" } });
-    await expect(noUrl.updates.check()).rejects.toMatchObject({
-      code: "E_UNAVAILABLE",
-    });
     const bare = await fixture({ bridge: null });
     expect(bare.updates.status().launcher).toBe(false);
     await expect(bare.updates.check()).rejects.toMatchObject({
@@ -328,6 +324,59 @@ describe("fetchBytes", () => {
       {
         code: "E_UNAVAILABLE",
       },
+    );
+  });
+
+  it("follows a bounded number of HTTPS redirects and refuses downgrades", async () => {
+    const calls: string[] = [];
+    const redirect = (to: string) =>
+      new Response(null, { status: 302, headers: { location: to } });
+    const stub = vi.fn(async (url: string) => {
+      calls.push(url);
+      if (url.endsWith("/latest")) return redirect("https://objects.example/a");
+      if (url.endsWith("/loop")) return redirect("/loop");
+      if (url.endsWith("/down")) return redirect("http://objects.example/a");
+      return new Response("ok");
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      expect(
+        Buffer.from(
+          await fetchBytes("https://example.org/latest", 10),
+        ).toString(),
+      ).toBe("ok");
+      expect(calls).toEqual([
+        "https://example.org/latest",
+        "https://objects.example/a",
+      ]);
+      await expect(
+        fetchBytes("https://example.org/down", 10),
+      ).rejects.toMatchObject({ code: "E_INVALID" });
+      calls.length = 0;
+      await expect(
+        fetchBytes("https://example.org/loop", 10),
+      ).rejects.toMatchObject({ code: "E_UNAVAILABLE" });
+      expect(calls).toHaveLength(6);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("default manifest url", () => {
+  it("checks the latest release manifest of the running platform when none is configured", async () => {
+    const urls: string[] = [];
+    const f = await fixture({
+      settings: { manifestUrl: "" },
+      fetch: async (url) => {
+        urls.push(url);
+        return manifestBytes({});
+      },
+    });
+    await f.updates.check();
+    expect(urls).toEqual([defaultManifestUrl(hostTarget())]);
+    expect(urls[0]).toMatch(
+      /^https:\/\/github\.com\/FlysoftBeta\/talos-ng\/releases\/latest\/download\/talos-[a-z0-9-]+-update\.json$/,
     );
   });
 });

@@ -54,8 +54,14 @@ jobs:
       - run: pnpm package -- --target ${{ matrix.target }}
       - uses: actions/upload-artifact@v7.0.2
         with:
-          name: talos-${{ matrix.target }}
-          path: dist/release/*
+          name: talos-update-${{ matrix.target }}
+          path: dist/release/update/*
+          if-no-files-found: error
+          compression-level: 0
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: talos-full-${{ matrix.target }}
+          path: dist/release/full/*
           if-no-files-found: error
           compression-level: 0
 
@@ -74,6 +80,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Fixed-name per-platform manifests with an absolute versioned url, so
+          # releases/latest/download/talos-<platform>-update.json is always current.
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          for m in release/talos-*-update.zip.json; do
+            zip=$(basename "${m%.json}")
+            platform=$(jq -er .platform "$m")
+            jq -c --arg url "$base/$zip" '.url = $url' "$m" > "release/talos-$platform-update.json"
+          done
           (cd release && sha256sum * > SHA256SUMS)
           gh release create "$GITHUB_REF_NAME" release/* \
             --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

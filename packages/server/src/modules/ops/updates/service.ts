@@ -26,16 +26,28 @@ interface CloudManifest {
   sha256: string;
 }
 export type FetchBytes = (url: string, limit: number) => Promise<Uint8Array>;
+const MAX_REDIRECTS = 5;
+export const defaultManifestUrl = (platform: string): string =>
+  `https://github.com/FlysoftBeta/talos-ng/releases/latest/download/talos-${platform}-update.json`;
 export const fetchBytes: FetchBytes = async (url, limit) => {
-  if (!/^https:\/\//.test(url))
-    throw new AppError("E_INVALID", "云端更新地址必须使用 HTTPS");
   const controller = new AbortController(),
     timer = setTimeout(() => controller.abort(), 120_000);
   try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      redirect: "error",
-    });
+    let response: Response;
+    for (let hops = 0; ; hops++) {
+      if (!/^https:\/\//.test(url))
+        throw new AppError("E_INVALID", "云端更新地址必须使用 HTTPS");
+      response = await fetch(url, {
+        signal: controller.signal,
+        redirect: "manual",
+      });
+      if (response.status < 300 || response.status >= 400) break;
+      const location = response.headers.get("location");
+      await response.body?.cancel();
+      if (!location || hops >= MAX_REDIRECTS)
+        throw new AppError("E_UNAVAILABLE", "更新地址重定向过多");
+      url = new URL(location, url).href;
+    }
     if (!response.ok || !response.body)
       throw new AppError("E_UNAVAILABLE", "下载失败");
     const chunks: Uint8Array[] = [];
@@ -149,11 +161,14 @@ export class Updates {
   async check(): Promise<ResultOf<typeof contract.ops.update.status>> {
     this.requireIdle();
     const settings = this.repo.settings();
-    if (!settings.cloudEnabled || !settings.manifestUrl)
-      throw new AppError("E_UNAVAILABLE", "云端更新未开启或未配置地址");
+    if (!settings.cloudEnabled)
+      throw new AppError("E_UNAVAILABLE", "云端更新未开启");
+    const manifestUrl =
+      settings.manifestUrl ||
+      defaultManifestUrl(installedTarget(process.env.TALOS_LAUNCHER_ROOT));
     this.state.phase = "checking";
     try {
-      this.latest = await this.fetchManifest(settings.manifestUrl);
+      this.latest = await this.fetchManifest(manifestUrl);
       this.state.candidate = this.latest.build;
       this.state.phase = "idle";
       this.state.lastError = null;

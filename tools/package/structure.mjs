@@ -10,7 +10,8 @@ import {
 } from "../../packages/launcher/src/index.ts";
 
 export async function checkLinuxStructure(root, build, target, other) {
-  const dir = join(root, "dist/release");
+  const dir = join(root, "dist/release/update"),
+    full = join(root, "dist/release/full");
   const base = `talos-${build}-${target}`;
   const bytes = await readFile(join(dir, base + "-update.zip"));
   const { files, manifest } = verifyRelease(bytes);
@@ -30,7 +31,7 @@ export async function checkLinuxStructure(root, build, target, other) {
   assert.equal(cloud.platform, target);
   assert.equal(cloud.sha256, digest(bytes));
   assert.equal(cloud.size, bytes.length);
-  const tar = gunzipSync(await readFile(join(dir, base + ".tar.gz")));
+  const tar = gunzipSync(await readFile(join(full, base + ".tar.gz")));
   const entries = new Map();
   for (let p = 0; p + 512 <= tar.length;) {
     const tail = tar

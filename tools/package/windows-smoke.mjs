@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { createServer } from "node:net";
 import { readZip } from "../../packages/launcher/src/index.ts";
 const root = resolve(import.meta.dirname, "../..");
-const files = await readdir(join(root, "dist/release"));
+const files = await readdir(join(root, "dist/release/full"));
 const archive =
   process.argv[2] ?? files.find((n) => n.endsWith("-win32-x64.zip"));
 if (!archive) throw new Error("Build a Windows package first");
@@ -52,7 +52,9 @@ async function execute(args, timeout = 60000) {
   });
 }
 try {
-  const entries = readZip(await readFile(join(root, "dist/release", archive)));
+  const entries = readZip(
+    await readFile(join(root, "dist/release/full", archive)),
+  );
   const names = [...entries.keys()];
   for (const required of ["runtime/node.exe", "start.cmd"])
     assert.ok(entries.has(required), `Missing ${required}`);

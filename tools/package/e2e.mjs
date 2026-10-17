@@ -147,7 +147,9 @@ try {
   await checkLinuxStructure(root, B, otherTarget, target);
   await checkLinuxStructure(root, B, target, otherTarget);
   const tar = gunzipSync(
-    await readFile(join(root, "dist/release", `talos-${A}-${target}.tar.gz`)),
+    await readFile(
+      join(root, "dist/release/full", `talos-${A}-${target}.tar.gz`),
+    ),
   );
   for (let p = 0; p + 512 <= tar.length;) {
     const tail = tar
@@ -281,10 +283,10 @@ try {
   const objectBytes = Buffer.from("打包端到端对象"),
     objectUpload = await upload(objectBytes);
   const updateB = await readFile(
-    join(root, "dist/release", `talos-${B}-${target}-update.zip`),
+    join(root, "dist/release/update", `talos-${B}-${target}-update.zip`),
   );
   const wrongUpdate = await readFile(
-    join(root, "dist/release", `talos-${B}-${otherTarget}-update.zip`),
+    join(root, "dist/release/update", `talos-${B}-${otherTarget}-update.zip`),
   );
   await assert.rejects(
     connection.api.ops.update.stage(
