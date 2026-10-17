@@ -433,4 +433,16 @@ describe("playback transport edge cases", () => {
     t.controller.closeQueue();
     expect(t.controller.getState().queueOpen).toBe(false);
   });
+
+  it("play all starts the first track and queues the rest; enqueue all skips queued ones", async () => {
+    const t = setup({ state: { queue: [], queueStamp: null } as never });
+    t.command.mockResolvedValue(granted());
+    await t.controller.playAll([track("a"), track("b"), track("c")]);
+    expect(t.controller.getState().current?.id).toBe("a");
+    expect(t.controller.queueTracks).toEqual(["b", "c"]);
+    t.controller.enqueueAll(["c", "d", "e"]);
+    expect(t.controller.queueTracks).toEqual(["b", "c", "d", "e"]);
+    await t.controller.playAll([]);
+    expect(t.controller.getState().current?.id).toBe("a");
+  });
 });

@@ -13,18 +13,23 @@ export interface ProviderTrack {
   durationMs: number;
   url: string;
 }
-export type SearchKind = "song" | "playlist" | "artist";
+export type CollectionKind = "playlist" | "artist" | "album";
+export type SearchKind = "song" | CollectionKind;
 export interface ProviderCollection {
-  kind: "playlist" | "artist";
+  kind: CollectionKind;
   id: string;
   title: string;
   subtitle: string;
+  /** An https cover or avatar url, null when the listing has none. */
+  thumbnail: string | null;
 }
 /** One page of provider results; `next` is the offset of the following page, null at the end. */
 export interface ProviderPage {
   tracks: ProviderTrack[];
   collections: ProviderCollection[];
   next: number | null;
+  /** The opened playlist, album or artist itself; null for search pages. */
+  collection: ProviderCollection | null;
 }
 export interface MediaProvider {
   search(
@@ -34,7 +39,7 @@ export interface MediaProvider {
   /** The music tracks of a playlist or an artist, paged. */
   collection(
     input: {
-      kind: "playlist" | "artist";
+      kind: CollectionKind;
       id: string;
       offset: number;
       limit: number;
@@ -79,15 +84,45 @@ interface RawEntry {
   categories?: unknown;
   playlist_count?: unknown;
   url?: unknown;
+  thumbnails?: unknown;
 }
 const SEARCH_FILTER = {
   playlist: "EgIQAw%253D%253D",
   artist: "EgIQAg%253D%253D",
 } as const;
+/** Album ids on YouTube Music are OLAK5uy_ playlists; uploaded albums are ordinary playlists. */
+const ID_PATTERN = {
+  playlist: /^(PL|OL|RD|UU)/,
+  album: /^(OLAK5uy_|PL|OL)/,
+  artist: /^UC/,
+} as const;
+const ALBUM_TITLE = /album|专辑|專輯|アルバム|\bEP\b|\bOST\b|원|앨범/i;
 const entryList = (output: Buffer): RawEntry[] => {
   const value = JSON.parse(output.toString("utf8")) as RawEntry;
   return Array.isArray(value.entries) ? (value.entries as RawEntry[]) : [];
 };
+const parsed = (output: Buffer): RawEntry =>
+  JSON.parse(output.toString("utf8")) as RawEntry;
+/** The smallest https image at least 300 px wide, else the widest one. */
+function thumbnailOf(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const images = value
+    .filter(
+      (v): v is { url: string; width?: unknown } =>
+        !!v && typeof v === "object" && typeof (v as RawEntry).url === "string",
+    )
+    .filter((v) => v.url.startsWith("https://"))
+    .map((v) => ({
+      url: v.url,
+      width: typeof v.width === "number" ? v.width : 0,
+    }));
+  const big = images
+    .filter((v) => v.width >= 300)
+    .sort((a, b) => a.width - b.width);
+  return (
+    big[0]?.url ?? images.sort((a, b) => b.width - a.width)[0]?.url ?? null
+  );
+}
 function musicTracks(entries: RawEntry[]): ProviderTrack[] {
   return entries
     .filter(
@@ -103,36 +138,58 @@ function musicTracks(entries: RawEntry[]): ProviderTrack[] {
     .map(parse)
     .filter((v): v is ProviderTrack => !!v);
 }
+const ownerOf = (e: RawEntry): string =>
+  typeof e.channel === "string"
+    ? e.channel
+    : typeof e.uploader === "string"
+      ? e.uploader
+      : "";
+function subtitleOf(kind: CollectionKind, e: RawEntry): string {
+  if (kind === "artist") return "歌手";
+  const count =
+    typeof e.playlist_count === "number" ? `${e.playlist_count} 首` : "";
+  return [kind === "album" ? "专辑" : "", ownerOf(e), count]
+    .filter(Boolean)
+    .join(" · ");
+}
 function collectionsOf(
   entries: RawEntry[],
-  kind: "playlist" | "artist",
+  kind: CollectionKind,
 ): ProviderCollection[] {
   const out: ProviderCollection[] = [];
   for (const e of entries) {
     if (typeof e.id !== "string" || typeof e.title !== "string") continue;
     if (!/^[\w-]{1,100}$/.test(e.id)) continue;
-    // Playlist ids start with PL/OL/RD/UU; channel ids with UC. Anything else is a video.
-    if (kind === "playlist" ? !/^(PL|OL|RD|UU)/.test(e.id) : !/^UC/.test(e.id))
-      continue;
-    const owner =
-      typeof e.channel === "string"
-        ? e.channel
-        : typeof e.uploader === "string"
-          ? e.uploader
-          : "";
-    const count =
-      typeof e.playlist_count === "number" ? `${e.playlist_count} 首` : "";
+    // Anything that is not a playlist, album or channel id is a plain video.
+    if (!ID_PATTERN[kind].test(e.id)) continue;
     out.push({
       kind,
       id: e.id,
       title: e.title,
-      subtitle:
-        kind === "playlist"
-          ? [owner, count].filter(Boolean).join(" · ")
-          : "歌手",
+      subtitle: subtitleOf(kind, e),
+      thumbnail: thumbnailOf(e.thumbnails),
     });
   }
   return out;
+}
+/** The header of an opened collection from the top level of its yt-dlp output. */
+function headerOf(
+  kind: CollectionKind,
+  id: string,
+  value: RawEntry,
+): ProviderCollection {
+  const raw = typeof value.title === "string" ? value.title : "";
+  const title =
+    kind === "artist"
+      ? ownerOf(value) || raw.replace(/ - (Videos|视频|影片)$/, "")
+      : raw;
+  return {
+    kind,
+    id,
+    title: title || id,
+    subtitle: subtitleOf(kind, value),
+    thumbnail: thumbnailOf(value.thumbnails),
+  };
 }
 function parse(raw: RawEntry): ProviderTrack | null {
   if (typeof raw.id !== "string" || typeof raw.title !== "string") return null;
@@ -202,63 +259,158 @@ export class YtDlpProvider implements MediaProvider {
       signal?.removeEventListener("abort", abort);
     }
   }
+  private page(
+    entries: RawEntry[],
+    offset: number,
+    limit: number,
+    kind: SearchKind | "tracks",
+    header: ProviderCollection | null = null,
+  ): ProviderPage {
+    return {
+      tracks: kind === "song" || kind === "tracks" ? musicTracks(entries) : [],
+      collections:
+        kind === "song" || kind === "tracks"
+          ? []
+          : collectionsOf(entries, kind),
+      next: nextOffset(offset, limit, entries.length),
+      collection: header,
+    };
+  }
+  private items(offset: number, limit: number, target: string): string[] {
+    return [
+      "--flat-playlist",
+      "--dump-single-json",
+      "--playlist-items",
+      `${offset + 1}-${offset + limit}`,
+      target,
+    ];
+  }
   async search(
     input: { query: string; kind: SearchKind; offset: number; limit: number },
     signal?: CancellationSignal,
   ): Promise<ProviderPage> {
     const { query, kind, offset, limit } = input;
-    const target =
-      kind === "song"
-        ? `ytsearch${offset + limit}:${query}`
-        : `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=${SEARCH_FILTER[kind]}`;
+    const q = encodeURIComponent(query);
+    const web = (text: string, filter: string) =>
+      `https://www.youtube.com/results?search_query=${text}&sp=${filter}`;
+    if (kind === "song") {
+      const output = await this.run(
+        this.items(offset, limit, `ytsearch${offset + limit}:${query}`),
+        signal,
+      );
+      return this.page(entryList(output), offset, limit, kind);
+    }
+    if (kind === "album") {
+      // YouTube Music's album shelf first; some yt-dlp builds list nothing there, so fall
+      // back to ordinary playlists that are named like albums.
+      let entries = entryList(
+        await this.run(
+          this.items(
+            offset,
+            limit,
+            `https://music.youtube.com/search?q=${q}#albums`,
+          ),
+          signal,
+        ),
+      );
+      let raw = entries.length;
+      if (!entries.length) {
+        entries = entryList(
+          await this.run(
+            this.items(
+              offset,
+              limit,
+              web(encodeURIComponent(`${query} album`), SEARCH_FILTER.playlist),
+            ),
+            signal,
+          ),
+        );
+        raw = entries.length;
+        entries = entries.filter(
+          (e) =>
+            typeof e.id === "string" &&
+            (e.id.startsWith("OLAK5uy_") ||
+              (typeof e.title === "string" && ALBUM_TITLE.test(e.title))),
+        );
+      }
+      return {
+        ...this.page(entries, offset, limit, kind),
+        next: nextOffset(offset, limit, raw),
+      };
+    }
     const output = await this.run(
-      [
-        "--flat-playlist",
-        "--dump-single-json",
-        "--playlist-items",
-        `${offset + 1}-${offset + limit}`,
-        target,
-      ],
+      this.items(offset, limit, web(q, SEARCH_FILTER[kind])),
       signal,
     );
-    const entries = entryList(output);
-    return {
-      tracks: kind === "song" ? musicTracks(entries) : [],
-      collections: kind === "song" ? [] : collectionsOf(entries, kind),
-      next: nextOffset(offset, limit, entries.length),
-    };
+    return this.page(entryList(output), offset, limit, kind);
+  }
+  /** An artist's albums: its releases tab, else its playlists (best effort, never fatal). */
+  private async artistShelf(
+    id: string,
+    limit: number,
+    signal?: CancellationSignal,
+  ): Promise<ProviderCollection[]> {
+    for (const [tab, kind] of [
+      ["releases", "album"],
+      ["playlists", "playlist"],
+    ] as const) {
+      try {
+        const found = collectionsOf(
+          entryList(
+            await this.run(
+              this.items(
+                0,
+                limit,
+                `https://www.youtube.com/channel/${id}/${tab}`,
+              ),
+              signal,
+            ),
+          ),
+          kind,
+        );
+        if (found.length) return found;
+      } catch (e) {
+        if (signal?.aborted) throw e;
+      }
+    }
+    return [];
   }
   async collection(
     input: {
-      kind: "playlist" | "artist";
+      kind: CollectionKind;
       id: string;
       offset: number;
       limit: number;
     },
     signal?: CancellationSignal,
   ): Promise<ProviderPage> {
-    if (!/^[\w-]{1,100}$/.test(input.id))
+    const { kind, id, offset, limit } = input;
+    if (!/^[\w-]{1,100}$/.test(id))
       throw new AppError("E_INVALID", "音乐来源无效");
     const url =
-      input.kind === "playlist"
-        ? `https://www.youtube.com/playlist?list=${input.id}`
-        : `https://www.youtube.com/channel/${input.id}/videos`;
-    const output = await this.run(
-      [
-        "--flat-playlist",
-        "--dump-single-json",
-        "--playlist-items",
-        `${input.offset + 1}-${input.offset + input.limit}`,
-        url,
-      ],
-      signal,
+      kind === "artist"
+        ? `https://www.youtube.com/channel/${id}/videos`
+        : `https://www.youtube.com/playlist?list=${id}`;
+    const [output, shelf] = await Promise.all([
+      this.run(this.items(offset, limit, url), signal),
+      // An artist page also lists albums, once, with its first page of songs.
+      kind === "artist" && offset === 0
+        ? this.artistShelf(id, limit, signal)
+        : Promise.resolve([]),
+    ]);
+    const value = parsed(output);
+    const entries = Array.isArray(value.entries)
+      ? (value.entries as RawEntry[])
+      : [];
+    const page = this.page(
+      entries,
+      offset,
+      limit,
+      "tracks",
+      headerOf(kind, id, value),
     );
-    const entries = entryList(output);
-    return {
-      tracks: musicTracks(entries),
-      collections: [],
-      next: nextOffset(input.offset, input.limit, entries.length),
-    };
+    page.collections = shelf;
+    return page;
   }
   async resolve(
     source: string,
@@ -331,16 +483,19 @@ export class FakeMediaProvider implements MediaProvider {
                       id: "fake-list",
                       title: "练习曲合集",
                       subtitle: `${all.length} 首`,
+                      thumbnail: null,
                     }
                   : {
                       kind: "artist",
                       id: "fake-artist",
                       title: "Talos 测试音频",
                       subtitle: "歌手",
+                      thumbnail: null,
                     },
               ]
             : [],
         next: null,
+        collection: null,
       };
     const hits = all.filter((t) =>
       `${t.title} ${t.artists.join(" ")}`.toLowerCase().includes(q),
@@ -353,10 +508,11 @@ export class FakeMediaProvider implements MediaProvider {
         input.offset + input.limit < hits.length
           ? input.offset + input.limit
           : null,
+      collection: null,
     };
   }
   async collection(input: {
-    kind: "playlist" | "artist";
+    kind: CollectionKind;
     id: string;
     offset: number;
     limit: number;
@@ -367,11 +523,29 @@ export class FakeMediaProvider implements MediaProvider {
     const tracks = all.slice(input.offset, input.offset + input.limit);
     return {
       tracks,
-      collections: [],
+      collections:
+        input.kind === "artist" && input.offset === 0
+          ? [
+              {
+                kind: "album",
+                id: "fake-album",
+                title: "练习曲专辑",
+                subtitle: "专辑",
+                thumbnail: null,
+              },
+            ]
+          : [],
       next:
         input.offset + input.limit < all.length
           ? input.offset + input.limit
           : null,
+      collection: {
+        kind: input.kind,
+        id: input.id,
+        title: input.kind === "artist" ? "Talos 测试音频" : "练习曲合集",
+        subtitle: input.kind === "artist" ? "歌手" : `${all.length} 首`,
+        thumbnail: null,
+      },
     };
   }
   async resolve(source: string, providerId: string): Promise<ProviderTrack> {

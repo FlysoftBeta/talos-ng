@@ -374,7 +374,12 @@ it("cancels and awaits a provider request already admitted over Link before dele
     released = deferred<void>();
   const k = kernel(new Db(), {
     mediaProvider: {
-      collection: async () => ({ tracks: [], collections: [], next: null }),
+      collection: async () => ({
+        tracks: [],
+        collections: [],
+        next: null,
+        collection: null,
+      }),
       search: async (_input, signal) => {
         signal!.addEventListener("abort", () => aborted.resolve());
         entered.resolve();
@@ -382,6 +387,7 @@ it("cancels and awaits a provider request already admitted over Link before dele
         return {
           collections: [],
           next: null,
+          collection: null,
           tracks: [
             {
               source: "test",

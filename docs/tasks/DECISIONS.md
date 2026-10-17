@@ -689,3 +689,11 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   and outside 45 s-20 min (live and spoken titles are still rejected). Requiring a duration (D-130)
   emptied the song tab whenever the listing lacked it. The provider takes an injectable subprocess
   runner, and `fixtures/` holds recorded yt-dlp 2026.08.19 output for the provider tests.
+- **D-133 — Online collections have a details page; albums are a search kind.** `media.search`
+  and `media.collection.open` take kind song/playlist/album/artist and answer a `collection`
+  header (cover, title, subtitle) next to tracks and `collections`. yt-dlp has no reliable album
+  listing: albums come from the `music.youtube.com/search?q=…#albums` shelf, else from
+  album-named playlists of the playlist search; an artist page lists songs (`/videos`) and, on
+  its first page only, albums (`/releases`, else `/playlists`). Album pages are playlist urls
+  (OLAK5uy_ ids work). The client keeps a trail of opened pages and the state machine in
+  `model/online-search.ts`. Verified live against yt-dlp 2026.08.19 except OLAK5uy_ album opens.

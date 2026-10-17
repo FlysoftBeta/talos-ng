@@ -15,6 +15,7 @@ import {
   listBody,
   removeFromPlaylist,
   retentionChoices,
+  saveAsPlaylist,
   searchTracks,
   validRetention,
   watchDeviceCache,
@@ -145,6 +146,31 @@ describe("media actions", () => {
     await expect(
       searchTracks({ command: async () => ({ queued: true }) } as never, "x"),
     ).rejects.toThrow("搜索尚未完成");
+  });
+  it("saves a collection as a new playlist, truncating the title, then opens it", async () => {
+    const command = vi.fn(async (...call: [{ name: string }, unknown?]) =>
+      call[0].name === "media.playlist.create"
+        ? { playlist: { id: "p1", title: "x", tracks: [] } }
+        : {},
+    );
+    const dispatch = vi.fn();
+    const sync = vi.fn(async () => {});
+    const ok = await saveAsPlaylist(
+      { command, dispatch, sync } as never,
+      "很长".repeat(60),
+      ["t1", "t2"],
+    );
+    expect(ok).toBe(true);
+    expect(command.mock.calls[0]![1]).toEqual({ title: "很长".repeat(40) });
+    expect(command.mock.calls[1]![1]).toEqual({
+      playlist: "p1",
+      tracks: ["t1", "t2"],
+    });
+    expect(dispatch).toHaveBeenCalled();
+    command.mockResolvedValueOnce({ queued: true } as never);
+    expect(
+      await saveAsPlaylist({ command, dispatch, sync } as never, "x", ["t"]),
+    ).toBe(false);
   });
   it("validates and lists retention choices", () => {
     expect(retentionChoices(45)).toEqual(["auto", 1, 7, 30, 45, 90, 365]);

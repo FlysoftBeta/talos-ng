@@ -85,6 +85,8 @@ export function MediaPlayerProvider({
     setVolume: controller.setVolume,
     toggleQueue: controller.toggleQueue,
     enqueue: controller.enqueue,
+    enqueueAll: controller.enqueueAll,
+    playAll: controller.playAll,
     setStopAtEnd: (value) => controller.setStopAtEnd(value),
   };
   return (

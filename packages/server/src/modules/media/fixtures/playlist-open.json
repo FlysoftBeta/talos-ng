@@ -2,14 +2,56 @@
   "id": "PLgFC_SXvt6Lk4qThY0Wg3p-ehQXKq2lEr",
   "title": "周杰倫 精選 | 周杰伦 精选 | Jay Chou M/V Collection",
   "_type": "playlist",
-  "extractor_key": "YoutubeTab",
   "playlist_count": 13,
   "channel": "周杰倫 Jay Chou",
   "uploader": "周杰倫 Jay Chou",
-  "webpage_url": "https://www.youtube.com/playlist?list=PLgFC_SXvt6Lk4qThY0Wg3p-ehQXKq2lEr",
+  "thumbnails": [
+    {
+      "url": "https://i.ytimg.com/vi/DGQm5tbpUyE/hqdefault.jpg?sqp=-oaymwEWCKgBEF5IWvKriqkDCQgBFQAAiEIYAQ==&rs=AOn4CLDXqkvoSsiCYLDWObmvcAc2kVk-zg",
+      "width": 168,
+      "height": 94
+    },
+    {
+      "url": "https://i.ytimg.com/vi/DGQm5tbpUyE/hqdefault.jpg?sqp=-oaymwEWCMQBEG5IWvKriqkDCQgBFQAAiEIYAQ==&rs=AOn4CLCxqKgTLp3JPRW4k20DtxAUNp_eeg",
+      "width": 196,
+      "height": 110
+    },
+    {
+      "url": "https://i.ytimg.com/vi/DGQm5tbpUyE/hqdefault.jpg?sqp=-oaymwEXCPYBEIoBSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLBu7iIOhzdl71iEhB9DAKs-arY11g",
+      "width": 246,
+      "height": 138
+    },
+    {
+      "url": "https://i.ytimg.com/vi/DGQm5tbpUyE/hqdefault.jpg?sqp=-oaymwEXCNACELwBSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLAxsmd7zO1uIXWvkMkqBkldoLHSPg",
+      "width": 336,
+      "height": 188
+    }
+  ],
   "entries": [
     {
       "title": "*周杰伦*Jay Chou慢歌精选30首合集 - 陪你一个慵懒的下午 - 30 Songs of the Most Popular Chinese Singer",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/mx9Npfwf8xQ/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLCf8ftens9rYF5HTuL_hA9etDjWrA",
+          "height": 94,
+          "width": 168
+        },
+        {
+          "url": "https://i.ytimg.com/vi/mx9Npfwf8xQ/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLDVdd6_itoHAyzzLfYe6Me4fVHBXw",
+          "height": 110,
+          "width": 196
+        },
+        {
+          "url": "https://i.ytimg.com/vi/mx9Npfwf8xQ/hqdefault.jpg?sqp=-oaymwEcCPYBEIoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLBorDgeHFlo3JcjjKgJSSRXSr8cZg",
+          "height": 138,
+          "width": 246
+        },
+        {
+          "url": "https://i.ytimg.com/vi/mx9Npfwf8xQ/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLA_VFwq9u77aMOefCGsjmbnqT-Z9Q",
+          "height": 188,
+          "width": 336
+        }
+      ],
       "duration": 8064,
       "view_count": 3500000,
       "timestamp": null,
@@ -30,6 +72,28 @@
     },
     {
       "title": "周杰倫好聽的20首歌 Best Songs Of Jay Chou 周杰倫最偉大的命中",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/DGQm5tbpUyE/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLDIo4MvSGEY_1FbbTBd-or21oF9Rw",
+          "height": 94,
+          "width": 168
+        },
+        {
+          "url": "https://i.ytimg.com/vi/DGQm5tbpUyE/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBJXGdKoxT6dZKRsBOMsKrsuq7YLw",
+          "height": 110,
+          "width": 196
+        },
+        {
+          "url": "https://i.ytimg.com/vi/DGQm5tbpUyE/hqdefault.jpg?sqp=-oaymwEcCPYBEIoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLAKPB5E78r1yqeSP31tXyQuQnvl_g",
+          "height": 138,
+          "width": 246
+        },
+        {
+          "url": "https://i.ytimg.com/vi/DGQm5tbpUyE/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCpTCTnJXJuLZ4QZnB7KzOxQgzEHQ",
+          "height": 188,
+          "width": 336
+        }
+      ],
       "duration": 5208,
       "view_count": 8500000,
       "timestamp": null,
@@ -50,6 +114,28 @@
     },
     {
       "title": "周杰倫好聽的10首歌 Best Songs Of Jay Chou 周杰倫最偉大的命中",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/VYt-6l-p4SM/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLAGId9H1dna8RmGwGPadX-GHc_ldA",
+          "height": 94,
+          "width": 168
+        },
+        {
+          "url": "https://i.ytimg.com/vi/VYt-6l-p4SM/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBA_nP0d7zmBdeHJsverB1N5AWC-w",
+          "height": 110,
+          "width": 196
+        },
+        {
+          "url": "https://i.ytimg.com/vi/VYt-6l-p4SM/hqdefault.jpg?sqp=-oaymwEcCPYBEIoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLAQbtPDq-UJayvIpZ_KPfCOSZJmeg",
+          "height": 138,
+          "width": 246
+        },
+        {
+          "url": "https://i.ytimg.com/vi/VYt-6l-p4SM/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCaAk6yjMWVZWFNgO3SF3J6FID7ig",
+          "height": 188,
+          "width": 336
+        }
+      ],
       "duration": 2618,
       "view_count": 284000,
       "timestamp": null,
@@ -70,6 +156,28 @@
     },
     {
       "title": "周杰倫好聽的10首歌 Best Songs Of Jay Chou 周杰倫最偉大的命中",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/swcUvjpW0MM/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLDh7Eioyv3lFdFQhEMsHixjsGc5sQ",
+          "height": 94,
+          "width": 168
+        },
+        {
+          "url": "https://i.ytimg.com/vi/swcUvjpW0MM/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLAhOhmt9v-kuG8wLOMBY5KJEaQfQQ",
+          "height": 110,
+          "width": 196
+        },
+        {
+          "url": "https://i.ytimg.com/vi/swcUvjpW0MM/hqdefault.jpg?sqp=-oaymwEcCPYBEIoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLBy-zR_vB6gB5a1x87SJv0yyv0zOg",
+          "height": 138,
+          "width": 246
+        },
+        {
+          "url": "https://i.ytimg.com/vi/swcUvjpW0MM/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLBr-9p8nrOYTeLxPGCuTKFrGkyT1A",
+          "height": 188,
+          "width": 336
+        }
+      ],
       "duration": 2615,
       "view_count": 1200000,
       "timestamp": null,
@@ -90,6 +198,28 @@
     },
     {
       "title": "周杰倫好聽的10首歌 Best Songs Of Jay Chou 周杰倫最偉大的命中 | Top 10 Hip-Hop Playlist",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/2HONw0MEUvQ/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLCadPPwd5HUGZuK3G0TJ3cL-uacMg",
+          "height": 94,
+          "width": 168
+        },
+        {
+          "url": "https://i.ytimg.com/vi/2HONw0MEUvQ/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLCsmrEwNMojn2fmm4MHdbvr5M11CQ",
+          "height": 110,
+          "width": 196
+        },
+        {
+          "url": "https://i.ytimg.com/vi/2HONw0MEUvQ/hqdefault.jpg?sqp=-oaymwEcCPYBEIoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCi7K2aDgbKjYlINs1KqBZb7cwcyA",
+          "height": 138,
+          "width": 246
+        },
+        {
+          "url": "https://i.ytimg.com/vi/2HONw0MEUvQ/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLBsuC6AgjBd5AFN1FcqPNH0_tjwHg",
+          "height": 188,
+          "width": 336
+        }
+      ],
       "duration": 2031,
       "view_count": 294000,
       "timestamp": null,

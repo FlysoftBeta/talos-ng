@@ -20,6 +20,19 @@ function fake(output: unknown) {
   };
   return { provider: new YtDlpProvider("yt-dlp", spawn), calls };
 }
+/** Answers by the url argument, like yt-dlp would; unknown urls fail like a missing tab. */
+function routed(outputs: Record<string, unknown>) {
+  const calls: string[][] = [];
+  const spawn: Spawn = async (_file, args) => {
+    calls.push(args);
+    const hit = Object.entries(outputs).find(([key]) =>
+      args.at(-1)!.includes(key),
+    );
+    if (!hit) throw new Error("ERROR: This channel does not have that tab");
+    return { stdout: Buffer.from(JSON.stringify(hit[1])) };
+  };
+  return { provider: new YtDlpProvider("yt-dlp", spawn), calls };
+}
 const noDurations = (name: string) => {
   const v = fixture(name);
   return {
@@ -130,6 +143,7 @@ describe("yt-dlp provider collections", () => {
       id: "PLgFC_SXvt6Lk4qThY0Wg3p-ehQXKq2lEr",
       title: expect.stringContaining("周杰倫 精選"),
       subtitle: "周杰倫 Jay Chou",
+      thumbnail: expect.stringMatching(/^https:\/\/i\.ytimg\.com\//),
     });
   });
   it("lists artist hits from the filtered results page", async () => {
@@ -195,5 +209,104 @@ describe("yt-dlp provider collections", () => {
       }),
     ).rejects.toThrow();
     expect(calls).toEqual([]);
+  });
+});
+
+describe("yt-dlp provider albums and collection pages", () => {
+  it("falls back to album-named playlists when the music shelf is empty", async () => {
+    const { provider, calls } = routed({
+      "music.youtube.com/search": fixture("search-albums-music"),
+      "youtube.com/results": fixture("search-albums-web"),
+    });
+    const page = await provider.search({
+      query: "周杰伦 范特西",
+      kind: "album",
+      offset: 0,
+      limit: 10,
+    });
+    expect(calls[0]!.at(-1)).toBe(
+      "https://music.youtube.com/search?q=%E5%91%A8%E6%9D%B0%E4%BC%A6%20%E8%8C%83%E7%89%B9%E8%A5%BF#albums",
+    );
+    expect(calls[1]!.at(-1)).toContain("%20album&sp=EgIQAw%253D%253D");
+    expect(page.collections.length).toBeGreaterThan(0);
+    expect(page.collections.every((c) => c.kind === "album")).toBe(true);
+    expect(page.collections[0]!.title).toMatch(/范特西|專輯|专辑/);
+    expect(page.collections[0]!.thumbnail).toMatch(/^https:\/\//);
+    // the cursor follows the raw listing, not the album-named subset
+    expect(page.next).toBe(10);
+  });
+  it("opens an album as a playlist and returns its header", async () => {
+    const { provider, calls } = routed({
+      "playlist?list=": fixture("playlist-songs"),
+    });
+    const page = await provider.collection({
+      kind: "album",
+      id: "OLAK5uy_abc-DEF",
+      offset: 0,
+      limit: 6,
+    });
+    expect(calls[0]!.at(-1)).toBe(
+      "https://www.youtube.com/playlist?list=OLAK5uy_abc-DEF",
+    );
+    expect(page.collection).toMatchObject({
+      kind: "album",
+      id: "OLAK5uy_abc-DEF",
+      title: "太陽之子 | Children of the Sun",
+      thumbnail: expect.stringMatching(/^https:\/\/i\.ytimg\.com\//),
+    });
+    expect(page.tracks.map((t) => t.providerId)).toEqual([
+      "yCWTHQ3_O-I",
+      "C78yprnyGsM",
+      "aGsrg1NO1cM",
+      "PJyFND4-zR4",
+      "a7ziV-RjqBo",
+    ]);
+    expect(page.next).toBe(6);
+  });
+  it("opens an artist with its songs, avatar and albums-or-playlists shelf", async () => {
+    const { provider, calls } = routed({
+      "/videos": fixture("channel-open"),
+      "/releases": fixture("artist-releases-empty"),
+      "/playlists": fixture("artist-playlists"),
+    });
+    const page = await provider.collection({
+      kind: "artist",
+      id: "UC8CU5nVhCQIdAGrFFp4loOQ",
+      offset: 0,
+      limit: 5,
+    });
+    expect(calls.map((c) => c.at(-1)!.split("/").pop()).sort()).toEqual([
+      "playlists",
+      "releases",
+      "videos",
+    ]);
+    expect(page.collection).toMatchObject({
+      kind: "artist",
+      title: "周杰倫 Jay Chou",
+      subtitle: "歌手",
+    });
+    expect(page.collection!.thumbnail).toMatch(/^https:\/\//);
+    expect(page.tracks.length).toBeGreaterThan(0);
+    expect(page.collections.length).toBeGreaterThan(0);
+    expect(page.collections.every((c) => c.id.startsWith("PL"))).toBe(true);
+  });
+  it("loads an artist's shelf only with the first page and survives missing tabs", async () => {
+    const { provider, calls } = routed({ "/videos": fixture("channel-open") });
+    const first = await provider.collection({
+      kind: "artist",
+      id: "UC8CU5nVhCQIdAGrFFp4loOQ",
+      offset: 0,
+      limit: 5,
+    });
+    expect(first.collections).toEqual([]);
+    expect(first.tracks.length).toBeGreaterThan(0);
+    calls.length = 0;
+    await provider.collection({
+      kind: "artist",
+      id: "UC8CU5nVhCQIdAGrFFp4loOQ",
+      offset: 5,
+      limit: 5,
+    });
+    expect(calls).toHaveLength(1);
   });
 });

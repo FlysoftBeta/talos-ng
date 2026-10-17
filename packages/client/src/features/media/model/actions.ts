@@ -86,16 +86,20 @@ export const validRetention = (days: number | "auto"): boolean =>
   days === "auto" || (Number.isInteger(days) && days >= 1 && days <= 365);
 
 // Commands
-export type SearchKind = "song" | "playlist" | "artist";
+export type CollectionKind = "playlist" | "artist" | "album";
+export type SearchKind = "song" | CollectionKind;
 export interface OnlineCollection {
-  kind: "playlist" | "artist";
+  kind: CollectionKind;
   id: string;
   title: string;
   subtitle: string;
+  thumbnail: string | null;
 }
 export interface MediaPage {
   tracks: MediaTrack[];
   collections: OnlineCollection[];
+  /** The opened playlist, album or artist itself; null for search pages. */
+  collection: OnlineCollection | null;
   next: number | null;
 }
 const PAGE_SIZE = 20;
@@ -129,6 +133,24 @@ export async function openCollection(
   });
   if ("queued" in value) throw new Error("加载尚未完成");
   return value;
+}
+/** Saves tracks as a new playlist of the library and opens it; false while only queued offline. */
+export async function saveAsPlaylist(
+  port: MediaCommandPort,
+  title: string,
+  tracks: readonly string[],
+): Promise<boolean> {
+  const created = await port.command(contract.media.playlist.create, {
+    title: title.trim().slice(0, 80) || "新歌单",
+  });
+  if ("queued" in created) return false;
+  await port.command(contract.media.playlist.items, {
+    playlist: created.playlist.id,
+    tracks: tracks.slice(0, 500),
+  });
+  await port.sync();
+  openPlaylist(port, created.playlist);
+  return true;
 }
 export function openPlaylist(
   port: Pick<RuntimeNavigationPort, "dispatch">,

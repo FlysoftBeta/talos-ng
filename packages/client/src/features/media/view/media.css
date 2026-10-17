@@ -480,20 +480,62 @@
 .media-online {
   padding: 8px 16px;
 }
-.media-online-tabs {
-  margin-bottom: 8px;
-}
 .media-online-tabs > * {
   margin-right: 8px;
 }
 .media-online-item {
   display: flex;
-  padding: 10px 0;
+  align-items: center;
+  padding: 8px 0;
   cursor: pointer;
 }
-.media-online-item > span:first-child {
+.media-online-thumb {
+  width: 40px;
+  height: 40px;
+  margin-right: 12px;
+  border-radius: 4px;
+  background: var(--surface-2, rgba(128, 128, 128, 0.2));
+  object-fit: cover;
+  flex: none;
+}
+.media-online-name {
   flex: 1;
+  min-width: 0;
+  margin-right: 12px;
 }
 .media-online-hint {
   opacity: 0.6;
+}
+.media-collection-head {
+  display: flex;
+  align-items: center;
+  margin: 12px 0;
+}
+.media-collection-cover {
+  width: 96px;
+  height: 96px;
+  margin-right: 16px;
+  border-radius: 6px;
+  background: var(--surface-2, rgba(128, 128, 128, 0.2));
+  object-fit: cover;
+  flex: none;
+}
+.media-collection-cover-artist {
+  border-radius: 48px;
+}
+.media-collection-text {
+  min-width: 0;
+}
+.media-collection-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 2px 0 4px;
+}
+.media-collection-kind {
+  font-size: 12px;
+  opacity: 0.6;
+  margin: 8px 0 4px;
+}
+.media-collection-actions > * {
+  margin-right: 8px;
 }

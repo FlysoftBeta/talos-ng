@@ -672,6 +672,7 @@ it("commits discovery and its grace clock atomically without creating playlists 
       tracks: all.slice(offset, offset + 50),
       collections: [],
       next: null,
+      collection: null,
     });
     await api.media.search({ query: "大量结果", limit: 50 });
     search.mockRestore();

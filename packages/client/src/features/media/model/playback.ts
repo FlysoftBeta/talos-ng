@@ -80,6 +80,10 @@ export interface PlayerApi extends PlaybackState {
   setVolume(value: number): void;
   toggleQueue(): void;
   enqueue(track: string): void;
+  /** Adds several tracks to the end of the queue, skipping the ones already queued. */
+  enqueueAll(tracks: readonly string[]): void;
+  /** Plays the first track and queues the rest. */
+  playAll(tracks: readonly MediaTrack[]): Promise<void>;
 }
 const CAP_KEY = "media:volume-cap";
 const message = (error: unknown, fallback: string): string =>
@@ -176,6 +180,14 @@ export class PlaybackController {
   }
   enqueue = (track: string): void =>
     this.replaceQueue(withTrackLast(this.queue.tracks, track));
+  enqueueAll = (tracks: readonly string[]): void =>
+    this.replaceQueue(tracks.reduce(withTrackLast, this.queue.tracks));
+  playAll = async (tracks: readonly MediaTrack[]): Promise<void> => {
+    const [first, ...rest] = tracks;
+    if (!first) return;
+    this.replaceQueue(rest.map((t) => t.id));
+    await this.play(first);
+  };
   moveQueued(index: number, delta: -1 | 1): void {
     this.replaceQueue(movedTrack(this.input.state?.queue ?? [], index, delta));
   }

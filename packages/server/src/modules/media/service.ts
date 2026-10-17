@@ -27,6 +27,7 @@ import { reconcileTracks, reclaimTracks } from "./lifecycle.ts";
 import { MediaRepo } from "./repo.ts";
 import { mediaMigrations } from "./schema.ts";
 import type {
+  CollectionKind,
   MediaProvider,
   ProviderCollection,
   ProviderTrack,
@@ -37,6 +38,7 @@ export interface MediaPage {
   tracks: MediaTrack[];
   collections: ProviderCollection[];
   next: number | null;
+  collection: ProviderCollection | null;
 }
 export interface MediaOptions {
   assertOwnerWritable?(user: string): void;
@@ -252,7 +254,7 @@ export class MediaService {
   }
   async collection(
     input: {
-      kind: "playlist" | "artist";
+      kind: CollectionKind;
       id: string;
       offset: number;
       limit: number;

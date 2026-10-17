@@ -2,12 +2,21 @@
   "id": "周杰伦",
   "title": "周杰伦",
   "_type": "playlist",
-  "extractor_key": "YoutubeSearchURL",
-  "playlist_count": null,
-  "webpage_url": "https://www.youtube.com/results?search_query=%E5%91%A8%E6%9D%B0%E4%BC%A6&sp=EgIQAw%253D%253D",
   "entries": [
     {
       "title": "周杰倫 精選 | 周杰伦 精选 | Jay Chou M/V Collection",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/mx9Npfwf8xQ/hq720.jpg?sqp=-oaymwEXCOgCEMoBSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLCbzWZn4iX40Ye6W2Gz14gGqYcIjg",
+          "height": 202,
+          "width": 360
+        },
+        {
+          "url": "https://i.ytimg.com/vi/mx9Npfwf8xQ/hq720.jpg?sqp=-oaymwEXCNAFEJQDSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLBMbPgE12A8rhElJpKVe7ljPJ2jGA",
+          "height": 404,
+          "width": 720
+        }
+      ],
       "duration": null,
       "view_count": null,
       "timestamp": null,
@@ -27,6 +36,18 @@
     },
     {
       "title": "周杰伦",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/SmaHHH_3Wq8/hq720.jpg?sqp=-oaymwEXCOgCEMoBSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLCBuPEldSjT11nZNSE_l5jpvJ6X4Q",
+          "height": 202,
+          "width": 360
+        },
+        {
+          "url": "https://i.ytimg.com/vi/SmaHHH_3Wq8/hq720.jpg?sqp=-oaymwEXCNAFEJQDSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLA8zbyISILsLUK3cTB0bAtA7mWWUg",
+          "height": 404,
+          "width": 720
+        }
+      ],
       "duration": null,
       "view_count": null,
       "timestamp": null,
@@ -47,6 +68,18 @@
     },
     {
       "title": "周杰倫歷年專輯",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/prcaZ0_6-R0/hq720.jpg?sqp=-oaymwEXCOgCEMoBSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLCPHAfiP_V01kK6AsctwNtjBr2COQ",
+          "height": 202,
+          "width": 360
+        },
+        {
+          "url": "https://i.ytimg.com/vi/prcaZ0_6-R0/hq720.jpg?sqp=-oaymwEXCNAFEJQDSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLBBQX1BpxqV1yQHNZKDeB5UNnNmtw",
+          "height": 404,
+          "width": 720
+        }
+      ],
       "duration": null,
       "view_count": null,
       "timestamp": null,
@@ -67,6 +100,13 @@
     },
     {
       "title": "周杰倫精選60首",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/v489sYYjtHI/hqdefault.jpg?sqp=-oaymwEXCOADEI4CSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLCLPeKNoSUHJ8T3KthzVjXXIwYDDw",
+          "height": 270,
+          "width": 480
+        }
+      ],
       "duration": null,
       "view_count": null,
       "timestamp": null,
@@ -87,6 +127,18 @@
     },
     {
       "title": "周杰伦合集 Jay Chou cellection",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/omwngAlNG6Q/hq720.jpg?sqp=-oaymwEXCOgCEMoBSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLCLF4Y9f5QL_XzJJdx-uj9q7Ony7w",
+          "height": 202,
+          "width": 360
+        },
+        {
+          "url": "https://i.ytimg.com/vi/omwngAlNG6Q/hq720.jpg?sqp=-oaymwEXCNAFEJQDSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLD46EmS4rArrVb_-7Xzpftojw57DA",
+          "height": 404,
+          "width": 720
+        }
+      ],
       "duration": null,
       "view_count": null,
       "timestamp": null,

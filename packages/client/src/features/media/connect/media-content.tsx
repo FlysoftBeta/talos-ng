@@ -18,6 +18,7 @@ import {
   listBody,
   playlistSharing,
   retentionChoices,
+  saveAsPlaylist,
   saveRetention,
   tabTracks,
   validRetention,
@@ -30,7 +31,11 @@ import {
   TrackListView,
 } from "../view/media-content.tsx";
 import type { PlaylistPanelProps } from "../view/media-content.tsx";
-import { OnlineResultsView } from "../view/online-results.tsx";
+import {
+  CollectionHeaderView,
+  OnlineHitsView,
+  OnlineTabsView,
+} from "../view/online-results.tsx";
 import { sourceTitle } from "../view/media-list.tsx";
 import { NowPlaying } from "./now-playing.tsx";
 import { useMediaPlayer } from "./player.tsx";
@@ -54,7 +59,8 @@ export function MediaContent(): ReactElement {
   const canRetention = useCan(contract.media.retention.set),
     canItems = useCan(contract.media.playlist.items),
     canShare = useCan(contract.media.playlist.grants),
-    canDelete = useCan(contract.media.playlist.delete);
+    canDelete = useCan(contract.media.playlist.delete),
+    canCreate = useCan(contract.media.playlist.create);
   const [removing, setRemoving] = useState(false),
     [sharing, setSharing] = useState(false),
     [retentionOpen, setRetentionOpen] = useState(false),
@@ -202,6 +208,14 @@ export function MediaContent(): ReactElement {
     tracks: tracks.length,
     connection: snapshot.status.connection,
   });
+  const opened = isSearch ? search.opened : null;
+  const hitsOnly =
+    isSearch &&
+    !opened &&
+    search.kind !== "song" &&
+    !search.busy &&
+    !search.error &&
+    search.collections.length > 0;
   return (
     <MediaContentView
       title={sourceTitle(source)}
@@ -209,36 +223,67 @@ export function MediaContent(): ReactElement {
       error={shownError}
       footer={footer}
     >
-      <TrackListView
-        state={
-          isSearch && connection === "offline"
-            ? "offline"
-            : body === "playlists"
-              ? connection
-              : body
-        }
-        loadingTitle={isSearch ? "正在搜索音乐" : "正在同步音乐"}
-        emptyTitle={
-          isSearch && connection === "offline"
-            ? "连接后搜索音乐"
-            : emptyTitle(source)
-        }
-        emptyHint={emptyHints[source]}
-        error={search.error}
-        onRetry={() => void search.search()}
-      >
-        {tracks.map((t, i) => (
-          <TrackRow key={t.id} index={i + 1} track={t} />
-        ))}
-      </TrackListView>
-      {isSearch ? (
-        <OnlineResultsView
+      {isSearch && !opened ? (
+        <OnlineTabsView
           kind={search.kind}
-          opened={search.opened?.title}
+          busy={search.busy}
+          onKind={(kind) => void search.search(kind)}
+        />
+      ) : null}
+      {opened ? (
+        <CollectionHeaderView
+          collection={opened}
+          trackCount={search.results.length}
+          busy={search.busy}
+          playReason={undefined}
+          queueReason={undefined}
+          saveReason={canCreate.ok ? undefined : canCreate.reason}
+          onBack={() => void search.back()}
+          onPlayAll={() => void player.playAll(search.results)}
+          onEnqueueAll={() =>
+            player.enqueueAll(search.results.map((t) => t.id))
+          }
+          onSave={() =>
+            run(
+              saveAsPlaylist(
+                runtime,
+                opened.title,
+                search.results.map((t) => t.id),
+              ),
+            )
+          }
+        />
+      ) : null}
+      {hitsOnly ? null : (
+        <TrackListView
+          state={
+            isSearch && connection === "offline"
+              ? "offline"
+              : body === "playlists"
+                ? connection
+                : body
+          }
+          loadingTitle={isSearch ? "正在搜索音乐" : "正在同步音乐"}
+          emptyTitle={
+            isSearch && connection === "offline"
+              ? "连接后搜索音乐"
+              : emptyTitle(source)
+          }
+          emptyHint={emptyHints[source]}
+          error={search.error}
+          onRetry={() => void search.search()}
+        >
+          {tracks.map((t, i) => (
+            <TrackRow key={t.id} index={i + 1} track={t} />
+          ))}
+        </TrackListView>
+      )}
+      {isSearch ? (
+        <OnlineHitsView
+          title={opened ? "专辑与歌单" : undefined}
           collections={search.collections}
           hasMore={search.next !== null}
           busy={search.busy}
-          onKind={(kind) => void search.search(kind)}
           onOpen={(c) => void search.open(c)}
           onMore={() => void search.loadMore()}
         />
