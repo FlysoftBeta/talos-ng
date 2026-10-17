@@ -73,7 +73,7 @@ redesign (section 11); those are part of the contract as well.
 | `reader.position` | "/ N" unit-count label next to the page box | - |
 
 Data attributes: `data-reader-unit="<n>"` on each mounted unit, `data-page-ready="true"` on a
-rendered page iframe (iframe `title` is `文档第 N 页`).
+rendered page's shadow host (`aria-label` is `文档第 N 页`).
 
 ## 5. Learning (`learning`)
 

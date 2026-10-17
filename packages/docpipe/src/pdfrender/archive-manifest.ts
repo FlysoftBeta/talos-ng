@@ -1,4 +1,10 @@
-import { MAX_RESOURCES, MAX_RESOURCE_BYTES, isRid } from "@talos/docpack";
+import {
+  MAX_RESOURCES,
+  MAX_RESOURCE_BYTES,
+  RENDER_FORMAT,
+  isRid,
+} from "@talos/docpack";
+import { AppError } from "@talos/base";
 import { archiveError } from "./zip.ts";
 import type { ZipEntry } from "./zip.ts";
 export interface ArchiveResource {
@@ -20,7 +26,7 @@ export interface ArchivePage {
 }
 export interface ArchiveManifest {
   format: "classapp-render-archive";
-  version: 1;
+  version: number;
   dictionary: null | {
     contentId: string;
     path: "dictionary.zdict";
@@ -68,8 +74,12 @@ export function validateArchiveManifest(
   entries: Map<string, ZipEntry>,
 ): ArchiveManifest {
   const m = obj(value, "format version dictionary resources files document");
-  if (m.format !== "classapp-render-archive" || m.version !== 1)
-    archiveError("version");
+  if (m.format !== "classapp-render-archive") archiveError("version");
+  if (m.version !== RENDER_FORMAT)
+    throw new AppError(
+      "E_UNAVAILABLE",
+      `pdfrender 输出格式 v${String(m.version)} 与期望的 v${RENDER_FORMAT} 不符，请更新 vendor/pdfrender 中的渲染器`,
+    );
   const resources = new Map<string, Record<string, unknown>>();
   const paths = new Set<string>();
   const match = (p: unknown, offset: unknown, size: unknown): void => {

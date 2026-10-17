@@ -10,20 +10,18 @@ import { VirtualScroller } from "../../../ui/virtual/index.ts";
 import { estimateUnit } from "../model/resources.ts";
 import type { DocumentResources } from "../model/resources.ts";
 import type { ReaderPosition } from "../model/reading-session.ts";
-import { FRAME_DOCUMENT, sanitizePage } from "../adapters/page-frame.ts";
+import { mountPage } from "../renderer/mount.ts";
 function ReaderUnit({
   unit,
   resources,
   width,
   zoom,
-  onScroll,
   onReady,
 }: {
   unit: Unit;
   resources: DocumentResources;
   width: number;
   zoom: string;
-  onScroll: (delta: number) => void;
   onReady: (element: HTMLElement) => void;
 }): ReactElement {
   const [value, setValue] =
@@ -32,7 +30,7 @@ function ReaderUnit({
     [retry, setRetry] = useState(0),
     [ready, setReady] = useState(false);
   const host = useRef<HTMLDivElement>(null),
-    frame = useRef<HTMLIFrameElement>(null);
+    page = useRef<HTMLDivElement>(null);
   const paged = resources.document.manifest.kind === "paged",
     scale =
       zoom === "fit"
@@ -61,46 +59,20 @@ function ReaderUnit({
     const flow = host.current?.querySelector<HTMLElement>(".reader-flow");
     if (flow) onReady(flow);
   }, [value, error, width, zoom]);
-  useEffect(() => {
-    const message = (event: MessageEvent) => {
-      if (event.source !== frame.current?.contentWindow) return;
-      const data = event.data as {
-        type?: string;
-        y?: number;
-        message?: string;
+  useLayoutEffect(() => {
+    const node = page.current;
+    if (!value || !node || !paged) return;
+    try {
+      const dispose = mountPage(node, value.text, value.resources);
+      setReady(true);
+      return () => {
+        setReady(false);
+        dispose();
       };
-      if (data?.type === "talos-frame-ready" && value) {
-        try {
-          const html = sanitizePage(
-            value.text,
-            new Map(value.resources.map((r) => [r.rid, { mime: r.mime }])),
-          );
-          const buffers = value.resources.map((r) => ({
-            ...r,
-            bytes: r.bytes.slice(0),
-          }));
-          frame.current!.contentWindow!.postMessage(
-            { type: "talos-page", html, resources: buffers },
-            "*",
-            buffers.map((r) => r.bytes),
-          );
-        } catch (e) {
-          setError(e instanceof Error ? e.message : "页面格式错误");
-        }
-      }
-      if (data?.type === "talos-page-ready") setReady(true);
-      if (data?.type === "talos-page-error")
-        setError(data.message ?? "页面载入失败");
-      if (
-        data?.type === "talos-scroll" &&
-        typeof data.y === "number" &&
-        Number.isFinite(data.y)
-      )
-        onScroll(Math.max(-2000, Math.min(2000, data.y)));
-    };
-    window.addEventListener("message", message);
-    return () => window.removeEventListener("message", message);
-  }, [value, onScroll]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "页面格式错误");
+    }
+  }, [value, paged]);
   const height = paged ? Math.ceil((unit.h ?? 1000) * scale) : undefined,
     pageWidth = (unit.w ?? 750) * scale;
   return (
@@ -155,13 +127,12 @@ function ReaderUnit({
         )
       ) : paged ? (
         <div className="reader-page" style={{ width: pageWidth, height }}>
-          <iframe
-            ref={frame}
-            title={`文档第 ${unit.ordinal + 1} 页`}
-            sandbox="allow-scripts"
-            srcDoc={FRAME_DOCUMENT}
+          <div
+            ref={page}
+            className="reader-page-body"
+            role="document"
+            aria-label={`文档第 ${unit.ordinal + 1} 页`}
             data-page-ready={ready ? "true" : "false"}
-            scrolling="no"
             style={{
               width: unit.w ?? 750,
               height: unit.h ?? 1000,
@@ -346,7 +317,6 @@ export function ReaderViewer({
             resources={resources}
             width={width}
             zoom={zoom}
-            onScroll={(delta) => scroller.scrollBy(delta)}
             onReady={(element) => {
               const pending = restore.current;
               if (!pending || pending.unitId !== page.unit.id) return;

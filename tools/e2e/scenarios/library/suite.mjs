@@ -148,8 +148,10 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     await close(cdp);
     await click(cdp, "阅读");
     await click(cdp, "中文 PDF");
-    await cdp.wait("!!document.querySelector('iframe[title=\"文档第 1 页\"]')");
-    await cdp.wait("!!document.querySelector('iframe[data-page-ready=true]')");
+    await cdp.wait(
+      "!!document.querySelector('[data-page-ready][aria-label=\"文档第 1 页\"]')",
+    );
+    await cdp.wait("!!document.querySelector('[data-page-ready=true]')");
     await pagePlacement(cdp);
     await eventually(
       async () => {
@@ -390,7 +392,7 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     await cdp.wait(`${text}.indexOf('离线未缓存')>=0`);
     await click(cdp, "阅读");
     await click(cdp, "中文 PDF");
-    await cdp.wait("!!document.querySelector('iframe')");
+    await cdp.wait("!!document.querySelector('[data-page-ready]')");
     await captures(cdp, name, "offline-pdf");
     await click(cdp, "阅读");
     await click(cdp, "离线阅读测试");

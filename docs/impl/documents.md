@@ -108,11 +108,22 @@ The client stores resources by `rid` in the file store and decodes on use. The v
 unit ids are stable anchors; page dimensions are known before resources are fetched; only
 the visible window plus 600 px of overscan is mounted, and unmount aborts remaining work.
 
-- `paged` units render in per-page sandboxed iframes (`sandbox="allow-scripts"`, opaque
-  origin, strict CSP, HTML sanitised again on the client). Resources are passed as
-  transferable `ArrayBuffer`s and turned into blob URLs **inside** the frame (Chrome 70
-  rejects parent-created blob URLs at an opaque origin); they are never persisted. Wheel,
-  drag and navigation keys are relayed only from that exact frame window.
+- `paged` units render through the reader's page renderer (`features/reader/renderer`)
+  into one shadow root per page inside the scroll viewport, so scrolling, selection across
+  pages and the virtual window are native. The page HTML is sanitised on the client: only
+  the `main.page` subtree is kept, scripts, links, frames, event handlers and external URLs
+  are removed, CSS loses `@import` and non-inline `url()`, and the only surviving link is
+  an SVG `<use>` to a same-page `#id` (pdfrender draws every image through `<use>`).
+  `data-bundle-ref` image slots become blob URLs created on mount and revoked on unmount;
+  stylesheet resources are inlined into the shadow root; page scripts never run (the word
+  width fitting they did is done by the renderer). The shadow host has `contain: layout
+  paint`, so fixed positioning cannot escape a page.
+- Paged packs record the pdfrender page format in `meta.renderFormat`
+  (`RENDER_FORMAT` in `@talos/docpack`). Docpipe refuses an archive of another format with
+  `E_UNAVAILABLE` (the vendored renderer and the expected format must change together). On
+  `doc.open`/`doc.describe` the server re-queues conversion of a ready pack whose format
+  differs (the document returns to processing); the client drops a cached manifest of
+  another format, and retention releases the old pack once the server pack id changes.
 - `flow` text units render as plain typography; a different viewport width reflows text and
   keeps relative depth within the visible unit. Saved text positions restore through a
   UTF-16 character anchor once the unit has loaded.
