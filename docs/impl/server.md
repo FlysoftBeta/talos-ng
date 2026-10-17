@@ -38,7 +38,7 @@ eviction, backups) runs from one serialised `maintain` pass.
 
 ## Kernel services
 
-`config` (file + `TALOS_*` environment, validated at boot, secrets never logged), `db`
+`config` (operator settings file plus the parent's start message, both validated at boot, secrets never logged), `db`
 (adapter, migrations, nestable synchronous `tx`, read `snapshot`, online `backupTo`), `uow`, `rev` (global
 revision counter), `syncHub` (`sync.md`), `events` (connection registry, per-user/scope
 fan-out), `jobs` (`jobs.md`), `objects` and `uploads` (`objects.md`), `authz`, `audit`,
@@ -106,25 +106,43 @@ seed) are composed in `app/` from per-module participants and predicates.
 
 ## Configuration
 
-One `talos.config.json` beside the data directory, overridden by `TALOS_*` variables; relative
-paths resolve beside the config file. Data directory: `data/talos.db` (+WAL), `data/objects`,
-`data/backups`, `data/updates`, `data/logs`.
+Two sources, no environment variables.
 
-| Variable | Format and default |
+**Operator settings** live in `talos.config.json` in the install directory (a missing file means
+defaults; unknown keys are rejected; relative paths resolve beside the file), validated by one
+zod schema in `kernel/config`:
+
+| Key | Meaning |
 |---|---|
-| `TALOS_PORTS`, `TALOS_SECURE_PORTS` | port, comma list or JSON array; default `[8080]` and `[]`; `0` allocates a free port for tests; secure ports need cert and key |
-| `TALOS_BIND_HOST` | default `0.0.0.0` |
-| `TALOS_DATA_DIR` | default `./.data` |
-| `TALOS_ASSETS_DIR`, `TALOS_WORKER_FILE` | client release `dist` directory and service-worker file; defaults under `packages/` |
-| `TALOS_BUILD` | safe identifier, default `dev`; the release manifest's build wins |
-| `TALOS_DEV`, `TALOS_TEST_SEED` | booleans, default `false`; the seed requires dev mode |
-| `TALOS_HTTPS_CERT/KEY/CA/DOMAIN/REDIRECT` | PEM paths, CA served at `/ca.crt`, domain required for redirect, redirect needs a secure port |
-| `TALOS_AI_MODELS_FILE`, `TALOS_AI_CONFIG` | AI provider configuration (`modules.md`) |
-| `TALOS_BINARIES` | JSON map of helper binary paths (`pdfrender`, `yt-dlp`) |
-| `TALOS_DB_READERS` | sync replica workers, integer 0–32; default `min(4, cpus − 1)`; `0` computes every pull on the main thread |
-| `TALOS_PDFRENDER`, `TALOS_MEDIA_CACHE` | renderer binary override; yt-dlp download cache at package time |
+| `ports`, `securePorts` | HTTP and HTTPS listeners; default `[8080]` and `[]`; `0` allocates a free port; secure ports need `https` |
+| `bindHost` | default `0.0.0.0` |
+| `https` | `cert`, `key`, optional `ca` (served at `/ca.crt`), `domain`, `redirect` (needs `domain` and a secure port); certificate files are reloaded on change |
+| `aiModelsFile` | JSON file with the AI provider (`baseURL`, `key`, `models` with prices; `modules.md`) |
 
-`pnpm dev` runs the real dev server plus Vite behind a same-origin proxy for `/link`, `/dl`,
+Everything else is not configurable. The data directory is the launcher-owned `data/` (the
+launcher's lock, backups and rollback address it), the build id comes from the client release
+manifest, the sync-replica worker count derives from the CPU count (`min(4, cpus − 1)`), and
+the renderer and yt-dlp locations follow fixed rules (`vendor/pdfrender`, `vendor/media/` next to `server.js`).
+
+**Process wiring** is the parent's business, sent as the first IPC message
+`{ type: "start", config }` before the server opens anything. The shared zod schema
+(`serverWiringSchema`, `packages/launcher/src/process/server-start.ts`) validates it in the child
+and in the parent (`sendStart`):
+
+| Field | Meaning |
+|---|---|
+| `dataDir`, `settingsFile`, `assetsDir`, `workerFile?` | absolute paths: data, `talos.config.json`, client release, service-worker file |
+| `dev`, `testSeed` | default `false`; the seed (root PIN `123456`, demo `654321`, fake providers) requires `dev` |
+| `printRootPin` | default `true`; the first-start root PIN goes to stdout |
+| `ytDlp?`, `pluginDir?` | yt-dlp executable and `talos-music` plugin directory; a release finds both next to `server.js`, a checkout needs its dev parent to supply them |
+| `launcher?` | `{ root, updatePending }`; present only under the launcher, enables updates and rollback |
+
+Parents: the launcher forks each release's `server.js`; `pnpm dev` and the real-server e2e
+harness fork `packages/server/bin/*.ts` with the tsx loader. Running `bin/talos-server.ts` directly
+in a checkout builds the same object in-process (`.data`, `--dev` for `dev`). The offline
+`server.js restore <backup> [dataDir]` takes the data directory as an argument.
+
+`pnpm dev` ensures the pinned yt-dlp is in the packaging cache (`~/.cache/talos-ng/media`, SHA-256 checked, downloaded on first run), runs the real dev server plus Vite behind a same-origin proxy for `/link`, `/dl`,
 `/app`, `/sw.js` and `/ca.crt`; no service worker is registered in development. `pnpm build`
 then `pnpm start` serves the production client from the real server.
 

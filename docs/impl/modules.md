@@ -190,7 +190,7 @@ and credits. Model output checkpoints fan out as subscribed `sync.delta`; reconn
 and explicit pages repair gaps; previews fit the sync byte budget and full UTF-8 text/images
 are fetched as binary.
 
-- Provider: the first model in `TALOS_AI_CONFIG` (`baseURL`, `key`, `models` with credit
+- Provider: the first model in the file named by `aiModelsFile` in `talos.config.json` (`baseURL`, `key`, `models` with credit
   prices per million tokens) must support the Responses protocol with text, images and tools.
   Requests use `/responses`, `store:false`, SSE and a hashed safety identifier, no SDK. Keys
   and upstream error bodies never enter synced rows; missing or invalid configuration

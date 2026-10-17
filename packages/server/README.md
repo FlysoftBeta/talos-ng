@@ -11,8 +11,9 @@ pnpm build && pnpm start   # production client served by the real server
 pnpm --filter @talos/server build   # dist/server.js for the pinned Node runtime
 ```
 
-Deterministic servers for tests: spawn `node --import tsx
-packages/server/bin/talos-server.ts --dev` with `TALOS_DATA_DIR` (fresh absolute directory),
-`TALOS_TEST_SEED=true`, `TALOS_BIND_HOST=127.0.0.1`, `TALOS_PORTS=<free port>`; restart with the
-same directory and port to keep sessions and queued-operation replay. Seed accounts are in
-`src/app/dev-seed.ts`. Environment variables: `docs/impl/server.md`.
+Deterministic servers for tests: fork `packages/server/bin/testing/server.ts` with `execArgv:
+["--import", "tsx"]` and an IPC channel, write a `talos.config.json` with the free port and
+`bindHost`, and send the start message (`sendStart` from `@talos/launcher`) with a fresh absolute
+`dataDir`, `dev: true` and `testSeed: true` (see `tools/e2e/harness/real-server.mjs`); restart with
+the same directory and port to keep sessions and queued-operation replay. Seed accounts are in
+`src/app/dev-seed.ts`. Configuration: `docs/impl/server.md`.

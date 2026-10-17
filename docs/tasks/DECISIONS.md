@@ -731,3 +731,24 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   Known limit: anonymous requests from the Google-cloud sandbox get no Songs/Albums
   catalogue or artist shelves from YouTube Music, so those two sections and artist shelves
   were not verified live (artists, playlists, paging, playlist open were).
+
+- **D-137 — The server reads no environment variables: operator settings come from
+  `talos.config.json`, process wiring from a typed IPC start message.** Settings that remain,
+  each an operator decision that differs per site: `ports`, `securePorts`, `bindHost`
+  (listeners), `https` (`cert`, `key`, `ca`, `domain`, `redirect`; certificates are the
+  operator's) and `aiModelsFile` (provider URL, key and prices are the operator's secrets).
+  Removed or turned into wiring because the parent decides them or nobody needs a knob:
+  `dataDir` (the launcher's lock, backups and rollback address `<install>/data`, so an
+  operator-chosen directory silently broke rollback; migration now replaces `data/`),
+  `assetsDir`/`workerFile` (release layout), `build` (the client manifest names it),
+  `dev`/`testSeed` (a production config can no longer enable the seeded test accounts),
+  `binaries` (fixed `vendor/media/` rule; a checkout's dev parent passes `ytDlp` and `pluginDir`),
+  `dbReaders` (derived from CPUs; tests pass `readers` to `startServer`), `TALOS_AI_CONFIG`
+  and `TALOS_PDFRENDER` (explicit option only). The parent (launcher, `pnpm dev`, e2e harness)
+  forks the server with IPC and sends `{type:"start", config}` validated by one zod schema
+  (`packages/launcher/src/process/server-start.ts`, shared because the launcher cannot import
+  the server); the server's direct entry builds the same object in-process. In-app updates keep
+  the old launcher, so later wiring fields must be optional or defaulted. `pnpm dev` downloads and
+  SHA-256-checks the pinned yt-dlp into the packaging cache (`tools/package/media-binary.ts`) and
+  passes it with the plugin directory, so music works without setup. The packaged e2e no longer
+  needs the seeded accounts: it signs in with the root PIN the first start prints.

@@ -13,7 +13,7 @@ Features run in this order: `identity`, `library`, `netbooks`, `media`, `chat`, 
 a free localhost port with a temporary database and a copy of the production client, or the
 static gallery server) and a fresh browser, so no storage, ServiceWorker, emulation or
 virtual-time state leaks between features. Processes, profiles and temp dirs are cleaned up
-on failure too. `TALOS_TEST_SEED=true` and `--dev` seed root PIN `123456` and ordinary PIN
+on failure too. The harness's start message (`dev` and `testSeed`) seeds root PIN `123456` and ordinary PIN
 `654321`; these exist only in the explicitly enabled development fixture.
 
 ## Layout

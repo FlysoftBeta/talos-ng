@@ -16,3 +16,6 @@ packages/client/screenshots/
 
 # Finished process documents (task prompts, results, audits) — kept on disk, out of git.
 archive/
+
+# Operator settings of a checkout run (pnpm dev)
+/talos.config.json

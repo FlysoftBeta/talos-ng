@@ -76,10 +76,16 @@ migrate.cmd, migrate.sh   run releases/<current>/migrate.js with the bundled run
 talos.config.json, target   data/ talos.db, objects/, backups/, updates/, logs/
 ```
 
+The launcher forks `server.js` with an IPC channel and sends one `{type:"start", config}` message (data directory,
+`talos.config.json`, client and service-worker paths, `launcher: {root, updatePending}`; `server.md`). The server reads no
+environment variables; yt-dlp and its plugin are found at `vendor/media/` next to `server.js`. Rollback runs
+`server.js restore <backup> <data>` of the previous release.
+
 `@talos/launcher` is bundled so installed releases need no npm modules; it depends only on
-`base` code compiled in, plus one small public archive API shared with the server so the
-server's preflight validation and the launcher's final validation use identical ZIP rules
-(this is the one server-to-launcher edge).
+`base` and zod compiled in, plus two small public APIs shared with the server: the archive API, so the
+server's preflight validation and the launcher's final validation use identical ZIP rules, and the
+start-message schema (these are the server-to-launcher edges). In-app updates do not replace the
+launcher, so a new release's `server.js` must keep accepting the start message an older launcher sends.
 
 - **Atomic pointer, not symlinks or directory swaps**: `current` is a pointer file repaired
   from the durable state record after a crash; no directory is renamed over running files
@@ -122,7 +128,8 @@ also publishes a fixed-name `talos-<platform>-update.json` whose url is the abso
 asset, so `releases/latest/download/talos-<platform>-update.json` always names the newest
 update; the server uses it when no manifest URL is configured (cloud updates stay opt-in). `--target <id>` or `TALOS_PACKAGE_TARGET`
 builds one. Only Node scripts do downloads and archive work (no tar/unzip/curl). yt-dlp is a
-pinned version with per-platform SHA-256 verified at package time. Installs include default
+pinned version with per-platform SHA-256 verified at package time (`tools/package/media-binary.ts`, whose
+cache `pnpm dev` shares). Installs include default
 config, `start.cmd`/`start.sh`, `migrate.cmd`/`migrate.sh`, opt-in Task Scheduler / systemd user-service helpers, licences
 and the operator README. `TALOS_BUILD_ID` selects the build id (safe ASCII).
 
