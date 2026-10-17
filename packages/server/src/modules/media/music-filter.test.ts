@@ -14,7 +14,6 @@ describe("music filter", () => {
     for (const bad of [
       { duration: 10 },
       { duration: 3 * 3600 },
-      { duration: undefined },
       { liveStatus: "is_live" },
       { title: "每日播客 第12期" },
       { title: "Best Ringtone 2024" },
@@ -23,6 +22,13 @@ describe("music filter", () => {
       { categories: ["Podcast"] },
     ])
       expect(isMusicEntry({ ...song, ...bad })).toBe(false);
+  });
+  it("keeps entries whose length the flat listing does not report", () => {
+    for (const duration of [undefined, null, 0])
+      expect(isMusicEntry({ ...song, duration })).toBe(true);
+    expect(
+      isMusicEntry({ ...song, duration: null, liveStatus: "is_live" }),
+    ).toBe(false);
   });
   it("pages by raw provider count so filtering never stalls the cursor", () => {
     expect(nextOffset(0, 20, 20)).toBe(20);

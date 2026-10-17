@@ -684,3 +684,8 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   is a stable endpoint. The updater follows up to 5 HTTPS-only redirects (GitHub answers 302 to
   its object host) and defaults to that URL for the installed target when `manifestUrl` is empty;
   `cloudEnabled` remains opt-in.
+- **D-132 — An unknown duration never hides a search result.** yt-dlp's flat search listing carries
+  `duration` only for some YouTube clients; `music-filter.ts` rejects a length only when it is known
+  and outside 45 s-20 min (live and spoken titles are still rejected). Requiring a duration (D-130)
+  emptied the song tab whenever the listing lacked it. The provider takes an injectable subprocess
+  runner, and `fixtures/` holds recorded yt-dlp 2026.08.19 output for the provider tests.

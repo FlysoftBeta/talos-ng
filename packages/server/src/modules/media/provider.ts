@@ -51,7 +51,19 @@ export interface MediaProvider {
     signal?: CancellationSignal,
   ): Promise<{ bytes: Uint8Array; mime: string }>;
 }
-const execute = promisify(execFile);
+/** Runs the yt-dlp binary and resolves with its raw stdout. */
+export type Spawn = (
+  file: string,
+  args: string[],
+  options: {
+    timeout: number;
+    maxBuffer: number;
+    encoding: "buffer";
+    signal: AbortSignal;
+    windowsHide: boolean;
+  },
+) => Promise<{ stdout: Buffer }>;
+const execute: Spawn = promisify(execFile) as unknown as Spawn;
 interface RawEntry {
   id?: unknown;
   title?: unknown;
@@ -153,7 +165,11 @@ function parse(raw: RawEntry): ProviderTrack | null {
 }
 /** All subprocess work is bounded. The service runs materialisation in a durable job. */
 export class YtDlpProvider implements MediaProvider {
-  constructor(readonly binaryPath: string) {}
+  constructor(
+    readonly binaryPath: string,
+    /** The subprocess runner; tests replace it with recorded yt-dlp output. */
+    private readonly spawn: Spawn = execute,
+  ) {}
   private async run(
     args: string[],
     signal?: CancellationSignal,
@@ -164,7 +180,7 @@ export class YtDlpProvider implements MediaProvider {
     signal?.addEventListener("abort", abort, { once: true });
     if (signal?.aborted) controller.abort();
     try {
-      const { stdout } = await execute(
+      const { stdout } = await this.spawn(
         this.binaryPath,
         ["--no-warnings", ...args],
         {

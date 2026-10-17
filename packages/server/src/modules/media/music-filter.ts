@@ -1,7 +1,7 @@
 /** The fields of a provider entry that tell music from other uploads. */
 export interface MusicCandidate {
   title: string;
-  /** Seconds, absent or 0 when unknown (live streams, premieres). */
+  /** Seconds; null or absent when yt-dlp's flat listing does not know it. */
   duration: unknown;
   liveStatus: unknown;
   categories: unknown;
@@ -15,10 +15,13 @@ const NON_MUSIC_CATEGORY = /podcast|news|gaming|howto|education|comedy|film/i;
 /** True when the entry looks like a single song: bounded length, not live, not spoken or promotional. */
 export function isMusicEntry(entry: MusicCandidate): boolean {
   const seconds = entry.duration;
+  // Flat search listings do not always carry a duration (it depends on the
+  // YouTube client yt-dlp ends up using); an unknown length must not hide the
+  // result. Only a known length outside the track range is rejected.
   if (
-    typeof seconds !== "number" ||
-    seconds < MIN_TRACK_SECONDS ||
-    seconds > MAX_TRACK_SECONDS
+    typeof seconds === "number" &&
+    seconds > 0 &&
+    (seconds < MIN_TRACK_SECONDS || seconds > MAX_TRACK_SECONDS)
   )
     return false;
   if (entry.liveStatus === "is_live" || entry.liveStatus === "is_upcoming")
