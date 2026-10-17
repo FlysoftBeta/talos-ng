@@ -161,9 +161,9 @@ export class NetbooksController {
       if (!this.closed) this.set({ busy: false, downloading: undefined });
     }
   }
-  /** Opens the task list (downloads continue after the dialog closes). */
+  /** Opens the activity centre (downloads continue after the dialog closes). */
   showTasks(): void {
-    this.port.dispatch({ type: "openOverlay", overlay: { kind: "tasks" } });
+    this.port.dispatch({ type: "openOverlay", overlay: { kind: "status" } });
   }
   /** Drops later results and stops the cooldown ticker. */
   dispose(): void {

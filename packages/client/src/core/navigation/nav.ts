@@ -11,8 +11,7 @@ export interface AreaState {
   stack: readonly Page[];
 }
 export type Overlay =
-  | { kind: "status" | "settings" | "tasks" | "admin" }
-  | { kind: "detail"; id: string };
+  { kind: "status" | "settings" | "admin" } | { kind: "detail"; id: string };
 export interface Nav {
   area: AreaId;
   areas: Record<AreaId, AreaState>;
@@ -140,9 +139,7 @@ export function isNav(value: unknown): value is Nav {
   return value.overlays.every(
     (item) =>
       record(item) &&
-      ((["status", "settings", "tasks", "admin"].includes(
-        item.kind as string,
-      ) &&
+      ((["status", "settings", "admin"].includes(item.kind as string) &&
         Object.keys(item).length === 1) ||
         (item.kind === "detail" &&
           typeof item.id === "string" &&

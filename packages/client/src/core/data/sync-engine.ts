@@ -40,6 +40,12 @@ class SyncCursorChanged extends AppError {
 
 export type SyncPhase =
   "offline" | "connecting" | "authenticating" | "syncing" | "live";
+/** Pull progress of one scope: `ready` scopes are already usable while others page. */
+export interface ScopeSync {
+  scope: string;
+  state: "waiting" | "loading" | "ready";
+  rows: number;
+}
 export interface SyncSnapshot {
   phase: SyncPhase;
   progress: number;
@@ -50,6 +56,8 @@ export interface SyncSnapshot {
   rows: readonly StoredRow[];
   outbox: readonly OutboxItem[];
   scopes: readonly string[];
+  /** Empty unless a pull is (or was interrupted while) paging. */
+  scopeSync: readonly ScopeSync[];
 }
 export interface EngineOptions {
   db: Database;
@@ -74,6 +82,7 @@ export class SyncEngine {
     rows: [],
     outbox: [],
     scopes: [],
+    scopeSync: [],
   };
   private readonly events = new Emitter<void>();
   private readonly writes = new Semaphore(1);
@@ -284,6 +293,21 @@ export class SyncEngine {
               if (holdsWindow(scope)) windowed.push(scope.scope);
             }
           const bases = { ...cursors };
+          const progress = new Map<string, ScopeSync>();
+          for (const scope of admitted) {
+            const saved = scopes.find((item) => item.scope === scope);
+            progress.set(scope, {
+              scope,
+              state:
+                saved && (saved.complete ?? saved.cursor > 0)
+                  ? "ready"
+                  : "waiting",
+              rows: 0,
+            });
+          }
+          const report = () =>
+            this.publish({ scopeSync: [...progress.values()] });
+          report();
           const pages = new Map<string, ScopePull[]>();
           const gone = new Set<string>();
           let more: boolean;
@@ -315,10 +339,18 @@ export class SyncEngine {
               pages.set(scope, list);
               cursors[scope] = page.cursor;
               more = more || page.more;
+              const known = progress.get(scope);
+              if (known?.state !== "ready")
+                progress.set(scope, {
+                  scope,
+                  state: "loading",
+                  rows: (known?.rows ?? 0) + page.rows.length,
+                });
               this.publish({
                 progress: this.snapshot.progress + page.rows.length,
               });
             }
+            report();
             if (!more) break;
             // Scopes whose chain is already complete become usable while other
             // scopes keep paging. Each commit is still atomic per scope chain, and
@@ -352,7 +384,13 @@ export class SyncEngine {
             for (const [scope, chain] of ready) {
               bases[scope] = chain[chain.length - 1]!.cursor;
               pages.delete(scope);
+              progress.set(scope, {
+                scope,
+                state: "ready",
+                rows: progress.get(scope)?.rows ?? 0,
+              });
             }
+            report();
           } while (more);
           if (more) continue;
           try {
@@ -369,7 +407,10 @@ export class SyncEngine {
             if (error instanceof SyncCursorChanged && attempt < 2) continue;
             throw error;
           }
-          if (generation === this.generation) this.needsPull = false;
+          if (generation === this.generation) {
+            this.needsPull = false;
+            this.publish({ scopeSync: [] });
+          }
           break;
         }
       });

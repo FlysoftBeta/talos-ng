@@ -56,7 +56,7 @@ function setup() {
     hasFile: vi.fn(async () => false),
     retainFile: vi.fn(async () => {}),
     downloadFile: vi.fn(async () => {}),
-    setDownload: vi.fn(),
+    setTransfer: vi.fn(),
     time: () => now,
     delay: vi.fn(() => 0),
     clearDelay: vi.fn(),
@@ -147,12 +147,12 @@ describe("personal media retention", () => {
     const t = setup();
     t.port.downloadFile.mockImplementationOnce(async () => {
       t.user("other");
-      t.port.setDownload.mockClear();
+      t.port.setTransfer.mockClear();
     });
     t.update(data([policy("p", "playlist", 7)]));
     await t.scheduler.idle();
     expect(t.port.releaseFiles).not.toHaveBeenCalled();
-    expect(t.port.setDownload).not.toHaveBeenCalled();
+    expect(t.port.setTransfer).not.toHaveBeenCalled();
   });
   it("fences the initial storage read before revoked cleanup on account switch", async () => {
     const t = setup();
@@ -170,7 +170,7 @@ describe("personal media retention", () => {
     t.port.getLocal.mockRejectedValueOnce(new Error("disk failed"));
     t.update(data());
     await t.scheduler.idle();
-    expect(t.port.setDownload).toHaveBeenCalledWith(
+    expect(t.port.setTransfer).toHaveBeenCalledWith(
       "media:retention",
       expect.objectContaining({ error: "disk failed" }),
     );

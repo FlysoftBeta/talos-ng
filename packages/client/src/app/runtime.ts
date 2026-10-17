@@ -43,7 +43,7 @@ export class ClientRuntime implements RuntimePort {
   readonly releaseFiles: RuntimePort["releaseFiles"];
   readonly getLocal: RuntimePort["getLocal"];
   readonly setLocal: RuntimePort["setLocal"];
-  readonly setDownload: RuntimePort["setDownload"];
+  readonly setTransfer: RuntimePort["setTransfer"];
   readonly setSetting: RuntimePort["setSetting"];
   readonly setting: RuntimePort["setting"];
   readonly settingMark: RuntimePort["settingMark"];
@@ -113,7 +113,7 @@ export class ClientRuntime implements RuntimePort {
     this.releaseFiles = controller.releaseFiles.bind(controller);
     this.getLocal = controller.getLocal.bind(controller);
     this.setLocal = controller.setLocal.bind(controller);
-    this.setDownload = controller.setDownload.bind(controller);
+    this.setTransfer = controller.setTransfer.bind(controller);
     this.setSetting = controller.setSetting.bind(controller);
     this.setting = controller.setting.bind(controller);
     this.settingMark = controller.settingMark.bind(controller);

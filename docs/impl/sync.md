@@ -142,7 +142,7 @@ error?, dependencies}`.
 - Ack removes the item **only after** the authoritative rows arrive by delta/pull; the
   optimistic mark clears then. Optimistic data is never promoted to authoritative base.
 - Terminal rejections (`E_DENIED, E_INVALID, E_NOT_FOUND, E_CONFLICT, E_TOO_LARGE`) make the item
-  `failed`; the affected rows roll back and are re-pulled; the status centre offers retry or
+  `failed`; the affected rows roll back and are re-pulled; the activity centre offers retry or
   discard. Every other error, including transport loss, returns it to pending with backoff
   (500 ms doubling to 30 s; a hint, the executor enforces it). Auth/version/lock errors
   pause flushing at the application level.
@@ -185,6 +185,13 @@ the server omits windowed rows of every other scope, which the client would disc
 anyway, so a large conversation's history no longer pages through its first sync. A
 page that opens a window during such a pull restarts it before commit (the omitted rows
 may be newer than the page). Requests without `windowed` receive every row.
+
+The engine snapshot exposes this as `scopeSync` while a pull pages: each admitted scope is
+`waiting`, `loading` (rows buffered so far) or `ready` (already complete: committed earlier in
+this pull, or from a previous session), and the list is empty once the final commit lands.
+The activity centre shows it so the user sees which scopes can already be used. Merged
+register writes also count the earlier writes folded into them (`merged` on the outbox item)
+for the same display.
 
 Full pull chains and deltas share an application gate: a newer delta cannot advance a
 cursor past buffered historical rows. Revocations purge immediately and carry per-scope

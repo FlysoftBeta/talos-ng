@@ -37,7 +37,7 @@ export function ReaderScreen({ id }: { id: string }): ReactElement {
     canOpen: canOpen.ok,
     device: snapshot.device,
     foreground: snapshot.gate === "app" && !snapshot.concealed,
-    downloads: snapshot.status.downloads,
+    downloads: snapshot.status.transfers,
   };
   const port = useMemo<ReaderPort>(
     () => ({
@@ -113,7 +113,7 @@ export function ReaderScreen({ id }: { id: string }): ReactElement {
       onPolicy={setPolicy}
       retentionStatus={retentionStatus(
         reading.retained,
-        snapshot.status.downloads,
+        snapshot.status.transfers,
         id,
       )}
       retentionReason={offline.ok ? undefined : offline.reason}

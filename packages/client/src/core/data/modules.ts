@@ -5,9 +5,16 @@ export interface ProjectionContext {
   readonly user: string;
   readonly op: string;
 }
+/** Display label of a sync scope kind; `name` picks an instance name from its rows. */
+export interface ScopeLabel {
+  readonly title: string;
+  readonly name?: (rows: readonly StoredRow[]) => string | undefined;
+}
 export interface ClientModule {
   readonly id: string;
   readonly operationTitles?: Readonly<Record<string, string>>;
+  /** Keyed by scope id, or by prefix when the key ends with a colon. */
+  readonly scopeLabels?: Readonly<Record<string, ScopeLabel>>;
   /** Outstanding prerequisite operations needed before this queued intent can run. */
   readonly dependencies?: (
     method: string,
@@ -107,6 +114,16 @@ export class ModuleRegistry {
       this.modules.find((module) => module.operationTitles?.[method])
         ?.operationTitles?.[method] ?? "保存更改"
     );
+  }
+  /** Readable label of a sync scope such as 「对话 · 三年二班」. */
+  scopeTitle(scope: string, rows: readonly StoredRow[]): string {
+    for (const module of this.modules)
+      for (const [key, label] of Object.entries(module.scopeLabels ?? {}))
+        if (scope === key || (key.endsWith(":") && scope.startsWith(key))) {
+          const name = label.name?.(rows.filter((row) => row.scope === scope));
+          return name ? `${label.title} · ${name}` : label.title;
+        }
+    return "其他数据";
   }
   supports(method: string): boolean {
     return this.modules.some((m) => !!m.reducers[method]);

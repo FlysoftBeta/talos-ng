@@ -41,7 +41,7 @@ function setup(now = 10 * DAY) {
     hasFile: vi.fn<(rid: string) => Promise<boolean>>(async () => false),
     can: vi.fn(() => ({ ok: true })),
     time: () => clock.now,
-    setDownload: vi.fn(),
+    setTransfer: vi.fn(),
     downloadFile: vi.fn(async () => {}),
     delay: vi.fn((fn: () => void, ms: number) => {
       const t = { fn, ms, cleared: false };
@@ -157,7 +157,7 @@ describe("library retention scheduler", () => {
     expect(t.local.get("library:retained")).toEqual([
       { doc: "a", rid: doc("a").pack.id, expires: 7 * DAY },
     ]);
-    expect(t.port.setDownload).toHaveBeenCalledWith("library:a", undefined);
+    expect(t.port.setTransfer).toHaveBeenCalledWith("library:a", undefined);
   });
 
   it("skips auto policies, expired policies, non-ready packs, present files and offline sessions", async () => {
@@ -236,7 +236,7 @@ describe("library retention scheduler", () => {
       data: dataOf([doc("a"), doc("b")], { a: keep(7), b: keep(7) }),
     });
     await t.idle();
-    expect(t.port.setDownload).toHaveBeenCalledWith("library:a", {
+    expect(t.port.setTransfer).toHaveBeenCalledWith("library:a", {
       title: "T-a",
       progress: 0,
       error: "磁盘已满",
@@ -271,7 +271,7 @@ describe("library retention scheduler", () => {
       data: dataOf([doc("a")], { a: keep(7) }),
     });
     await t.idle();
-    const calls = t.port.setDownload.mock.calls.map((c) => c[1]?.progress);
+    const calls = t.port.setTransfer.mock.calls.map((c) => c[1]?.progress);
     expect(calls).toContain(0.5);
     expect(calls).toContain(1);
   });

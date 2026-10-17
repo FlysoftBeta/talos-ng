@@ -13,6 +13,7 @@ import type { Repository } from "./data/repository.ts";
 import type { Capability, ClientSnapshot } from "./lifecycle/snapshot.ts";
 import type { NavGuards } from "./navigation/guards.ts";
 import type { NavIntent } from "./navigation/index.ts";
+import type { TransferUpdate } from "./status/model.ts";
 
 /** Validates and dispatches contract commands, including durable queued operations and lost-response retries. */
 export interface RuntimeCommandPort {
@@ -78,12 +79,7 @@ export interface RuntimeNavigationPort {
 
 /** Reports downloads and storage state and exposes the root-only offline diagnostic control. */
 export interface RuntimeStatusPort {
-  setDownload(
-    id: string,
-    value:
-      | { title: string; progress: number; state?: string; error?: string }
-      | undefined,
-  ): void;
+  setTransfer(id: string, value: TransferUpdate | undefined): void;
   estimateStorage(): Promise<void>;
   isDebugOffline(): boolean;
   setDebugOffline(value: boolean): void;

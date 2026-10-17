@@ -554,14 +554,19 @@ describe("scope synchronization", () => {
           },
     );
     const states: { rows: number; ready: boolean }[] = [];
-    f.engine.subscribe(() =>
-      states.push({
-        rows: f.engine.getSnapshot().rows.length,
-        ready: f.engine.getSnapshot().cacheReady,
-      }),
-    );
+    const scopeStates: string[] = [];
+    f.engine.subscribe(() => {
+      const snapshot = f.engine.getSnapshot();
+      states.push({ rows: snapshot.rows.length, ready: snapshot.cacheReady });
+      scopeStates.push(
+        snapshot.scopeSync.map((item) => `${item.scope}:${item.state}`).join(),
+      );
+    });
     await f.engine.connect();
     expect(f.engine.getSnapshot().rows).toHaveLength(3);
+    // Per-scope progress: the finished public scope turns ready while the paged one loads.
+    expect(scopeStates).toContain(`${scope}:loading,sys:ready`);
+    expect(f.engine.getSnapshot().scopeSync).toEqual([]);
     // The completed public scope is usable before the paged one finishes; the
     // paged scope's pages never appear separately, and the cache is not ready yet.
     expect(states.map((state) => state.rows)).toContain(1);

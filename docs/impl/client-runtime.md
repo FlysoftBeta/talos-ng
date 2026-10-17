@@ -75,7 +75,7 @@ preparation, then start synchronization in the background. The app can render ca
 empty repositories while the first pull remains unfinished. Online commands are available
 once authenticated (`syncing` or `live`); connecting/authenticating still blocks them.
 Queued changes remain optimistic and durable, and their sender waits for pull reconciliation.
-The status centre continues showing synchronization progress and recoverable errors; retries
+The activity centre continues showing synchronization progress and recoverable errors; retries
 use the engine's backoff. Authentication/admission failures still invalidate credentials.
 Every detached completion is fenced by both engine identity and session generation.
 
@@ -117,7 +117,7 @@ Pill and centre read a typed `StatusViewModel`; link status is an external store
 `createBoot` runs after the first successful React commit: it confirms an installed build
 through IndexedDB before any network operation, then registers the worker and checks for
 updates in the background; explicit offline skips network work. When WELCOME announces a
-different build, the shell installer stages it in the background and the status centre offers
+different build, the shell installer stages it in the background and the activity centre offers
 the update; the user's explicit action records an activation request, and locking applies a
 ready update. Boot confirmation happens only after React commits a stable gate. Installer
 failures leave the existing app usable. Shell internals: `packaging.md`.

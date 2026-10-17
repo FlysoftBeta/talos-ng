@@ -5,6 +5,7 @@ import { applySettingSet } from "./model/setting-reducer.ts";
 
 export const settingsModule = defineClientModule({
   id: "settings",
+  scopeLabels: { "me:": { title: "个人数据" } },
   operationTitles: { "me.setting.set": "更新个人设置" },
   orderKey: (_method, args) =>
     String((args as { key?: unknown } | null)?.key ?? ""),

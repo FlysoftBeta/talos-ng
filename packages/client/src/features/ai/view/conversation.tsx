@@ -232,7 +232,7 @@ export function ConversationView({
           actions={
             <FileButton
               label="图片"
-              accept="image/png,image/jpeg,image/gif,image/webp"
+              accept="image/*"
               disabledReason={
                 !state.canAddImage
                   ? !state.send.ok

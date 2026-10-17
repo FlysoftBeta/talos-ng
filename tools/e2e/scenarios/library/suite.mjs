@@ -142,14 +142,16 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     const large = await upload(wire, libraryPdf(500), "五百页 PDF", "500.pdf");
     await ready(wire, small.doc);
     await ready(wire, large.doc);
-    await click(cdp, "任务");
+    await click(cdp, "状态");
     await cdp.wait(`${text}.indexOf('完成')>=0`);
     await captures(cdp, name, "tasks");
     await close(cdp);
     await click(cdp, "阅读");
     await click(cdp, "中文 PDF");
-    await cdp.wait("!!document.querySelector('iframe[title=\"文档第 1 页\"]')");
-    await cdp.wait("!!document.querySelector('iframe[data-page-ready=true]')");
+    await cdp.wait(
+      "!!document.querySelector('[data-page-ready][aria-label=\"文档第 1 页\"]')",
+    );
+    await cdp.wait("!!document.querySelector('[data-page-ready=true]')");
     await pagePlacement(cdp);
     await eventually(
       async () => {
@@ -390,7 +392,7 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     await cdp.wait(`${text}.indexOf('离线未缓存')>=0`);
     await click(cdp, "阅读");
     await click(cdp, "中文 PDF");
-    await cdp.wait("!!document.querySelector('iframe')");
+    await cdp.wait("!!document.querySelector('[data-page-ready]')");
     await captures(cdp, name, "offline-pdf");
     await click(cdp, "阅读");
     await click(cdp, "离线阅读测试");

@@ -1,15 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createUlid } from "@talos/base";
 import type { StoredRow } from "../../core/data/db.ts";
 import {
-  TaskController,
   canCancelTask,
   canRetryTask,
   selectTasks,
   taskDetail,
   taskTitle,
-} from "./model.ts";
-import type { Task } from "./model.ts";
+} from "./jobs.ts";
+import type { Task } from "./jobs.ts";
 const id = createUlid();
 function task(patch: Partial<Task> = {}): Task {
   return {
@@ -111,32 +110,7 @@ describe("task view model", () => {
     expect(taskTitle(task({ kind: "internal.future" }))).toBe("后台任务");
   });
 });
-describe("task controller", () => {
-  it("runs cancel and history cleanup only after confirmation and reports failures", async () => {
-    const command = vi.fn<
-      (method: unknown, args?: unknown) => Promise<unknown>
-    >(async () => ({}));
-    const c = new TaskController({ command } as never);
-    const running = task({ state: "running" });
-    c.askCancel(running);
-    expect(command).not.toHaveBeenCalled();
-    expect(c.getState().confirmation).toEqual({ task: running });
-    c.dismiss();
-    c.confirm();
-    expect(command).not.toHaveBeenCalled();
-    c.askClear();
-    command.mockRejectedValueOnce(new Error("清理失败"));
-    c.confirm();
-    await vi.waitFor(() =>
-      expect(c.getState()).toMatchObject({ busy: false, error: "清理失败" }),
-    );
-    expect(command.mock.calls[0]![0]).toMatchObject({ name: "tasks.clear" });
-    c.askCancel(running);
-    c.confirm();
-    expect(c.getState().error).toBe("");
-    expect(command.mock.calls[1]![1]).toEqual({ id: running.id });
-  });
-
+describe("task actions", () => {
   it("offers only the actions the state allows", () => {
     expect(canRetryTask(task({ state: "failed" }))).toBe(true);
     expect(canRetryTask(task({ state: "failed", retryable: false }))).toBe(

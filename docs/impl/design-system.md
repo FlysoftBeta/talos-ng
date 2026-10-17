@@ -38,7 +38,7 @@ Chrome 70 supports. `scripts/css-check.mjs` lints every `.css` file under `src/`
 |---|---|---|
 | `layout` | `AppFrame`, `PaneHeader`, `PaneTools`, `PaneBody`, `Pane`, `Stack`, `Inline`, `Group`, `GroupRow`, `SectionHeader`, `KeyValue`, `Tag`, `Avatar`, `EmptyPane` | frame and pane anatomy; grouped settings-style lists; record details |
 | `actions` | `Button` (primary, secondary, ghost, danger, danger-ghost; small; `icon`; `disabledReason`; `busy`), `IconButton` (`pressed`, `badge`, `disabledReason`), `GridAction` | one primary per surface; icon buttons always labelled |
-| `feedback` | `ListRow`, `Mark`, `Badge`, `StatePanel`, `Spinner`, `Progress`, `InlineNotice`, `BannerHost`, `OfflineHint`, `HelpTip`, `useToast`/`ToastHost`, `StatusPill`, `StatusCenter` | rows, the five states, operation marks, disabled reasons |
+| `feedback` | `ListRow`, `Mark`, `Badge`, `StatePanel`, `Spinner`, `Progress`, `InlineNotice`, `BannerHost`, `OfflineHint`, `HelpTip`, `useToast`/`ToastHost`, `StatusPill` | rows, the five states, operation marks, disabled reasons |
 | `overlays` | `Sheet`, `Dialog` (`size` sm/md/lg/xl, `footer`, `actions`, `subtitle`), `DialogActions`, `ConfirmDialog`, `Menu` | side panels, centred dialogs, row and overflow menus |
 | `inputs` | `Field` (checkbox renders `Checkbox`), `TextArea`, `SearchField`, `Checkbox`, `Switch`, `SelectField` (custom listbox picker, `hideLabel`), `FileButton`, `FileField`, `DurationInput`, `SharedComposer` | forms; no native select |
 | `navigation` | `Rail`, `RailItem`, `RailSpacer`, `Segmented` (`block`), `Tabs` | area switch; two-to-five-way choices; pane views |

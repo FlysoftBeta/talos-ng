@@ -8,6 +8,7 @@ import { lwwMerge } from "@talos/sync";
 import { defineClientModule } from "../../core/data/modules.ts";
 export const aiModule = defineClientModule({
   id: "ai",
+  scopeLabels: { "ai:": { title: "AI 会话" } },
   rowTypes: ["aiConversation", "aiMessage", "aiDraft", "aiCredit"],
   windowed: {
     aiMessage: {

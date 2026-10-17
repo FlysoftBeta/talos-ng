@@ -9,7 +9,7 @@ import type {
   LibraryState,
   LibraryProgressInput,
 } from "@talos/contract";
-import { PackReader, encodeResourceBatch } from "@talos/docpack";
+import { PackReader, RENDER_FORMAT, encodeResourceBatch } from "@talos/docpack";
 import type { ConverterRegistry } from "@talos/docpipe";
 import type { ObjectStore } from "@talos/objectstore";
 import { clampFutureStamp, lwwMerge } from "@talos/sync";
@@ -111,6 +111,41 @@ export class LibraryService {
     const row = this.repo.doc(id);
     if (!row || row.deleted) throw new AppError("E_NOT_FOUND", "文档不存在");
     return JSON.parse(row.body) as LibraryDoc;
+  }
+  /**
+   * A paged pack rendered in another pdfrender format is stale: drop it and convert the
+   * original again. The caller then sees the document as processing (E_BUSY).
+   */
+  async refreshStale(id: string): Promise<void> {
+    const doc = this.document(id);
+    if (doc.status !== "ready" || doc.kind !== "paged" || !doc.pack) return;
+    const old = doc.pack.id;
+    const source = await this.options.store.open(old);
+    let format: unknown;
+    try {
+      format = (await PackReader.open(source)).manifest.meta.renderFormat;
+    } finally {
+      await source.close();
+    }
+    if (format === RENDER_FORMAT) return;
+    this.options.uow.write((ctx) => {
+      const row = this.repo.doc(id);
+      const current =
+        row && !row.deleted && (JSON.parse(row.body) as LibraryDoc);
+      if (!current || current.pack?.id !== old) return;
+      this.options.objects.removeRef(old, "library.pack", id);
+      this.repo.putDoc(
+        { ...current, status: "processing", pack: null },
+        row.source!,
+        row.filename!,
+        ctx.rev,
+      );
+      ctx.changed(`me:${current.owner}`, "libraryDoc", id);
+      this.options.jobs.enqueue(current.owner, "library.convert", {
+        doc: id,
+        title: current.title,
+      });
+    });
   }
   collection(id: string): LibraryCollection {
     const row = this.repo.collection(id);

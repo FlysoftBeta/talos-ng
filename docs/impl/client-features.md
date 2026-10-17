@@ -39,7 +39,7 @@ or `model/module.ts`, `connect`, `index.ts`).
   `SharingAdapter` lets the grant sheet serve media playlists without library RPCs.
 - Models: `library-data`, `collections`, `documents` (ranged pack reading), `import`
   (chunked upload, 256 KiB chunks for PDF; the dialog closes at once, conversion is a server
-  job; transfer failures show in the status centre, conversion failures in tasks),
+  job; uploads are cancellable and retryable transfers; both failure kinds show in the activity centre),
   `retention` (serialised background scheduler); reader: `reading-session`, `resources`,
   `clock`. Viewer details: `documents.md`.
 - Library and media retention are personal `me:<user>` rows per item or collection. Policies
@@ -118,16 +118,24 @@ reasons); the update upload (begin, 512 KiB FileReader slices, commit, stage, ab
 failure) lives in `UpdateController`. TLS configuration stays in the server config file; the
 panel reports status only.
 
-## Tasks
+## Activity centre
 
-`TasksSheet` reads the `tasks.jobs` repository (no polling), shows records in creation order
-and sequences retry/cancel/cleanup in `TaskController`. Cached records stay visible offline;
-display labels per job kind live in the model, unknown kinds fall back to a generic label.
+One sheet, one entry (the rail status pill). `ActivityCenter` (connect) reads the status model
+(`core/status/model.ts`: queued writes, scopes, transfers) and the `tasks.jobs` repository (no
+polling), and `buildActivity` (model) maps all of it onto one `ActivityItem` list grouped into
+active, needs-attention and completed, each item carrying optional retry/cancel actions and a
+`blocked` reason (offline, missing right). `ActivityController` sequences job commands,
+confirmation and errors; queued-write retry/discard and transfer retry/cancel are callbacks the
+publishers put on their status entries. `view.tsx` is pure presentation (props only): it
+renders the hero, the per-scope list, the three groups (completed is collapsible) and expands an
+item's error on demand, so a redesign replaces only the view and CSS. `jobs.ts` holds job
+labels, details and action predicates; unknown kinds fall back to a generic label. The entry
+badge adds queued/running and failed jobs to the queued-write counts (`useActivityCounts`).
 
-The task view separates active and finished records, preserving creation order inside each
-section. Its connection passes kind, state and progress as presentation data; the view
-chooses an icon and renders a progress bar without decoding display strings. Retry, cancel
-and history cleanup retain their existing permission checks and confirmation flow.
+Transfers are published by `setTransfer(id, {title, progress, direction, error, retry, cancel})`
+(offline retention, library import upload); progress 1 or an error moves the entry out of the
+active group. The library import upload is cancellable (stops between chunks, aborts the
+server upload) and retryable.
 
 ## Settings
 

@@ -18,7 +18,7 @@ export interface ImportSource {
   read(start: number, end: number): Promise<Uint8Array>;
 }
 export type ImportPort = Pick<RuntimeCommandPort, "command" | "operation"> &
-  Pick<RuntimeStatusPort, "setDownload">;
+  Pick<RuntimeStatusPort, "setTransfer">;
 
 export function attachmentError(size: number): string | undefined {
   return size > MAX_IMPORT_BYTES ? "文档不能超过 200 MiB" : undefined;
@@ -57,7 +57,30 @@ export async function importDocument(
   if (!source && utf8Encode(body).length > INLINE_TEXT_BYTES)
     source = textSource(title, body);
   const id = `import:${port.operation().op}`;
-  port.setDownload(id, { title: `上传 ${title}`, progress: 0 });
+  const label = `上传 ${title}`;
+  let cancelled = false,
+    uploadId: string | undefined;
+  const publish = (progress: number, error?: string) =>
+    port.setTransfer(id, {
+      title: label,
+      direction: "upload",
+      progress,
+      ...(error === undefined
+        ? {
+            cancel: () => {
+              cancelled = true;
+            },
+          }
+        : {
+            error,
+            retry: () => {
+              port.setTransfer(id, undefined);
+              void importDocument(port, input);
+            },
+            cancel: () => port.setTransfer(id, undefined),
+          }),
+    });
+  publish(0);
   try {
     if (source) {
       if (source.size > MAX_IMPORT_BYTES)
@@ -67,7 +90,9 @@ export async function importDocument(
         size: source.size,
       });
       if ("queued" in begin) return;
+      uploadId = begin.id;
       for (let offset = begin.offset; offset < source.size;) {
+        if (cancelled) throw new AppError("E_CANCELLED", "已取消");
         const bytes = await source.read(
           offset,
           Math.min(offset + CHUNK_BYTES, source.size),
@@ -79,10 +104,7 @@ export async function importDocument(
         );
         if ("queued" in part) return;
         offset = part.offset;
-        port.setDownload(id, {
-          title: `上传 ${title}`,
-          progress: offset / source.size,
-        });
+        publish(offset / source.size);
       }
       await port.command(contract.upload.commit, { id: begin.id });
       await port.command(contract.library.doc.importFile, {
@@ -97,12 +119,16 @@ export async function importDocument(
         body,
         collection,
       });
-    port.setDownload(id, undefined);
+    port.setTransfer(id, undefined);
   } catch (error) {
-    port.setDownload(id, {
-      title: `上传 ${title}`,
-      progress: 0,
-      error: error instanceof Error ? error.message : "导入失败",
-    });
+    if (cancelled) {
+      if (uploadId)
+        await port
+          .command(contract.upload.abort, { id: uploadId })
+          .catch(() => undefined);
+      port.setTransfer(id, undefined);
+      return;
+    }
+    publish(0, error instanceof Error ? error.message : "导入失败");
   }
 }

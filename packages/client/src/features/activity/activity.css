@@ -1,0 +1,120 @@
+/* The activity centre: connection hero, sync scopes, then work grouped by state. */
+.activity-hero {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--s-5);
+  padding: var(--s-4);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+}
+.activity-hero-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-right: var(--s-3);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--muted);
+}
+.activity-hero.status-offline .activity-hero-icon {
+  background: var(--pending-soft);
+  color: var(--pending);
+}
+.activity-hero.status-syncing .activity-hero-icon {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.activity-hero strong {
+  display: block;
+  color: var(--text);
+  font-size: var(--fs-4);
+  line-height: var(--lh-4);
+}
+.activity-hero span {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+}
+.activity-scope {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  font-size: var(--fs-2);
+}
+.activity-scope .icon {
+  margin-right: var(--s-1);
+}
+.activity-scope.is-ready {
+  color: var(--confirmed);
+}
+.activity-scope.is-loading {
+  color: var(--accent);
+}
+.activity-section {
+  margin-bottom: var(--s-5);
+}
+.activity-item {
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--border);
+}
+.activity-item-main {
+  display: flex;
+  align-items: center;
+}
+.activity-item-icon {
+  display: flex;
+  flex: none;
+  margin-right: var(--s-3);
+  color: var(--muted);
+}
+.activity-item-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-right: var(--s-3);
+}
+.activity-item-title {
+  display: block;
+  color: var(--text);
+}
+.activity-item-detail {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+.activity-item-progress {
+  margin-top: var(--s-2);
+}
+.activity-item-error {
+  margin: var(--s-2) 0 0;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--radius);
+  background: var(--failed-soft);
+  color: var(--failed);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+  overflow-wrap: break-word;
+  user-select: text;
+}
+.activity-item-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--s-2);
+}
+.activity-item-actions > * + * {
+  margin-left: var(--s-2);
+}
+.activity-item .btn-sm {
+  min-height: var(--control);
+}
+.activity-clear {
+  display: flex;
+  justify-content: center;
+  padding: var(--s-3);
+}

@@ -84,6 +84,16 @@ const reduce =
   };
 export const libraryModule = defineClientModule({
   id: "library",
+  scopeLabels: {
+    "coll:": {
+      title: "文档集",
+      name: (rows) => {
+        const row = rows.find((item) => item.type === "libraryCollection");
+        const value = libraryCollectionSchema.safeParse(row?.data);
+        return value.success ? value.data.title : undefined;
+      },
+    },
+  },
   orderKey: (method: string, args: unknown): string => {
     if (!args || typeof args !== "object") return "";
     const input = args as Record<string, unknown>;

@@ -23,7 +23,7 @@ export type RetentionPort = DocumentReadPort &
     | "retainFile"
     | "downloadFile"
   > &
-  Pick<RuntimeStatusPort, "setDownload"> &
+  Pick<RuntimeStatusPort, "setTransfer"> &
   Pick<RuntimeClockPort, "time" | "delay" | "clearDelay">;
 export interface RetentionInput {
   user: string | undefined;
@@ -75,8 +75,8 @@ export class RetentionScheduler {
       failed = false;
     let timer: ReturnType<RetentionPort["delay"]> | undefined;
     const active = () => !cancelled && port.getSnapshot().user?.id === user;
-    const publish: RetentionPort["setDownload"] = (id, value) => {
-      if (active()) port.setDownload(id, value);
+    const publish: RetentionPort["setTransfer"] = (id, value) => {
+      if (active()) port.setTransfer(id, value);
     };
     const owner = (id: string) => `library:${id}:retained`;
     const allowed = (id: string) => retentionDeadline(data, id);

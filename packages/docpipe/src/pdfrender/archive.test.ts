@@ -23,9 +23,6 @@ it("indexes ZIP64 ranges, reads content and isolates returned manifest mutations
   });
 });
 const negatives: Record<string, (m: ArchiveManifest) => void> = {
-  version: (m) => {
-    m.version = 2 as 1;
-  },
   format: (m) => {
     m.format = "bad" as ArchiveManifest["format"];
   },
@@ -101,6 +98,14 @@ it.each(Object.keys(negatives))("rejects archive manifest %s", async (name) => {
   );
   await expect(PdfRenderArchive.open(source(bytes))).rejects.toMatchObject({
     code: "E_INTEGRITY",
+  });
+});
+it("reports an outdated renderer format as unavailable so the vendored binary gets updated", async () => {
+  const bytes = archiveFixture((m) => {
+    (m as unknown as ArchiveManifest).version = 99;
+  });
+  await expect(PdfRenderArchive.open(source(bytes))).rejects.toMatchObject({
+    code: "E_UNAVAILABLE",
   });
 });
 it.each([

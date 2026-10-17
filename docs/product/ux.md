@@ -35,7 +35,7 @@ decides its layout, not the other way round.
 | AI | conversations with an assistant | collection list + stream |
 | 管理 admin | many tables of records, online only | section nav + table |
 
-Settings, the status centre and the task list are **sheets**, not areas: they are visited
+Settings and the activity centre (sync, queued changes, transfers, background tasks) are **sheets**, not areas: they are visited
 briefly over whatever the user is doing.
 
 ### The frame
@@ -93,11 +93,11 @@ One vocabulary, used everywhere:
 | syncing | accent, spinning mark | rail: 同步中 n |
 | offline | amber | rail: 离线; online-only controls disabled with reason |
 | pending (queued) | amber clock | rail badge with count; inline mark 待发送 / 待同步 on the item |
-| failed | red | rail badge (red wins); inline mark with 重试; status centre lists retry / discard |
-| progress | accent bar | status centre, task list, inline on the item |
-| update ready | accent dot on the status entry | status centre offers 应用新版本 |
+| failed | red | rail badge (red wins); inline mark with 重试; the activity centre lists failed work with 重试 / 取消 / 查看错误 |
+| progress | accent bar | activity centre, inline on the item |
+| update ready | accent dot on the status entry | the activity centre offers 应用新版本 |
 
-- The rail status entry is the single home; it opens the status centre.
+- The rail status entry is the single home; it opens the one activity centre.
 - Badges carry a count or are hidden; never an empty dot (except update ready).
 - Offline is normal for a local-first app: no global banner, no modal. Only things that
   cannot work offline change, and they say why.

@@ -10,7 +10,7 @@ import type { Nav } from "../navigation/index.ts";
 import { createNav, isNav } from "../navigation/index.ts";
 import type { ClientSnapshot } from "../lifecycle/snapshot.ts";
 import type { RuntimeConfiguration as RuntimeOptions } from "../lifecycle/configuration.ts";
-import type { StatusViewModel } from "../status/model.ts";
+import type { OutboundView, StatusViewModel } from "../status/model.ts";
 import type { StoredRow } from "./db.ts";
 import type { typedCall } from "./link.ts";
 import type { ModuleRegistry } from "./modules.ts";
@@ -249,20 +249,42 @@ export class SessionSyncController {
             }),
       pending: state.outbox.filter((op) => op.state !== "failed").length,
       failed: state.outbox.filter((op) => op.state === "failed").length,
-      operations: state.outbox.map((op) => ({
-        id: op.op,
-        title: this.ports.modules.operationTitle(op.method),
-        state: op.state === "failed" ? "failed" : "pending",
-        ...(op.state === "failed"
-          ? {
-              retry: () => {
-                void this.ports.retry(op.op).catch(this.ports.report);
-              },
-              discard: () => {
-                void this.ports.discard(op.op).catch(this.ports.report);
-              },
-            }
-          : {}),
+      operations: state.outbox.map((op): OutboundView => {
+        const failed = op.state === "failed";
+        const waiting =
+          op.state === "pending" &&
+          op.notBefore !== undefined &&
+          op.notBefore > Date.now();
+        return {
+          id: op.op,
+          title: this.ports.modules.operationTitle(op.method),
+          state: failed
+            ? "failed"
+            : op.state === "sending"
+              ? "sending"
+              : waiting
+                ? "waiting"
+                : "pending",
+          merged: op.merged ?? 0,
+          ...(waiting ? { dueAt: op.notBefore } : {}),
+          ...(failed && op.error ? { error: op.error.message } : {}),
+          ...(failed
+            ? {
+                retry: () => {
+                  void this.ports.retry(op.op).catch(this.ports.report);
+                },
+                discard: () => {
+                  void this.ports.discard(op.op).catch(this.ports.report);
+                },
+              }
+            : {}),
+        };
+      }),
+      scopes: state.scopeSync.map((item) => ({
+        id: item.scope,
+        title: this.ports.modules.scopeTitle(item.scope, state.rows),
+        state: item.state,
+        rows: item.rows,
       })),
     });
   }

@@ -41,8 +41,8 @@ there is no token or link that grants access to whoever holds it.
   protected PDFs are rejected with 文档已加密，暂不支持; unreadable files with 文档无效.
 - Importing needs write access to the target booklist and a connection. Without an explicit
   target it goes into 我的书架. The book and its first membership are committed together. The dialog closes
-  at once; upload progress shows in the status centre and conversion runs as a background
-  task shown in the task list, restartable after a server restart. A failed conversion keeps
+  at once; upload progress shows in the activity centre and conversion runs as a background
+  task shown there too, restartable after a server restart. A failed conversion keeps
   its source and can be retried from the task list.
 - Every document ends as one rendition that is the same for all formats, so retention and
   offline reading work identically for text and PDF.

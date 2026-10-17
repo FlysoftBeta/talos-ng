@@ -19,6 +19,8 @@ export interface OutboxItem {
   readonly notBefore?: number;
   /** Latest notBefore a register write keeps when later writes merge into it. */
   readonly deadline?: number;
+  /** Earlier pending writes folded into this one, for display. */
+  readonly merged?: number;
 }
 
 export type EnqueueItem = Pick<
@@ -30,6 +32,7 @@ export type EnqueueItem = Pick<
   | "dependsOn"
   | "notBefore"
   | "deadline"
+  | "merged"
 >;
 export type OutboxEvent =
   | { readonly type: "enqueue"; readonly item: EnqueueItem }
@@ -107,6 +110,7 @@ function mergeRegister(
         ? options.merge(item.method, earlier.args, item.args)
         : item.args,
       createdAt: earlier.createdAt,
+      merged: (earlier.merged ?? 0) + (item.merged ?? 0) + 1,
       ...(dependsOn.length ? { dependsOn } : { dependsOn: undefined }),
       ...(item.notBefore !== undefined
         ? { notBefore: Math.min(item.notBefore, deadline) }

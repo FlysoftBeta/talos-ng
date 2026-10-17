@@ -42,7 +42,7 @@ const port = {
   hasFile: async () => false,
   can: () => ({ ok: true }),
   time: () => 1,
-  setDownload: state.status,
+  setTransfer: state.status,
   downloadFile: state.download,
   delay: () => 0,
   clearDelay: () => {},

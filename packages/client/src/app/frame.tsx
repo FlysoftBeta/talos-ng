@@ -1,6 +1,9 @@
 import "./app.css";
 import { AiList, AiContent } from "../features/ai/index.ts";
-import { TasksSheet } from "../features/tasks/index.ts";
+import {
+  ActivityCenter,
+  useActivityCounts,
+} from "../features/activity/index.ts";
 import {
   LearningProvider,
   LearningScreen,
@@ -48,7 +51,7 @@ import { AppFrame, EmptyPane, Pane, PaneHeader } from "../ui/layout/index.ts";
 import { Icon } from "../ui/icon/index.ts";
 import type { IconName } from "../ui/icon/index.ts";
 import { Rail, RailItem, RailSpacer } from "../ui/navigation/index.ts";
-import { StatePanel, StatusCenter, StatusPill } from "../ui/feedback/index.ts";
+import { StatePanel, StatusPill } from "../ui/feedback/index.ts";
 import { TalosProvider } from "../ui/theme/index.ts";
 import type { ColorMode } from "../ui/theme/index.ts";
 const areas: Record<
@@ -135,6 +138,7 @@ function AppContent(): ReactElement {
   const areaGate = areaGates[state.nav.area];
   const chatUnread = useChatUnread();
   const [gateStatus, setGateStatus] = useState(false);
+  const activityCounts = useActivityCounts(state.status);
   const current = areas[state.nav.area];
   const stack = state.nav.areas[state.nav.area].stack;
   const top = stack[stack.length - 1];
@@ -142,7 +146,7 @@ function AppContent(): ReactElement {
   const adminOpen = overlay?.kind === "admin" && admin.ok;
   const workbench = useAdminWorkbench(adminExtensions);
   const close = () => runtime.dispatch({ type: "closeOverlay" });
-  const open = (kind: "settings" | "status" | "tasks" | "admin") =>
+  const open = (kind: "settings" | "status" | "admin") =>
     runtime.dispatch({ type: "openOverlay", overlay: { kind } });
   const isApp = state.gate === "app";
   return (
@@ -220,13 +224,8 @@ function AppContent(): ReactElement {
                 <MediaMiniPlayer />
                 <StatusPill
                   rail
-                  model={state.status}
+                  model={{ ...state.status, ...activityCounts }}
                   onClick={() => open("status")}
-                />
-                <RailItem
-                  label="任务"
-                  icon={<Icon name="tasks" size={22} />}
-                  onClick={() => open("tasks")}
                 />
                 <RailItem
                   label="设置"
@@ -293,19 +292,13 @@ function AppContent(): ReactElement {
           <LibraryBackground />
           <MediaBackground />
           <SettingsSheet open={overlay?.kind === "settings"} onClose={close} />
-          <StatusCenter
-            open={overlay?.kind === "status"}
-            model={state.status}
-            onClose={close}
-          />
-          <TasksSheet open={overlay?.kind === "tasks"} onClose={close} />
+          <ActivityCenter open={overlay?.kind === "status"} onClose={close} />
         </div>
       )}
       <LearningOverlays />
       {!isApp && !state.concealed && (
-        <StatusCenter
+        <ActivityCenter
           open={gateStatus}
-          model={state.status}
           onClose={() => setGateStatus(false)}
         />
       )}

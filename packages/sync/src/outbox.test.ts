@@ -290,6 +290,7 @@ describe("outbox", () => {
           op: "2",
           args: { key: "draft", value: 5 },
           createdAt: 1,
+          merged: 1,
           // A continuously edited register still goes out by the first deadline.
           notBefore: 30,
           deadline: 30,

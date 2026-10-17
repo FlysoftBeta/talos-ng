@@ -61,6 +61,16 @@ function updateState(
 }
 export const chatModule = defineClientModule({
   id: "chat",
+  scopeLabels: {
+    "conv:": {
+      title: "对话",
+      name: (rows) => {
+        const row = rows.find((item) => item.type === "communityConversation");
+        const value = communityConversationSchema.safeParse(row?.data);
+        return value.success ? value.data.name || undefined : undefined;
+      },
+    },
+  },
   orderKey: (method, args) => {
     const value = args as { id?: string; conversation?: string } | null;
     if (method === "chat.text.put") return `text:${value?.id ?? ""}`;

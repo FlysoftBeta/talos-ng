@@ -1,6 +1,10 @@
 import { AppError, utf8Decode } from "@talos/base";
 import { contract } from "@talos/contract";
-import { decodeResource, decodeResourceBatch } from "@talos/docpack";
+import {
+  RENDER_FORMAT,
+  decodeResource,
+  decodeResourceBatch,
+} from "@talos/docpack";
 import type { PackReader } from "@talos/docpack";
 import type { ClientManifest, Unit } from "@talos/docpack";
 import type {
@@ -95,6 +99,14 @@ export async function openDocument(
       value,
       await runtime.hasFile(value.pack.id),
     );
+  }
+  // A pack rendered in another page format cannot be displayed; the server re-renders it.
+  if (
+    cached?.manifest.kind === "paged" &&
+    cached.manifest.meta.renderFormat !== RENDER_FORMAT
+  ) {
+    await runtime.setLocal(documentKey(id), null);
+    throw new AppError("E_UNAVAILABLE", "离线未缓存");
   }
   if (cached && (await runtime.hasFile(cached.pack.id)))
     return new DocumentResources(runtime, cached, true);

@@ -39,7 +39,7 @@ app has enough synchronized state to distinguish an absent item from an unfinish
   logout. Their controls stay visible but disabled, and tapping shows the reason.
 
 Transport errors never fail a queued change; it waits. A change the server rejects is listed
-in the status centre with retry and discard. A revoked right turns pending changes for that
+in the activity centre with retry and discard. A revoked right turns pending changes for that
 object dormant instead of sending them. Components never branch on "online"; a control asks
 for permission and receives either permission or a reason string.
 
@@ -61,7 +61,7 @@ syncs it.
 
 When device storage runs low, content is evicted in this order: files nobody owns, ordinary
 caches by last use, expired retention. Drafts, the pending-change queue, sign-ins and
-retention still in its window are never evicted. The status centre shows storage use.
+retention still in its window are never evicted. The activity centre shows storage use.
 
 ## Updates while offline
 

@@ -39,7 +39,7 @@ export type RetentionPort = CommandPort &
   Pick<RuntimeQueryPort, "getSnapshot" | "hasScope"> &
   Pick<RuntimeFilePort, "releaseFiles"> &
   RuntimeClockPort &
-  Pick<RuntimeStatusPort, "setDownload">;
+  Pick<RuntimeStatusPort, "setTransfer">;
 export type BackgroundPort = Pick<RuntimeCommandPort, "command" | "can"> &
   Pick<RuntimeQueryPort, "getSnapshot"> &
   Pick<RuntimeSettingsPort, "setting"> &
