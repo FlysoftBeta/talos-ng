@@ -61,6 +61,13 @@ try {
   assert.ok(names.some((name) => name.endsWith("/pdfrender.exe")));
   assert.ok(names.some((name) => /pdfrender\/windows\/.*\.dll$/i.test(name)));
   assert.ok(names.some((name) => name.endsWith("/yt-dlp.exe")));
+  assert.ok(
+    names.some((name) =>
+      name.endsWith(
+        "/plugins/talos-music/yt_dlp_plugins/extractor/talos_music.py",
+      ),
+    ),
+  );
   const manifestName = names.find((name) =>
     name.endsWith("/client/app/manifest.json"),
   );

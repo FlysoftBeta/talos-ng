@@ -12,11 +12,12 @@ it can fetch live or keeps for offline use.
 - Search (Enter or button) returns bounded results with title, artist and, when the source
   provides it, album. Search, playlist creation/deletion and sharing need a
   connection; preparing audio for a search result happens when it is played or retained.
-- Results are filtered to music (no podcasts, audiobooks, ringtones, ads, live streams, or clips under
-  45 s / over 20 min; a length the source does not report never hides a result) and paged
-  with 加载更多. Tabs 歌曲/歌单/专辑/歌手 search songs, online playlists, albums and artists.
+- Results come straight from YouTube Music's own catalogue sections, as the YouTube Music
+  app shows them, not from a filtered video search: 歌曲 from Songs, 专辑 from Albums, 歌手
+  from Artists, 歌单 from Community playlists. Nothing is dropped by length or title, so a
+  long track in a playlist stays. Results are paged with 加载更多.
 - Opening a playlist, album or artist shows its page: cover, title, the tracks (paged) and,
-  for an artist, its albums or playlists. The page offers 播放全部 (plays the first track,
+  for an artist, its songs and albums (albums are `OLAK5uy_` playlists). The page offers 播放全部 (plays the first track,
   queues the rest), 加入队列 and 保存为歌单 (creates a library playlist from the loaded
   tracks); an album opened from an artist returns to that artist.
 - Search does not create a playlist or save every result permanently. Save a song explicitly

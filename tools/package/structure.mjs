@@ -24,6 +24,11 @@ export async function checkLinuxStructure(root, build, target, other) {
     if (name.startsWith("vendor/pdfrender/") && name.split("/").length > 3)
       assert.ok(name.startsWith(`vendor/pdfrender/${flavor}/`), name);
   assert.ok(files.has("vendor/media/yt-dlp"));
+  assert.ok(
+    files.has(
+      "vendor/media/plugins/talos-music/yt_dlp_plugins/extractor/talos_music.py",
+    ),
+  );
   assert.ok(![...files.keys()].some((name) => /\.dll$|\.exe$/i.test(name)));
   const cloud = JSON.parse(
     await readFile(join(dir, base + "-update.zip.json"), "utf8"),

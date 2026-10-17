@@ -2,7 +2,6 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { AppError } from "@talos/base";
 import type { CancellationSignal } from "@talos/base";
-import { isMusicEntry, nextOffset } from "./music-filter.ts";
 
 export interface ProviderTrack {
   source: string;
@@ -80,29 +79,43 @@ interface RawEntry {
   duration?: unknown;
   webpage_url?: unknown;
   entries?: unknown;
-  live_status?: unknown;
-  categories?: unknown;
   playlist_count?: unknown;
+  release_year?: unknown;
   url?: unknown;
   thumbnails?: unknown;
+  /** Set by the bundled yt-dlp plugin: song, album, artist or playlist. */
+  talos_kind?: unknown;
+  talos_albums?: unknown;
+  talos_songs_playlist?: unknown;
 }
-const SEARCH_FILTER = {
-  playlist: "EgIQAw%253D%253D",
-  artist: "EgIQAg%253D%253D",
+/**
+ * The YouTube Music search section each kind comes from. Every section is a
+ * catalogue result list, so nothing needs filtering afterwards.
+ */
+const SECTION = {
+  song: "songs",
+  album: "albums",
+  artist: "artists",
+  playlist: "playlists",
 } as const;
-/** Album ids on YouTube Music are OLAK5uy_ playlists; uploaded albums are ordinary playlists. */
 const ID_PATTERN = {
   playlist: /^(PL|OL|RD|UU)/,
-  album: /^(OLAK5uy_|PL|OL)/,
+  /** Album ids on YouTube Music are OLAK5uy_ playlists. */
+  album: /^OLAK5uy_/,
   artist: /^UC/,
 } as const;
-const ALBUM_TITLE = /album|专辑|專輯|アルバム|\bEP\b|\bOST\b|원|앨범/i;
+/** Placeholders YouTube leaves in playlists for removed uploads. */
+const UNAVAILABLE_TITLE = /^\[(private|deleted) video\]$/i;
+const SAFE_ID = /^[\w-]{1,100}$/;
 const entryList = (output: Buffer): RawEntry[] => {
   const value = JSON.parse(output.toString("utf8")) as RawEntry;
   return Array.isArray(value.entries) ? (value.entries as RawEntry[]) : [];
 };
 const parsed = (output: Buffer): RawEntry =>
   JSON.parse(output.toString("utf8")) as RawEntry;
+/** The next offset of a raw page: null once the provider returned fewer entries than asked. */
+const nextOffset = (offset: number, limit: number, rawCount: number) =>
+  rawCount >= limit ? offset + limit : null;
 /** The smallest https image at least 300 px wide, else the widest one. */
 function thumbnailOf(value: unknown): string | null {
   if (!Array.isArray(value)) return null;
@@ -123,17 +136,10 @@ function thumbnailOf(value: unknown): string | null {
     big[0]?.url ?? images.sort((a, b) => b.width - a.width)[0]?.url ?? null
   );
 }
-function musicTracks(entries: RawEntry[]): ProviderTrack[] {
+function tracksOf(entries: RawEntry[]): ProviderTrack[] {
   return entries
     .filter(
-      (e) =>
-        typeof e.title === "string" &&
-        isMusicEntry({
-          title: e.title,
-          duration: e.duration,
-          liveStatus: e.live_status,
-          categories: e.categories,
-        }),
+      (e) => typeof e.title !== "string" || !UNAVAILABLE_TITLE.test(e.title),
     )
     .map(parse)
     .filter((v): v is ProviderTrack => !!v);
@@ -148,7 +154,8 @@ function subtitleOf(kind: CollectionKind, e: RawEntry): string {
   if (kind === "artist") return "歌手";
   const count =
     typeof e.playlist_count === "number" ? `${e.playlist_count} 首` : "";
-  return [kind === "album" ? "专辑" : "", ownerOf(e), count]
+  const year = typeof e.release_year === "number" ? `${e.release_year}` : "";
+  return [kind === "album" ? "专辑" : "", ownerOf(e), year, count]
     .filter(Boolean)
     .join(" · ");
 }
@@ -159,9 +166,7 @@ function collectionsOf(
   const out: ProviderCollection[] = [];
   for (const e of entries) {
     if (typeof e.id !== "string" || typeof e.title !== "string") continue;
-    if (!/^[\w-]{1,100}$/.test(e.id)) continue;
-    // Anything that is not a playlist, album or channel id is a plain video.
-    if (!ID_PATTERN[kind].test(e.id)) continue;
+    if (!SAFE_ID.test(e.id) || !ID_PATTERN[kind].test(e.id)) continue;
     out.push({
       kind,
       id: e.id,
@@ -182,7 +187,7 @@ function headerOf(
   const title =
     kind === "artist"
       ? ownerOf(value) || raw.replace(/ - (Videos|视频|影片)$/, "")
-      : raw;
+      : raw.replace(/^(Album|专辑|專輯) - /, "");
   return {
     kind,
     id,
@@ -226,6 +231,11 @@ export class YtDlpProvider implements MediaProvider {
     readonly binaryPath: string,
     /** The subprocess runner; tests replace it with recorded yt-dlp output. */
     private readonly spawn: Spawn = execute,
+    /**
+     * The directory holding the bundled `talos-music` yt-dlp plugin (search
+     * sections and artist pages). Without it only plain playlists open.
+     */
+    private readonly pluginDir: string | null = null,
   ) {}
   private async run(
     args: string[],
@@ -259,25 +269,10 @@ export class YtDlpProvider implements MediaProvider {
       signal?.removeEventListener("abort", abort);
     }
   }
-  private page(
-    entries: RawEntry[],
-    offset: number,
-    limit: number,
-    kind: SearchKind | "tracks",
-    header: ProviderCollection | null = null,
-  ): ProviderPage {
-    return {
-      tracks: kind === "song" || kind === "tracks" ? musicTracks(entries) : [],
-      collections:
-        kind === "song" || kind === "tracks"
-          ? []
-          : collectionsOf(entries, kind),
-      next: nextOffset(offset, limit, entries.length),
-      collection: header,
-    };
-  }
+  /** A flat, paged listing of `target`; plugin extractors need the plugin directory. */
   private items(offset: number, limit: number, target: string): string[] {
     return [
+      ...(this.pluginDir ? ["--plugin-dirs", this.pluginDir] : []),
       "--flat-playlist",
       "--dump-single-json",
       "--playlist-items",
@@ -290,90 +285,99 @@ export class YtDlpProvider implements MediaProvider {
     signal?: CancellationSignal,
   ): Promise<ProviderPage> {
     const { query, kind, offset, limit } = input;
-    const q = encodeURIComponent(query);
-    const web = (text: string, filter: string) =>
-      `https://www.youtube.com/results?search_query=${text}&sp=${filter}`;
-    if (kind === "song") {
-      const output = await this.run(
-        this.items(offset, limit, `ytsearch${offset + limit}:${query}`),
+    if (!this.pluginDir)
+      throw new AppError("E_UNAVAILABLE", "音乐搜索组件未安装");
+    // One YouTube Music catalogue section per kind: no video search, no
+    // after-the-fact guessing whether a hit is music.
+    const output = await this.run(
+      this.items(
+        offset,
+        limit,
+        `https://music.youtube.com/search?q=${encodeURIComponent(query)}#${SECTION[kind]}`,
+      ),
+      signal,
+    );
+    const entries = entryList(output);
+    const next = nextOffset(offset, limit, entries.length);
+    if (kind === "song")
+      return {
+        tracks: tracksOf(entries.filter((e) => e.talos_kind === "song")),
+        collections: [],
+        next,
+        collection: null,
+      };
+    return {
+      tracks: [],
+      collections: collectionsOf(
+        entries.filter((e) => e.talos_kind === kind),
+        kind,
+      ),
+      next,
+      collection: null,
+    };
+  }
+  /** An artist page: header, albums (first page only) and a page of songs. */
+  private async artist(
+    id: string,
+    offset: number,
+    limit: number,
+    signal?: CancellationSignal,
+  ): Promise<ProviderPage> {
+    if (!this.pluginDir)
+      throw new AppError("E_UNAVAILABLE", "音乐搜索组件未安装");
+    const value = parsed(
+      await this.run(
+        [
+          "--plugin-dirs",
+          this.pluginDir,
+          "--flat-playlist",
+          "--dump-single-json",
+          `talos-music:artist:${id}`,
+        ],
         signal,
-      );
-      return this.page(entryList(output), offset, limit, kind);
-    }
-    if (kind === "album") {
-      // YouTube Music's album shelf first; some yt-dlp builds list nothing there, so fall
-      // back to ordinary playlists that are named like albums.
-      let entries = entryList(
-        await this.run(
-          this.items(
-            offset,
-            limit,
-            `https://music.youtube.com/search?q=${q}#albums`,
-          ),
-          signal,
-        ),
-      );
-      let raw = entries.length;
-      if (!entries.length) {
-        entries = entryList(
+      ),
+    );
+    const shelf = Array.isArray(value.entries)
+      ? (value.entries as RawEntry[])
+      : [];
+    const songsList =
+      typeof value.talos_songs_playlist === "string" &&
+      SAFE_ID.test(value.talos_songs_playlist)
+        ? value.talos_songs_playlist
+        : null;
+    // The shelf shows only the first few songs; its "see all" playlist pages
+    // the rest. Without one, the shelf is the whole list.
+    const songs = songsList
+      ? entryList(
           await this.run(
             this.items(
               offset,
               limit,
-              web(encodeURIComponent(`${query} album`), SEARCH_FILTER.playlist),
+              `https://music.youtube.com/playlist?list=${songsList}`,
             ),
             signal,
           ),
-        );
-        raw = entries.length;
-        entries = entries.filter(
-          (e) =>
-            typeof e.id === "string" &&
-            (e.id.startsWith("OLAK5uy_") ||
-              (typeof e.title === "string" && ALBUM_TITLE.test(e.title))),
-        );
-      }
-      return {
-        ...this.page(entries, offset, limit, kind),
-        next: nextOffset(offset, limit, raw),
-      };
-    }
-    const output = await this.run(
-      this.items(offset, limit, web(q, SEARCH_FILTER[kind])),
-      signal,
-    );
-    return this.page(entryList(output), offset, limit, kind);
-  }
-  /** An artist's albums: its releases tab, else its playlists (best effort, never fatal). */
-  private async artistShelf(
-    id: string,
-    limit: number,
-    signal?: CancellationSignal,
-  ): Promise<ProviderCollection[]> {
-    for (const [tab, kind] of [
-      ["releases", "album"],
-      ["playlists", "playlist"],
-    ] as const) {
-      try {
-        const found = collectionsOf(
-          entryList(
-            await this.run(
-              this.items(
-                0,
-                limit,
-                `https://www.youtube.com/channel/${id}/${tab}`,
-              ),
-              signal,
-            ),
-          ),
-          kind,
-        );
-        if (found.length) return found;
-      } catch (e) {
-        if (signal?.aborted) throw e;
-      }
-    }
-    return [];
+        )
+      : shelf.slice(offset, offset + limit);
+    const total = songsList ? songs.length : shelf.length - offset;
+    return {
+      tracks: tracksOf(songs),
+      collections:
+        offset === 0
+          ? collectionsOf(
+              Array.isArray(value.talos_albums)
+                ? (value.talos_albums as RawEntry[])
+                : [],
+              "album",
+            )
+          : [],
+      next: songsList
+        ? nextOffset(offset, limit, total)
+        : shelf.length > offset + limit
+          ? offset + limit
+          : null,
+      collection: headerOf("artist", id, value),
+    };
   }
   async collection(
     input: {
@@ -385,39 +389,36 @@ export class YtDlpProvider implements MediaProvider {
     signal?: CancellationSignal,
   ): Promise<ProviderPage> {
     const { kind, id, offset, limit } = input;
-    if (!/^[\w-]{1,100}$/.test(id))
-      throw new AppError("E_INVALID", "音乐来源无效");
-    const url =
-      kind === "artist"
-        ? `https://www.youtube.com/channel/${id}/videos`
-        : `https://www.youtube.com/playlist?list=${id}`;
-    const [output, shelf] = await Promise.all([
-      this.run(this.items(offset, limit, url), signal),
-      // An artist page also lists albums, once, with its first page of songs.
-      kind === "artist" && offset === 0
-        ? this.artistShelf(id, limit, signal)
-        : Promise.resolve([]),
-    ]);
-    const value = parsed(output);
+    if (!SAFE_ID.test(id)) throw new AppError("E_INVALID", "音乐来源无效");
+    if (kind === "artist") return this.artist(id, offset, limit, signal);
+    // Playlists and albums (OLAK5uy_ playlists) open as music playlists; every
+    // item is listed, whatever its length.
+    const value = parsed(
+      await this.run(
+        this.items(
+          offset,
+          limit,
+          `https://music.youtube.com/playlist?list=${id}`,
+        ),
+        signal,
+      ),
+    );
     const entries = Array.isArray(value.entries)
       ? (value.entries as RawEntry[])
       : [];
-    const page = this.page(
-      entries,
-      offset,
-      limit,
-      "tracks",
-      headerOf(kind, id, value),
-    );
-    page.collections = shelf;
-    return page;
+    return {
+      tracks: tracksOf(entries),
+      collections: [],
+      next: nextOffset(offset, limit, entries.length),
+      collection: headerOf(kind, id, value),
+    };
   }
   async resolve(
     source: string,
     providerId: string,
     signal?: CancellationSignal,
   ): Promise<ProviderTrack> {
-    if (source !== "youtube-music" || !/^[\w-]{1,100}$/.test(providerId))
+    if (source !== "youtube-music" || !SAFE_ID.test(providerId))
       throw new AppError("E_INVALID", "音乐来源无效");
     const output = await this.run(
       [

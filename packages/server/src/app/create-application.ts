@@ -65,6 +65,8 @@ export interface KernelOptions {
   netbooksWait?: (ms: number, signal: CancellationSignal) => Promise<void>;
   mediaProvider?: MediaProvider;
   mediaBinaryPath?: string;
+  /** Directory of the bundled `talos-music` yt-dlp plugin (search sections, artist pages). */
+  mediaPluginDir?: string;
   /**
    * Build over a read-only replica connection: no start-up writes, no
    * background work. Only read paths (sync snapshots) are served from it.
@@ -272,7 +274,11 @@ export function createKernel(options: KernelOptions): Kernel {
       options.mediaProvider ??
       (options.testSeed
         ? testMediaProvider()
-        : new YtDlpProvider(options.mediaBinaryPath ?? "")),
+        : new YtDlpProvider(
+            options.mediaBinaryPath ?? "",
+            undefined,
+            options.mediaPluginDir ?? null,
+          )),
   });
   const chatService = new ChatService({
     db,

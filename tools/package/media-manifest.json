@@ -7,5 +7,9 @@
   "windows": {
     "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp_win.zip",
     "sha256": "30b4c14aafab6082becff7881e41b76df46dc43ea7633479410a91e29da492bf"
+  },
+  "plugin": {
+    "source": "packages/server/ytdlp-plugin",
+    "files": ["talos-music/yt_dlp_plugins/extractor/talos_music.py"]
   }
 }

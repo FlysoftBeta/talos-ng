@@ -1,0 +1,61 @@
+{
+ "id": "UCL2MDNdwEtV6aYUgNjFQGZA",
+ "title": "Jay Chou",
+ "_type": "playlist",
+ "talos_kind": "artist",
+ "channel": "Jay Chou",
+ "thumbnails": [
+  {
+   "url": "https://lh3.googleusercontent.com/artist=w1060-h1060-p-l90-rj",
+   "width": 1060,
+   "height": 1060
+  }
+ ],
+ "talos_songs_playlist": "OLAK5uy_kSongs0000000000000000000000000",
+ "talos_albums": [
+  {
+   "_type": "url",
+   "ie_key": "YoutubeTab",
+   "talos_kind": "album",
+   "id": "OLAK5uy_nUxU1qD0JGoCgY1XdPvhd3wGMxpNiYx6g",
+   "url": "https://music.youtube.com/playlist?list=OLAK5uy_nUxU1qD0JGoCgY1XdPvhd3wGMxpNiYx6g",
+   "title": "范特西",
+   "channel": "周杰倫",
+   "release_year": 2001,
+   "thumbnails": [
+    {
+     "url": "https://lh3.googleusercontent.com/OLAK5uy_nUxU1qD0JGoCgY1XdPvhd3wGMxpNiYx6g=w226-h226-l90-rj",
+     "width": 226,
+     "height": 226
+    }
+   ]
+  }
+ ],
+ "entries": [
+  {
+   "_type": "url",
+   "ie_key": "Youtube",
+   "talos_kind": "song",
+   "id": "Zr1xnP7ct3Y",
+   "url": "https://music.youtube.com/watch?v=Zr1xnP7ct3Y",
+   "title": "晴天",
+   "artists": [
+    "周杰倫"
+   ],
+   "album": "葉惠美",
+   "duration": 269,
+   "thumbnails": [
+    {
+     "url": "https://lh3.googleusercontent.com/Zr1xnP7ct3Y=w60-h60-l90-rj",
+     "width": 60,
+     "height": 60
+    },
+    {
+     "url": "https://lh3.googleusercontent.com/Zr1xnP7ct3Y=w544-h544-l90-rj",
+     "width": 544,
+     "height": 544
+    }
+   ]
+  }
+ ]
+}

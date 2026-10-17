@@ -1,0 +1,24 @@
+{
+ "id": "OLAK5uy_nUxU1qD0JGoCgY1XdPvhd3wGMxpNiYx6g",
+ "title": "Album - 范特西",
+ "_type": "playlist",
+ "playlist_count": 10,
+ "channel": "周杰倫",
+ "thumbnails": [
+  {
+   "url": "https://i.ytimg.com/pl_c/OLAK5uy_nUxU1qD0JGoCgY1XdPvhd3wGMxpNiYx6g/studio_square_thumbnail.jpg",
+   "width": 544,
+   "height": 544
+  }
+ ],
+ "entries": [
+  {
+   "id": "abc123def45",
+   "title": "爱在西元前",
+   "duration": 233,
+   "channel": "周杰倫",
+   "url": "https://www.youtube.com/watch?v=abc123def45",
+   "thumbnails": []
+  }
+ ]
+}

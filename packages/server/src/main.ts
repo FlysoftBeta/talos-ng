@@ -1,7 +1,7 @@
 import { AppError } from "@talos/base";
 import type { ModelProvider } from "./modules/ai/index.ts";
 import { ResponsesProvider } from "./modules/ai/index.ts";
-import { watchFile, unwatchFile } from "node:fs";
+import { existsSync, watchFile, unwatchFile } from "node:fs";
 import { join } from "node:path";
 import { X509Certificate } from "node:crypto";
 import { acquireLock } from "@talos/launcher";
@@ -86,6 +86,11 @@ export async function startServer(
         throw new AppError("E_INVALID", "无法读取 AI 模型配置");
       }
     }
+    // A release ships the plugin next to yt-dlp; a checkout has the source.
+    const mediaPluginDir = [
+      join(import.meta.dirname, "vendor", "media", "plugins"),
+      join(import.meta.dirname, "..", "ytdlp-plugin"),
+    ].find((dir) => existsSync(dir));
     kernel = createKernel({
       aiProvider,
       ops: {
@@ -121,6 +126,7 @@ export async function startServer(
           "media",
           process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp",
         ),
+      ...(mediaPluginDir ? { mediaPluginDir } : {}),
       printRootPin: options.printRootPin,
     });
     await kernel.chat.ready;

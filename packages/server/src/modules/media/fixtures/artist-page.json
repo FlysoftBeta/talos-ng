@@ -1,0 +1,31 @@
+{
+ "id": "UCL2MDNdwEtV6aYUgNjFQGZA",
+ "title": "Jay Chou",
+ "_type": "playlist",
+ "entries": [],
+ "talos_kind": "artist",
+ "channel": "Jay Chou",
+ "thumbnails": [
+  {
+   "url": "https://yt3.googleusercontent.com/5vqNE8l4iYKmNCHd_YIgknhMF-W4ROcG5H7ZbdfOudxTcNSIIJrf9WpctLh43GlzFLmmcpMUxRQ918Kv=w540-h225-p-l90-rj",
+   "width": 540,
+   "height": 225,
+   "id": "0",
+   "resolution": "540x225"
+  },
+  {
+   "url": "https://yt3.googleusercontent.com/5vqNE8l4iYKmNCHd_YIgknhMF-W4ROcG5H7ZbdfOudxTcNSIIJrf9WpctLh43GlzFLmmcpMUxRQ918Kv=w816-h340-p-l90-rj",
+   "width": 816,
+   "height": 340,
+   "id": "1",
+   "resolution": "816x340"
+  }
+ ],
+ "talos_albums": [],
+ "talos_songs_playlist": null,
+ "webpage_url": "talos-music:artist:UCL2MDNdwEtV6aYUgNjFQGZA",
+ "extractor": "talos-music:artist",
+ "extractor_key": "TalosMusicArtist",
+ "release_year": null,
+ "playlist_count": 0
+}

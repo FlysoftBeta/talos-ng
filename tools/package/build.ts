@@ -206,6 +206,12 @@ for (const platform of packageTargets) {
     platform === "win32-x64" ? platform : "linux-x64",
   ))
     payload.set(name, data);
+  // The talos-music yt-dlp plugin is plain Python, identical for every target.
+  for (const name of mediaManifest.plugin.files)
+    payload.set(
+      `vendor/media/plugins/${name}`,
+      await readFile(join(root, mediaManifest.plugin.source, name)),
+    );
   for (const flavor of platform === "win32-x64"
     ? ["windows"]
     : [platform.replace(/-x64$/, "")])

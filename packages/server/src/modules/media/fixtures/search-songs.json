@@ -1,0 +1,83 @@
+{
+ "id": "晴天 - songs",
+ "title": "晴天 - songs",
+ "_type": "playlist",
+ "entries": [
+  {
+   "_type": "url",
+   "ie_key": "Youtube",
+   "talos_kind": "song",
+   "id": "Zr1xnP7ct3Y",
+   "url": "https://music.youtube.com/watch?v=Zr1xnP7ct3Y",
+   "title": "晴天",
+   "artists": [
+    "周杰倫"
+   ],
+   "album": "葉惠美",
+   "duration": 269,
+   "thumbnails": [
+    {
+     "url": "https://lh3.googleusercontent.com/Zr1xnP7ct3Y=w60-h60-l90-rj",
+     "width": 60,
+     "height": 60
+    },
+    {
+     "url": "https://lh3.googleusercontent.com/Zr1xnP7ct3Y=w544-h544-l90-rj",
+     "width": 544,
+     "height": 544
+    }
+   ]
+  },
+  {
+   "_type": "url",
+   "ie_key": "Youtube",
+   "talos_kind": "song",
+   "id": "WbKoQ1GUOHg",
+   "url": "https://music.youtube.com/watch?v=WbKoQ1GUOHg",
+   "title": "晴天 (Live)",
+   "artists": [
+    "周杰倫"
+   ],
+   "album": null,
+   "duration": 301,
+   "thumbnails": [
+    {
+     "url": "https://lh3.googleusercontent.com/WbKoQ1GUOHg=w60-h60-l90-rj",
+     "width": 60,
+     "height": 60
+    },
+    {
+     "url": "https://lh3.googleusercontent.com/WbKoQ1GUOHg=w544-h544-l90-rj",
+     "width": 544,
+     "height": 544
+    }
+   ]
+  },
+  {
+   "_type": "url",
+   "ie_key": "Youtube",
+   "talos_kind": "song",
+   "id": "m9YbWBkAHBA",
+   "url": "https://music.youtube.com/watch?v=m9YbWBkAHBA",
+   "title": "雨天 - 晴天",
+   "artists": [
+    "Hanna",
+    "Ken"
+   ],
+   "album": "Rainy Mix",
+   "duration": 1810,
+   "thumbnails": [
+    {
+     "url": "https://lh3.googleusercontent.com/m9YbWBkAHBA=w60-h60-l90-rj",
+     "width": 60,
+     "height": 60
+    },
+    {
+     "url": "https://lh3.googleusercontent.com/m9YbWBkAHBA=w544-h544-l90-rj",
+     "width": 544,
+     "height": 544
+    }
+   ]
+  }
+ ]
+}

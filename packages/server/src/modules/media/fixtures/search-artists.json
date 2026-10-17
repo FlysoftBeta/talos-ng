@@ -1,0 +1,32 @@
+{
+ "id": "周杰伦 - artists",
+ "title": "周杰伦 - artists",
+ "_type": "playlist",
+ "entries": [
+  {
+   "_type": "url",
+   "title": "Jay Chou",
+   "thumbnails": [
+    {
+     "url": "https://yt3.googleusercontent.com/5vqNE8l4iYKmNCHd_YIgknhMF-W4ROcG5H7ZbdfOudxTcNSIIJrf9WpctLh43GlzFLmmcpMUxRQ918Kv=w60-h60-p-l90-rj",
+     "width": 60,
+     "height": 60
+    },
+    {
+     "url": "https://yt3.googleusercontent.com/5vqNE8l4iYKmNCHd_YIgknhMF-W4ROcG5H7ZbdfOudxTcNSIIJrf9WpctLh43GlzFLmmcpMUxRQ918Kv=w120-h120-p-l90-rj",
+     "width": 120,
+     "height": 120
+    }
+   ],
+   "ie_key": "YoutubeTab",
+   "talos_kind": "artist",
+   "id": "UCL2MDNdwEtV6aYUgNjFQGZA",
+   "url": "https://music.youtube.com/channel/UCL2MDNdwEtV6aYUgNjFQGZA"
+  }
+ ],
+ "webpage_url": "https://music.youtube.com/search?q=%E5%91%A8%E6%9D%B0%E4%BC%A6#artists",
+ "extractor": "youtube:music:search_url+talos-music",
+ "extractor_key": "YoutubeMusicSearchURL",
+ "release_year": null,
+ "playlist_count": 1
+}

@@ -716,3 +716,18 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   to the top item. A rarely opened conversation gains almost nothing and a conversation never
   opened is not a candidate; muted conversations send no signal. The counts come from local
   chat state, nothing new is synced.
+
+- **D-136 — Online music comes from YouTube Music catalogue sections via a bundled yt-dlp
+  plugin.** Search no longer uses `ytsearch`/youtube.com results plus a title/length filter.
+  Songs, albums, artists and playlists are the `#songs`, `#albums`, `#artists` and
+  `#playlists` (community playlists) sections of `music.youtube.com/search?q=…`. Built-in
+  yt-dlp returns bare ids there (no artist, album, duration, and no title for artists, no
+  playlists section), so `packages/server/ytdlp-plugin/talos-music` (loaded with
+  `--plugin-dirs`, shipped as `vendor/media/plugins/…` in all three targets, listed in
+  `tools/package/media-manifest.json`) emits rich flat entries tagged `talos_kind` and an
+  artist extractor `talos-music:artist:<UC id>` (songs shelf, see-all playlist, album
+  carousel). Playlists and albums open as `music.youtube.com/playlist?list=` with no length
+  filter; `music-filter.ts` is removed (only private/deleted placeholders are skipped).
+  Known limit: anonymous requests from the Google-cloud sandbox get no Songs/Albums
+  catalogue or artist shelves from YouTube Music, so those two sections and artist shelves
+  were not verified live (artists, playlists, paging, playlist open were).
