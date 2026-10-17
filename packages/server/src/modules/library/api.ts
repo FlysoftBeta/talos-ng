@@ -67,6 +67,7 @@ export function registerLibraryApi(
   });
   host.register(contract.library.doc.open, async (ctx, args) => {
     canRead(ctx.user!, args.doc);
+    await service.refreshStale(args.doc);
     const result = await service.open(args.doc);
     // Leave room for the transport envelope and download ticket; large indexes use /dl ranges.
     if (
@@ -86,8 +87,9 @@ export function registerLibraryApi(
       }),
     };
   });
-  host.register(contract.library.doc.describe, (ctx, args) => {
+  host.register(contract.library.doc.describe, async (ctx, args) => {
     canRead(ctx.user!, args.doc);
+    await service.refreshStale(args.doc);
     const result = service.describe(args.doc);
     return {
       ...result,

@@ -370,7 +370,7 @@ async function performanceRun(cdp, server, wire, conv) {
   await measure(
     "500-page PDF",
     () => click(cdp, "性能五百页 PDF"),
-    "!!document.querySelector('iframe[data-page-ready=true]')",
+    "!!document.querySelector('[data-page-ready=true]')",
   );
   values["PDF scroll longest task"] = await scrollBudget(
     cdp,

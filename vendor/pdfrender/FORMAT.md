@@ -155,3 +155,27 @@ To validate and scaffold an archive with the example parser:
 ```sh
 node examples/pdfrender-bundle-parser.mjs output.zip webroot
 ```
+
+## Archive format, version 2 (specified; not yet in the vendored binaries)
+
+Version 2 targets the Talos page renderer, which mounts pages into shadow roots of
+the host document instead of iframes. Differences from version 1:
+
+- `manifest.json` has `version: 2`.
+- A page `document` is an HTML fragment: exactly one `<main class="page"
+style="width:Wpx;height:Hpx">` element with the background SVG and text layer. No
+  doctype, `html`, `head`, `meta`, `link` or `script`.
+- There is no script resource. `document.shared` and every item's `dependencies` list
+  the one `text/css` stylesheet first; the consumer inlines it into the page's root.
+  Word width fitting (`--fit-x` per `.word`, ratio clamped to 0.5–2, only for words of
+  two or more characters with a positive `style.width`) is the consumer's job.
+- The stylesheet contains only page rules: no `html`/`body` rules, no index-page
+  rules, and no `inset` (Chrome 70); background and text layers use
+  `top:0;left:0;width:100%;height:100%`.
+- Unchanged: images are referenced only from SVG `<image xlink:href data-bundle-ref
+data-bundle-mime>` inside `<defs>` and drawn with `<use xlink:href="#pdfrender-pN-M">`;
+  consumers must keep same-page `#id` references while removing every other URL.
+
+Talos expects the version in `RENDER_FORMAT` (`@talos/docpack`); its renderer already
+accepts both page shapes, so moving to version 2 means vendoring new binaries and
+bumping that constant together.

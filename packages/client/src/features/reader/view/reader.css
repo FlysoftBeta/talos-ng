@@ -45,9 +45,7 @@
 .reader-page.is-loading {
   background: var(--bg);
 }
-.reader-page iframe {
-  display: block;
-  border: 0;
+.reader-page-body {
   transform-origin: 0 0;
 }
 .reader-flow {

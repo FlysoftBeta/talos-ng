@@ -26,6 +26,12 @@ export interface OutlineEntry {
   ordinal: number;
   level: number;
 }
+/**
+ * Version of the pdfrender page format a paged pack was built from (`meta.renderFormat`).
+ * A pack with another version is re-rendered by the server and evicted by the client;
+ * bump together with the vendored renderer (`vendor/pdfrender/FORMAT.md`).
+ */
+export const RENDER_FORMAT = 1;
 export interface Manifest {
   v: 1;
   kind: PackKind;

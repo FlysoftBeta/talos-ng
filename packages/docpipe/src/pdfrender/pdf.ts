@@ -4,6 +4,7 @@ import type { Converter } from "../conversion/ports.ts";
 import { checkAbort } from "../conversion/ports.ts";
 import type { PdfRenderRunner } from "./runner.ts";
 import { FileAccess } from "../file-spool/files.ts";
+import { RENDER_FORMAT } from "@talos/docpack";
 import { PdfRenderArchive } from "./archive.ts";
 import { writePack } from "../conversion/write-pack.ts";
 export function createPdfConverter(runner: PdfRenderRunner): Converter {
@@ -29,6 +30,7 @@ export function createPdfConverter(runner: PdfRenderRunner): Converter {
               meta: {
                 sourceMime: manifest.document.sourceMime,
                 sourcePages: manifest.document.sourcePages,
+                renderFormat: RENDER_FORMAT,
               },
             },
             async (writer) => {

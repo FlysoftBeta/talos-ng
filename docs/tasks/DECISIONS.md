@@ -578,3 +578,11 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   caches cannot trigger retention cleanup or replacement of an unseen playback queue.
   Missing feature rows show loading/offline states, and arriving idle settings reset the
   timer. This supersedes the earlier full-sync-before-login assumption.
+- **D-121 — PDF pages render into shadow roots, with a versioned render format.** The
+  per-page sandboxed iframes and their scroll/key relaying are replaced by a small client
+  page renderer that mounts sanitised page markup into a shadow root: style isolation
+  stays, scrolling and cross-page selection become native, and page scripts no longer run
+  at all. Images in pages had failed because the client sanitiser stripped the
+  same-document `<use xlink:href="#id">` through which pdfrender draws every image; such
+  references are now kept. Paged packs carry `meta.renderFormat`; a mismatch is rejected at
+  conversion, re-rendered by the server on open and evicted from the client cache.
