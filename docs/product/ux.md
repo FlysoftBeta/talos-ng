@@ -63,6 +63,12 @@ briefly over whatever the user is doing.
   (only while a track is loaded), then 状态, 任务, 设置, 管理 (administrators), 锁定. Each
   entry is an icon with a short label. The current area has a tinted indicator. Unread
   counts appear as a badge on 对话. An area the user may not use is hidden.
+- **悬浮启动器** (rail, above 设置; only where the browser supports video
+  Picture-in-Picture and canvas capture): opens a small always-on-top window showing
+  shortcut tiles for the reachable areas and the top recently used items. The window's
+  previous/next-track buttons move the highlight and its play/pause (click) button opens the
+  highlighted entry: the app window is focused and navigates to it. Pressing the rail
+  entry again, or closing the window, ends it.
 - **List pane**: what the area contains — conversations, collections, sections. Two widths
   only: *collection* (rows with a preview) and *nav* (short section names).
 - **Content pane**: the selected thing. Its header has the same height as the list header,

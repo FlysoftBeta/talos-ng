@@ -661,3 +661,11 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   A randomized interleaving test against a server log checks storage-or-hole, convergence
   and order independence, and fails when the head-only window rule is restored. Stored
   scope records and the page/pull wire shapes changed without migration (nothing released).
+
+- **D-129 — Floating quick-launch window uses video Picture-in-Picture.** A canvas drawn by
+  `features/launcher` is captured into a hidden playing video and shown with
+  `requestPictureInPicture()` (Chrome 70); Media Session previous/next/play/pause select and open
+  entries where the API exists, with the video's pause event as fallback. The rail entry is
+  hidden when unsupported. Media Session handlers are global, so stopping the launcher re-binds
+  the music player's controls. The sticker picker is a floating panel anchored to the composer
+  (above it, aligned to its button) instead of a centred modal.

@@ -163,3 +163,13 @@ resolves titles from the chat, library and media data and fills `RecentPanelView
 panel hosted by the chat area's landing page. The music and reading list panes compute their
 own recent/frequent sections from `model/recent.ts` and render the shared `RecentSection`
 ui component; items that no longer exist are filtered out before the cut-off is applied.
+
+`features/launcher` is the floating quick-launch window. `model/selection.ts` cycles the
+highlight (stable across list refreshes); `model/launcher.ts` owns open state and talks to a
+`LauncherSurface` and `LauncherActions` port; `view/draw.ts` paints the launcher onto a canvas;
+`adapters/browser.ts` captures the canvas (5 fps) into a hidden playing `<video>` prepared
+ahead of time so `requestPictureInPicture()` runs inside the click, maps Media Session
+play/pause/next/previous to click/step actions (a pause event on the video is the fallback
+click) and re-installs the music player's handlers on stop. `app/launcher.tsx` builds the items
+from the reachable areas and `useRecentTargets()` (shared with `RecentHome`) and hides the rail
+entry when `launcherSupported()` is false.

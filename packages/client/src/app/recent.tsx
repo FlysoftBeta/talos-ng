@@ -45,12 +45,13 @@ export function RecentTracker(): null {
   return null;
 }
 
-/** The landing panel of the chat area: recent and frequent items of every module. */
-export function RecentHome(): ReactElement {
+/** How recent items are named and opened; shared by the landing panel and the floating launcher. */
+export function useRecentTargets(): {
+  resolvers: RecentResolvers;
+  open: Record<TrackedRef["kind"], (id: string) => void>;
+} {
   const runtime = useRuntime(),
     player = useMediaPlayer(),
-    history = useAccessHistory(),
-    entries = useAccessEntries(history),
     chats = useConversations(),
     library = useLibrary(),
     media = useMedia();
@@ -96,6 +97,14 @@ export function RecentHome(): ReactElement {
         page: { kind: "page", id: playlistPageId(id) },
       }),
   };
+  return { resolvers, open };
+}
+
+/** The landing panel of the chat area: recent and frequent items of every module. */
+export function RecentHome(): ReactElement {
+  const history = useAccessHistory(),
+    entries = useAccessEntries(history),
+    { resolvers, open } = useRecentTargets();
   const icons = {
     chat: "chat",
     book: "document",

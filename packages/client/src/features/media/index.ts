@@ -9,3 +9,4 @@ export {
 export { MediaBackground } from "./connect/background.tsx";
 export { useMedia } from "./connect/use-media.ts";
 export { playlistPageId } from "./model/actions.ts";
+export { bindMediaControls } from "./adapters/media-session.ts";

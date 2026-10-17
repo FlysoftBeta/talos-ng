@@ -17,6 +17,7 @@ import {
   LibraryAreaList,
   adminExtensions,
 } from "./areas.tsx";
+import { LauncherEntry } from "./launcher.tsx";
 import { RecentTracker } from "./recent.tsx";
 import {
   MediaList,
@@ -226,6 +227,11 @@ function AppContent(): ReactElement {
                   rail
                   model={{ ...state.status, ...activityCounts }}
                   onClick={() => open("status")}
+                />
+                <LauncherEntry
+                  areas={AREA_IDS.filter((area) => areaGates[area].ok).map(
+                    (area) => ({ id: area, title: areas[area].title }),
+                  )}
                 />
                 <RailItem
                   label="设置"
