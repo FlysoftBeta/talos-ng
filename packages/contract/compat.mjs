@@ -210,6 +210,7 @@ try {
         'authority.access.set': [{user:id,roles:['administrator'],features:['offline']},{ok:true}],
         'authority.grant.set': [{resource:'collection:example',principalType:'user',principal:id,level:'read'},{ok:true}],
         'sync.pull': [{cursors:{}},delta],
+        'sync.push': [{ops:[{op:id,method:'me.setting.set',args:{key:'theme',value:register}}]},{results:[{op:id}]}],
         'upload.begin': [{kind:'file',size:1024},{id:id,offset:0}],
         'upload.append': [{id:id,offset:0},{offset:1024}],
         'upload.commit': [{id:id},{id:id,object:{id:hash,size:1024}}],
