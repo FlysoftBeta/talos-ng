@@ -3,32 +3,32 @@
   "repository": "FlysoftBeta/pdf-render",
   "workflow": "pdfrender.yml",
   "run": {
-    "id": 31309289423,
-    "headSha": "ae0a0dad5da9aec296bb99c401f8930b48695272",
-    "createdAt": "2026-08-09T10:49:58Z",
-    "url": "https://github.com/FlysoftBeta/pdf-render/actions/runs/31309289423"
+    "id": 39002781402,
+    "headSha": "9b6f190656501c4f0f37e167c0a976cc6c53e3ad",
+    "createdAt": "2026-10-17T04:29:55Z",
+    "url": "https://github.com/FlysoftBeta/pdf-render/actions/runs/39002781402"
   },
   "artifacts": {
     "linux-debian": {
-      "id": 9036902991,
+      "id": 12089518623,
       "name": "pdfrender-linux-debian-x86_64",
-      "size": 5751969,
-      "githubDigest": "sha256:44ec294e48d88fa25eb216c48ef1c839360a09b8e6b1935c287eaae33fcd1ff7",
-      "archiveDigest": "sha256:636d19624d5d71ee692b400a0d81201a388857341cfc9dd00d226be0ecab34c0"
+      "size": 5747833,
+      "githubDigest": "sha256:ca1dca2a69bdbf4f272c96a4ee23e77cb144a20735481592b7ebd4da6389ddec",
+      "archiveDigest": "sha256:5059e4b3e06df348595ef9dfa205eed67bd36fac931a26d2b90e335d56c9edb5"
     },
     "linux-redhat": {
-      "id": 9036907290,
+      "id": 12089802767,
       "name": "pdfrender-linux-redhat-x86_64",
-      "size": 5760497,
-      "githubDigest": "sha256:369e0c523d0523074c60373df347970e86408a9fcc184b0baa6661682a1be7f8",
-      "archiveDigest": "sha256:5cf416fd918a39454d6383fd3e1e589cddfe606caea30b568c908c6213f7446a"
+      "size": 5744192,
+      "githubDigest": "sha256:d357e275921b65f679e30e996f0ebcd0cd3b31197dcde448d5117095ca66f686",
+      "archiveDigest": "sha256:e32d330c0fcb69ac15f5d523ca768f4aaf1fc104570efdecab20f24d5d0b10f9"
     },
     "windows": {
-      "id": 9036941747,
+      "id": 12089514051,
       "name": "pdfrender-windows-x86_64",
-      "size": 12883797,
-      "githubDigest": "sha256:c16cbe1466d00d7bbf44f70fe063fe519e3f3508e0d0d41dd57ae8eb68ea5c6f",
-      "archiveDigest": "sha256:3846b94d2efacd1654edcb95ebde68e973f29eaf0cc8254fbdf05c02b37c43ee"
+      "size": 12945718,
+      "githubDigest": "sha256:0e713786c3281bfe3f6e8f3d72ac4b895dbfe03dbe628cdd5b8338fa64db7164",
+      "archiveDigest": "sha256:0d2e7046e9dcc604d87db1e8833bed922cea9759789725fd468a71d81dabc82c"
     }
   }
 }

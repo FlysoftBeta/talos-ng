@@ -122,7 +122,7 @@ export function archiveFixture(
     name = `objects/${rid}`;
   const m: Record<string, unknown> = {
     format: "classapp-render-archive",
-    version: 1,
+    version: 2,
     dictionary: null,
     resources: [
       {

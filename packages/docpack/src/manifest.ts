@@ -31,7 +31,7 @@ export interface OutlineEntry {
  * A pack with another version is re-rendered by the server and evicted by the client;
  * bump together with the vendored renderer (`vendor/pdfrender/FORMAT.md`).
  */
-export const RENDER_FORMAT = 1;
+export const RENDER_FORMAT = 2;
 export interface Manifest {
   v: 1;
   kind: PackKind;

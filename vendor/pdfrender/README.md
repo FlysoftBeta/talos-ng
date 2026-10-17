@@ -1,9 +1,9 @@
 # Vendored pdfrender
 
-Copied unchanged from the read-only legacy project's `lib/poppler-prebuilt`
+Unmodified CI artifacts of the pdf-render project, laid out as the former `lib/poppler-prebuilt`
 platform payloads. `manifest.json` preserves upstream CI provenance and artifact
 checksums: FlysoftBeta/pdf-render, commit
-`ae0a0dad5da9aec296bb99c401f8930b48695272`, run 31309289423 (2026-08-09).
+`9b6f190656501c4f0f37e167c0a976cc6c53e3ad`, run 39002781402 (2026-10-17).
 The format documentation from the Debian payload is retained as `FORMAT.md`;
 per-platform documentation duplicates and the example parser are omitted.
 
