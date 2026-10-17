@@ -37,6 +37,7 @@ import { materializeMedia } from "./target/media.ts";
 import { retainWorkspaces, importWorkspaceFiles } from "./target/ai.ts";
 import { importSettings } from "./target/identity.ts";
 import { importRow } from "./entities/index.ts";
+import { remapAiSequences } from "./entities/ai.ts";
 
 export async function main(argv: string[]): Promise<void> {
   const { command, options } = args(argv);
@@ -198,6 +199,8 @@ export async function main(argv: string[]): Promise<void> {
               p.child,
             );
         });
+        if (exists(source, "ai_messages") && exists(source, "ai_conversations"))
+          remapAiSequences(source, target);
         finishCollections(target, kernel, source);
         importSharing(source, target, kernel);
         importSettings(source, target, kernel);
@@ -259,6 +262,15 @@ export async function main(argv: string[]): Promise<void> {
           failedJobCount,
           failedJobs,
           source.schema(),
+          Object.fromEntries(
+            ["posts", "ai_messages"].map((t) => [
+              t,
+              target.get<{ n: number }>(
+                "SELECT count(*) n FROM migration_issues WHERE entity=?",
+                t,
+              )!.n,
+            ]),
+          ),
         );
       }
     } finally {

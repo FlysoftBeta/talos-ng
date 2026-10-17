@@ -4,6 +4,7 @@ import { Db } from "@talos/server/migration";
 import type { LegacyRow } from "../types.ts";
 import { value, number, time } from "../values.ts";
 import { rev, mapId } from "../journal.ts";
+import type { LegacyDb } from "../legacy/db.ts";
 
 export function importAi(
   target: Db,
@@ -56,7 +57,11 @@ export function importAi(
       const body = {
         id,
         conversation,
-        seq: number(row, "sequence", r),
+        // Legacy `sequence` is global; the target sequence is dense per conversation.
+        seq: target.get<{ n: number }>(
+          "SELECT coalesce(max(seq),0)+1 n FROM ai_messages WHERE conversation=?",
+          conversation,
+        )!.n,
         rev: r,
         role: value(row, "role"),
         text: value(row, "content"),
@@ -148,4 +153,40 @@ export function importAi(
       break;
   }
   return id;
+}
+
+/**
+ * Conversation sequence fields refer to legacy global sequences. After all messages are imported, map each to the
+ * dense sequence of the newest imported message at or before it. Reads the source only, so reruns give the same result.
+ */
+export function remapAiSequences(source: LegacyDb, target: Db): void {
+  const convs = source.all<LegacyRow>(
+    "SELECT id,last_assistant_sequence l,last_read_assistant_sequence r FROM ai_conversations",
+  );
+  const dense = (conversation: string, legacy: number): number => {
+    if (legacy <= 0) return 0;
+    for (const m of source.all<LegacyRow>(
+      "SELECT id FROM ai_messages WHERE conversation_id=? AND sequence<=? ORDER BY sequence DESC",
+      String(conversation),
+      legacy,
+    )) {
+      const seq = target.get<{ seq: number }>(
+        "SELECT seq FROM ai_messages WHERE id=?",
+        mapId(target, "ai_messages", String(m.id)),
+      )?.seq;
+      if (seq) return seq;
+    }
+    return 0;
+  };
+  target.tx(() => {
+    for (const c of convs) {
+      const id = mapId(target, "ai_conversations", String(c.id));
+      target.run(
+        "UPDATE ai_rows SET data=json_set(data,'$.lastSeq',?,'$.readSeq',?) WHERE type='aiConversation' AND id=?",
+        dense(String(c.id), Number(c.l)),
+        dense(String(c.id), Number(c.r)),
+        id,
+      );
+    }
+  });
 }

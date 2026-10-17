@@ -11,6 +11,7 @@ export async function report(
   failedJobCount: number,
   failedJobs: { id: string; error: string }[],
   schema: { version: string | null; compatibilityViews: string[] },
+  skippedSequenced: Record<string, number> = {},
 ): Promise<void> {
   const lines = [
     "# Migration report",
@@ -30,11 +31,13 @@ export async function report(
     "",
     `Recorded row issues: ${issueCount}. Showing the first ${issues.length}.`,
     ...issues.map((i) => `- ${i.entity}/${i.legacy_id}: ${i.reason}`),
+    `Skipped chat posts: ${skippedSequenced.posts ?? 0}; skipped AI messages: ${skippedSequenced.ai_messages ?? 0}. Skipped rows leave no sequence hole: both are renumbered densely per conversation.`,
     `Failed document conversions: ${failedJobCount}. Showing the first ${failedJobs.length}.`,
     ...failedJobs.map((job) => `- library.convert/${job.id}: ${job.error}`),
     "",
     "## Deliberate exclusions and lossy mappings",
     "",
+    "- Legacy post and AI message sequences are global; imported rows are renumbered 1..n per conversation in legacy order, and read marks/last-sequence fields follow.",
     "- Audit logs and incidents are operational diagnostics; they were not migrated. Keep the legacy backup for history.",
     "- Old conversation_read_marks are obsolete snapshots; convs_user supplies current read state. users.is_ghost and Android/SQLite metadata are not target account state. Old eviction/quota bookkeeping and unpublished upload paths are excluded.",
     "- Pre-v27 bookmarks, article group links and media-list owners are adapted through read-only views. Queue owner bindings become personal user_queues state, not collection grants.",

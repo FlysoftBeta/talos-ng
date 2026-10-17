@@ -46,7 +46,11 @@ export function importChat(
       const data = {
         id,
         conversation: c,
-        seq: number(row, "sequence", r),
+        // Legacy `sequence` is global across conversations; targets need a dense per-conversation sequence.
+        seq: target.get<{ n: number }>(
+          "SELECT coalesce(max(seq),0)+1 n FROM chat_posts WHERE conversation=?",
+          c,
+        )!.n,
         rev: r,
         author: hasUser(author) ? author : legacyUlid("users", "deleted"),
         authorName:

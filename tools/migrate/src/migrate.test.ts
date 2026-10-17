@@ -1257,3 +1257,78 @@ it("preserves legacy users.banned_until UTC deadlines and clears expired bans", 
     db.close();
   }
 });
+
+it("renumbers interleaved global legacy sequences densely per conversation and maps read marks", async () => {
+  const f = await completionFixture();
+  const source = new DatabaseSync(f.source);
+  const group2 = "77777777-7777-4777-8777-777777777771";
+  source
+    .prepare("INSERT INTO groups(id,conv_id,handle,name) VALUES(?,?,?,?)")
+    .run(group2, `group:${group2}`, "other", "Other");
+  source.exec(
+    "CREATE TABLE convs_user(user_id TEXT,conv_id TEXT,last_read_post_id TEXT)",
+  );
+  const add = source.prepare(
+    "INSERT INTO posts(id,conv_id,author_id,brief,content_json) VALUES(?,?,?,?,?)",
+  );
+  const json = '{"type":"text","text_same_as_brief":true}';
+  // Fixture post is global sequence 1 in `group`; the rest interleave with sparse gaps.
+  add.run("p-b1", `group:${group2}`, alice, "b1", json);
+  add.run("p-a2", `group:${group}`, alice, "a2", json);
+  add.run("p-orphan", "group:missing", alice, "x", json);
+  add.run("p-b2", `group:${group2}`, alice, "b2", json);
+  add.run("p-a3", `group:${group}`, alice, "a3", json);
+  const mark = source.prepare("INSERT INTO convs_user VALUES(?,?,?)");
+  mark.run(alice, `group:${group}`, "p-a2");
+  mark.run(alice, `group:${group2}`, "p-b2");
+  source
+    .prepare(
+      "INSERT INTO ai_messages(id,conversation_id,role,content,status) VALUES(?,?,?,?,?)",
+    )
+    .run("m2", conversation, "assistant", "hi", "completed");
+  source
+    .prepare(
+      "UPDATE ai_conversations SET last_assistant_sequence=(SELECT max(sequence) FROM ai_messages)",
+    )
+    .run();
+  source.close();
+  await main(["run", "--source", f.source, "--target", f.target]);
+  const db = new Db(join(f.target, "talos.db"));
+  try {
+    const seqs = (conv: string) =>
+      db
+        .all<{ seq: number }>(
+          "SELECT seq FROM chat_posts WHERE conversation=? ORDER BY seq",
+          legacyUlid("groups", conv),
+        )
+        .map((r) => r.seq);
+    expect(seqs(group)).toEqual([1, 2, 3]);
+    expect(seqs(group2)).toEqual([1, 2]);
+    const state = (conv: string) =>
+      JSON.parse(
+        db.get<{ data: string }>(
+          "SELECT data FROM chat_states WHERE conversation=?",
+          legacyUlid("groups", conv),
+        )!.data,
+      ) as { readSeq: number; lastSeq: number };
+    expect(state(group)).toMatchObject({ readSeq: 2, lastSeq: 3 });
+    expect(state(group2)).toMatchObject({ readSeq: 2, lastSeq: 2 });
+    expect(
+      db
+        .all<{ seq: number }>("SELECT seq FROM ai_messages ORDER BY seq")
+        .map((r) => r.seq),
+    ).toEqual([1, 2]);
+    expect(
+      JSON.parse(
+        db.get<{ data: string }>(
+          "SELECT data FROM ai_rows WHERE type='aiConversation'",
+        )!.data,
+      ),
+    ).toMatchObject({ lastSeq: 2 });
+    expect(
+      db.get("SELECT 1 FROM migration_issues WHERE entity='posts'"),
+    ).toBeTruthy();
+  } finally {
+    db.close();
+  }
+});
