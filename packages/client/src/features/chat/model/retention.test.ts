@@ -69,7 +69,7 @@ describe("rolling retained conversations", () => {
       clearDelay: vi.fn(),
       releaseFiles: vi.fn(async () => undefined),
       setLocal: vi.fn(async () => undefined),
-      setDownload: vi.fn(),
+      setTransfer: vi.fn(),
     };
     model = new RetentionController(
       harness.runtime as unknown as RetentionPort,
@@ -104,7 +104,7 @@ describe("rolling retained conversations", () => {
       `conv:${id}:retention`,
       { op: id, cutoff: now - 604800000 },
     );
-    expect(harness.runtime.setDownload).toHaveBeenLastCalledWith(
+    expect(harness.runtime.setTransfer).toHaveBeenLastCalledWith(
       `conv:${id}:retained`,
       expect.objectContaining({ progress: 1 }),
     );
@@ -148,7 +148,7 @@ describe("rolling retained conversations", () => {
     vi.mocked(page).mockRejectedValue(new Error("network"));
     await update(state);
     expect(page).toHaveBeenCalledTimes(1);
-    expect(harness.runtime.setDownload).toHaveBeenLastCalledWith(
+    expect(harness.runtime.setTransfer).toHaveBeenLastCalledWith(
       `conv:${id}:retained`,
       expect.objectContaining({ error: "下载失败" }),
     );

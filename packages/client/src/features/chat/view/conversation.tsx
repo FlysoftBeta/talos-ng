@@ -298,7 +298,7 @@ export function ConversationView({
         </Group>
         <Group
           title="离线保留"
-          hint="按发送时间下载最近一周或半年的正文和原图，并持续更新；进度见状态中心。"
+          hint="按发送时间下载最近一周或半年的正文和原图，并持续更新；进度见同步与任务。"
         >
           <GroupRow label="保留范围" stacked>
             <OfflineHint

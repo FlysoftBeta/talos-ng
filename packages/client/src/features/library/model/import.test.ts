@@ -14,7 +14,7 @@ function port(
   const downloads: unknown[] = [];
   const value = {
     operation: () => ({ op: "o1" }),
-    setDownload: (_id: string, v: unknown) => downloads.push(v),
+    setTransfer: (_id: string, v: unknown) => downloads.push(v),
     command: vi.fn(
       async (
         m: { name: string },
@@ -78,7 +78,35 @@ describe("document import", () => {
     });
     await importDocument(p.value, { title: "t", body: "x" });
     expect(p.downloads.at(-1)).toMatchObject({ error: "服务器拒绝" });
+    const failed = p.downloads.at(-1) as { retry?: () => void };
+    expect(failed.retry).toBeTypeOf("function");
     expect(attachmentError(201 * 1024 * 1024)).toBe("文档不能超过 200 MiB");
     expect(attachmentError(1)).toBeUndefined();
+  });
+  it("cancels an upload between chunks, aborts it on the server and clears the entry", async () => {
+    const bytes = new Uint8Array(600 * 1024);
+    const source: ImportSource = {
+      name: "a.pdf",
+      size: bytes.length,
+      read: async (s, e) => bytes.slice(s, e),
+    };
+    let cancel: (() => void) | undefined;
+    const p = port((name, args, body) => {
+      if (name === "upload.begin") return { id: "u", offset: 0 };
+      if (name === "upload.append") {
+        // The user cancels while the first chunk is in flight.
+        cancel?.();
+        return { offset: args.offset + body!.length };
+      }
+      return {};
+    });
+    const setTransfer = p.value.setTransfer;
+    p.value.setTransfer = (id, v) => {
+      cancel = v?.cancel;
+      setTransfer(id, v);
+    };
+    await importDocument(p.value, { title: "t", body: "", source });
+    expect(p.calls).toEqual(["upload.begin", "upload.append", "upload.abort"]);
+    expect(p.downloads.at(-1)).toBeUndefined();
   });
 });

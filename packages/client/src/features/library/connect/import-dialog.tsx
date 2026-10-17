@@ -59,7 +59,7 @@ export function ImportDialog({
       canStart={canStartImport(title, body, !!file)}
       onStart={() => {
         onClose();
-        runtime.dispatch({ type: "openOverlay", overlay: { kind: "tasks" } });
+        runtime.dispatch({ type: "openOverlay", overlay: { kind: "status" } });
         void importDocument(runtime, {
           title,
           body,

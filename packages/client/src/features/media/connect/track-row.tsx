@@ -48,7 +48,7 @@ export function TrackRow({
     [addingTo, setAddingTo] = useState(false),
     [target, setTarget] = useState(""),
     [deviceCached, setDeviceCached] = useState(false);
-  const downloads = snapshot.status.downloads;
+  const downloads = snapshot.status.transfers;
   useEffect(
     () => watchDeviceCache(runtime, track.audio?.id, setDeviceCached),
     [runtime, track.audio?.id, downloads],

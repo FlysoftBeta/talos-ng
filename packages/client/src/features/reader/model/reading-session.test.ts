@@ -315,7 +315,7 @@ describe("reading session edge cases", () => {
     session.showTasks();
     expect(h.port.dispatch).toHaveBeenLastCalledWith({
       type: "openOverlay",
-      overlay: { kind: "tasks" },
+      overlay: { kind: "status" },
     });
     session.dispose();
   });

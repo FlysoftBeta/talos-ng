@@ -23,7 +23,7 @@ export function LibraryBackground(): null {
       hasFile: runtime.hasFile,
       retainFile: runtime.retainFile,
       downloadFile: runtime.downloadFile,
-      setDownload: runtime.setDownload,
+      setTransfer: runtime.setTransfer,
       time: runtime.time,
       delay: runtime.delay,
       clearDelay: runtime.clearDelay,

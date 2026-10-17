@@ -89,7 +89,7 @@ export function LibraryList({
         return doc
           ? {
               ...row,
-              ...documentRowExtras(data, state.status.downloads, doc),
+              ...documentRowExtras(data, state.status.transfers, doc),
             }
           : row;
       })}

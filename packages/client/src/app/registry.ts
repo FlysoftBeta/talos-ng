@@ -1,5 +1,5 @@
 import { aiModule } from "../features/ai/module.ts";
-import { tasksModule } from "../features/tasks/module.ts";
+import { tasksModule } from "../features/activity/module.ts";
 import { chatModule } from "../features/chat/model/module.ts";
 import { opsModule } from "../features/ops/module.ts";
 import { ModuleRegistry } from "../core/data/modules.ts";

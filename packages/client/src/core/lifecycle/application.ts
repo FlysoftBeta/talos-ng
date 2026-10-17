@@ -38,8 +38,8 @@ import type { NavIntent } from "../navigation/index.ts";
 import { createNav } from "../navigation/index.ts";
 import type { ClientIncident } from "../status/diagnostics.ts";
 import { BrowserDiagnostics } from "../status/diagnostics.ts";
-import { projectDownload } from "../status/downloads.ts";
-import type { StatusViewModel } from "../status/model.ts";
+import { projectTransfer } from "../status/transfers.ts";
+import type { StatusViewModel, TransferUpdate } from "../status/model.ts";
 import type { BootHandle } from "./boot.ts";
 import type { RuntimeConfiguration } from "./configuration.ts";
 import type {
@@ -116,7 +116,8 @@ export class ApplicationController {
         pending: 0,
         failed: 0,
         operations: [],
-        downloads: [],
+        scopes: [],
+        transfers: [],
         storage: "尚未估算",
         build: this.build,
         update: { state: "none", message: "尚未检查更新" },
@@ -419,18 +420,10 @@ export class ApplicationController {
   assertLocalScope(key: string): void {
     return this.fileAccess.assertLocalScope(key);
   }
-  setDownload(
-    id: string,
-    value:
-      | { title: string; progress: number; state?: string; error?: string }
-      | undefined,
-  ): void {
-    const downloads = projectDownload(
-      this.snapshot.status.downloads,
-      id,
-      value,
-    );
-    this.status({ downloads });
+  setTransfer(id: string, value: TransferUpdate | undefined): void {
+    this.status({
+      transfers: projectTransfer(this.snapshot.status.transfers, id, value),
+    });
   }
   async setSetting(key: string, value: JsonValue): Promise<void> {
     return this.settings.setSetting(key, value);

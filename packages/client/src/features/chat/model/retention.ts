@@ -69,7 +69,7 @@ export class RetentionController {
       if (cutoff === undefined) {
         if (!this.released.has(releaseKey)) {
           this.released.add(releaseKey);
-          runtime.setDownload(id, undefined);
+          runtime.setTransfer(id, undefined);
           void runtime
             .releaseFiles(id)
             .catch(() => this.released.delete(releaseKey));
@@ -119,7 +119,7 @@ export class RetentionController {
         });
         let anchor: number | undefined;
         let count = 0;
-        runtime.setDownload(id, { title: `离线保留 · ${name}`, progress: 0 });
+        runtime.setTransfer(id, { title: `离线保留 · ${name}`, progress: 0 });
         for (;;) {
           if (!active()) return;
           const result = await page(
@@ -152,7 +152,7 @@ export class RetentionController {
             }
             count++;
           }
-          runtime.setDownload(id, {
+          runtime.setTransfer(id, {
             title: `离线保留 · ${name} · ${count} 条`,
             progress: Math.min(1, count / Math.max(1, result.latest)),
           });
@@ -167,7 +167,7 @@ export class RetentionController {
         }
         if (!active()) return;
         this.completed.set(id, key);
-        runtime.setDownload(id, {
+        runtime.setTransfer(id, {
           title: `离线保留完成 · ${name} · ${count} 条`,
           progress: 1,
         });
@@ -175,7 +175,7 @@ export class RetentionController {
         .catch((cause) => {
           this.failed.set(id, key);
           if (active())
-            runtime.setDownload(id, {
+            runtime.setTransfer(id, {
               title: `离线保留 · ${name}`,
               progress: 0,
               error: message(cause),

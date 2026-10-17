@@ -7,6 +7,7 @@ import {
 import { defineClientModule } from "../../core/data/modules.ts";
 export const learningModule = defineClientModule({
   id: "learning",
+  scopeLabels: { learn: { title: "学习资料" } },
   rowTypes: ["learningCorpus", "learningProgress"],
   reducers: {
     "learning.answer.record": (rows, args, { user }) => {

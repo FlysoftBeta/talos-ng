@@ -52,7 +52,7 @@ export function DashboardView({
         <div className="learn-column">
           {model.failedNote && (
             <InlineNotice tone="failed">
-              有操作未能同步，请打开状态中心查看原因。
+              有操作未能同步，请打开同步与任务查看原因。
             </InlineNotice>
           )}
           <StatTiles tiles={tiles} data-testid="learning.stats" />

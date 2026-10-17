@@ -69,7 +69,7 @@ export function retentionStatus(
   return retained
     ? "已保留 · 可完整离线阅读"
     : downloads.some((d) => d.id === `library:${doc}`)
-      ? "下载中 · 可在状态中心查看"
+      ? "下载中 · 可在同步与任务查看"
       : "尚未下载 · 连接后自动下载完整文档";
 }
 export interface ReaderDetails {
@@ -321,7 +321,7 @@ export class ReadingSession {
     this.port.dispatch({ type: "back" });
   }
   showTasks(): void {
-    this.port.dispatch({ type: "openOverlay", overlay: { kind: "tasks" } });
+    this.port.dispatch({ type: "openOverlay", overlay: { kind: "status" } });
   }
   /** Stops timers and listeners and flushes the last position. */
   dispose(): void {

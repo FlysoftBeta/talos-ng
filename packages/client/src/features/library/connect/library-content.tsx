@@ -136,7 +136,7 @@ function ConnectedCollection({
           ? {
               id,
               title: doc.title,
-              ...documentRowExtras(data, state.status.downloads, doc),
+              ...documentRowExtras(data, state.status.transfers, doc),
             }
           : { id, title: undefined };
       })}

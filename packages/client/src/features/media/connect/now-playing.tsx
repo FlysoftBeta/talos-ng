@@ -19,7 +19,7 @@ export function NowPlaying(): ReactElement | null {
   const player = useMediaPlayer(),
     runtime = useRuntime(),
     data = useMedia(),
-    downloads = useClientSnapshot().status.downloads;
+    downloads = useClientSnapshot().status.transfers;
   const [cached, setCached] = useState(false);
   const track = player.current;
   useEffect(

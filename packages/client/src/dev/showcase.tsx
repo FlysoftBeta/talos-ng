@@ -1,5 +1,7 @@
 import { NumPad } from "../features/auth/index.ts";
 import type { StatusViewModel } from "../core/status/model.ts";
+import { buildActivity } from "../features/activity/model.ts";
+import { ActivityView } from "../features/activity/view.tsx";
 import { useMemo, useReducer, useState } from "react";
 import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
@@ -31,7 +33,6 @@ import {
   ListRow,
   StatePanel,
   StatusPill,
-  StatusCenter,
   Skeleton,
   OfflineHint,
   Mark,
@@ -97,17 +98,33 @@ export function Showcase({
         id: "1",
         title: "发送到「午后读书会」",
         state: "pending",
+        merged: 0,
         discard: () => setToast(true),
       },
       {
         id: "2",
         title: "保存阅读笔记",
         state: "failed",
+        merged: 0,
+        error: "没有权限修改此笔记",
         retry: () => setToast(true),
         discard: () => setToast(true),
       },
     ],
-    downloads: [{ id: "book", title: "给未来的一封信", progress: 0.68 }],
+    scopes: [
+      { id: "me:1", title: "个人数据", state: "ready", rows: 12 },
+      { id: "conv:1", title: "对话 · 午后读书会", state: "loading", rows: 240 },
+      { id: "coll:1", title: "文档集 · 经典", state: "waiting", rows: 0 },
+    ],
+    transfers: [
+      {
+        id: "book",
+        title: "给未来的一封信",
+        direction: "download",
+        progress: 0.68,
+        cancel: () => setToast(true),
+      },
+    ],
     storage: "128 MB / 2 GB",
     build: __BUILD_ID__,
     update: gallery
@@ -606,10 +623,24 @@ export function Showcase({
           </div>
         </AppFrame>
       </div>
-      <StatusCenter
+      <ActivityView
         open={overlay === "status"}
-        model={status}
+        status={status}
+        activity={buildActivity(status, [], {
+          retry: () => setToast(true),
+          cancel: () => setToast(true),
+          blocked: {},
+        })}
+        busy={false}
+        error=""
+        showClear={false}
+        clearBlocked={undefined}
+        confirmation={undefined}
         onClose={close}
+        onInvoke={(action) => action.run()}
+        onClear={() => setToast(true)}
+        onDismiss={close}
+        onConfirm={close}
       />
       <Sheet open={overlay === "sheet"} title="显示设置" onClose={close}>
         <Stack>
