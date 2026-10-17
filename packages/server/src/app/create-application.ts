@@ -169,6 +169,8 @@ export function createKernel(options: KernelOptions): Kernel {
     uow,
     now,
     printRootPin: options.printRootPin,
+    // Development installs always start with a known root PIN.
+    ...(options.dev ? { rootPin: "123456" } : {}),
     projectAccess: (user) => authority.repo.project(user),
     accessRevision: (user) => authority.repo.revision(user),
     onBindingChanged: (connection) => syncHub.unsubscribe(connection.id),

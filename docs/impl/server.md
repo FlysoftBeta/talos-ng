@@ -143,7 +143,8 @@ in a checkout builds the same object in-process (`.data`, `--dev` for `dev`). Th
 `server.js restore <backup> [dataDir]` takes the data directory as an argument.
 
 `pnpm dev` ensures the pinned yt-dlp is in the packaging cache (`~/.cache/talos-ng/media`, SHA-256 checked, downloaded on first run), runs the real dev server plus Vite behind a same-origin proxy for `/link`, `/dl`,
-`/app`, `/sw.js` and `/ca.crt`; no service worker is registered in development. `pnpm build`
+`/app`, `/sw.js` and `/ca.crt`; no service worker is registered in development. Dev mode always
+provisions the first root user with PIN `123456`, so deleting `.data/` gives a known fresh start. `pnpm build`
 then `pnpm start` serves the production client from the real server.
 
 ## Test seed

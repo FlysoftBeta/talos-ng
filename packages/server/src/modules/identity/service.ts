@@ -21,6 +21,7 @@ export interface IdentityOptions {
   now?: () => number;
   randomBytes?: (size: number) => Uint8Array;
   printRootPin?: (pin: string) => void;
+  rootPin?: string;
   onBindingChanged?: (connection: Connection) => void;
   onSessionsChanged?: () => void;
   projectAccess?: (user: User) => User;
@@ -65,6 +66,7 @@ export class IdentityService {
       onBindingChanged: options.onBindingChanged,
       onSessionsChanged: options.onSessionsChanged,
       printRootPin: options.printRootPin,
+      rootPin: options.rootPin,
       now,
       random,
       id,

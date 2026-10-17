@@ -26,6 +26,8 @@ interface ProvisioningOptions {
   now: () => number;
   onSessionsChanged?: () => void;
   printRootPin?: (pin: string) => void;
+  /** Fixed first root PIN (development only); otherwise a random one is drawn. */
+  rootPin?: string;
   provisioning: Pick<
     ProvisioningQueries,
     | "claimInvitation"
@@ -53,10 +55,13 @@ export class ProvisioningService {
   bootstrap(): void {
     if (this.options.directory.countUsers()) return;
     // Rejection sampling avoids modulo bias over the six-digit credential space.
-    let n = 0xffffffff;
-    while (n >= 4294000000)
-      n = Buffer.from(this.options.random(4)).readUInt32BE();
-    const pin = String(n % 1000000).padStart(6, "0");
+    let pin = this.options.rootPin;
+    if (!pin) {
+      let n = 0xffffffff;
+      while (n >= 4294000000)
+        n = Buffer.from(this.options.random(4)).readUInt32BE();
+      pin = String(n % 1000000).padStart(6, "0");
+    }
     this.createUser({ pin, name: "根管理员", handle: "root", roles: ["root"] });
     (
       this.options.printRootPin ??
