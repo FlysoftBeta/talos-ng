@@ -22,9 +22,11 @@ The server can listen on several ports and an HTTPS listener.
 - The new version must be confirmed in the workbench within three minutes; otherwise, or if
   it fails to start, the previous version and the database are restored. A staged update
   that was not applied is not applied by a restart.
-- Client update: when the server announces a new build, the app downloads it in the
-  background and offers 新版本已就绪; it is applied only after explicit confirmation, never by
-  reload alone. The previous client version is kept until the new one has booted; two
+- Client update: a released server accepts only clients of its own build. A client of any
+  other build is refused when it connects, downloads the server's build in the background and
+  asks 需要更新: 现在更新 applies it at once (downloading first if needed); 保持离线 keeps the
+  app working offline on saved content, with 新版本已就绪 still offered in the activity centre.
+  An update is never applied without that choice, nor by reload alone. The previous client version is kept until the new one has booted; two
   unconfirmed starts roll back. Navigating never applies an unconfirmed update.
 - A first install needs HTTPS or localhost.
 

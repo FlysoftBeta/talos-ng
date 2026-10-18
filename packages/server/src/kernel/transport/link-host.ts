@@ -21,6 +21,8 @@ export interface LinkHostOptions {
   db: Db;
   uow: Uow;
   build: string;
+  /** Refuse a HELLO from any other client build; the client then updates itself. */
+  rejectOtherBuilds?: boolean;
   clock?: Clock;
   authenticate(connection: Connection): { user?: string; device?: string };
   reportIncident(error: unknown, context?: { method?: string }): string;
@@ -95,13 +97,16 @@ export class LinkHost {
       () => this.clock.now(),
     );
     this.link = new LinkServer({
-      acceptHello: (hello) => ({
-        v: 1,
-        build: options.build,
-        now: this.clock.now(),
-        device: hello.device ?? id(),
-        conn: id(),
-      }),
+      acceptHello: (hello) =>
+        options.rejectOtherBuilds && hello.build !== options.build
+          ? new AppError("E_VERSION", "客户端版本与服务器不一致")
+          : {
+              v: 1,
+              build: options.build,
+              now: this.clock.now(),
+              device: hello.device ?? id(),
+              conn: id(),
+            },
       clock: () => this.clock.now(),
       timers: this.clock,
       reportIncident: (error, context) =>

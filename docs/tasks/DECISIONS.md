@@ -790,3 +790,10 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   `runtime/node`. In-app updates are unaffected (update ZIPs never carried these files, and the
   server does not read the target file); an existing install keeps its old root files until it
   is re-extracted from a full package.
+- **D-141 — Released servers refuse other client builds; the user chooses 现在更新 or 保持离线
+  (owner instruction).** A server started without `dev` answers a HELLO whose build differs from
+  its own with BYE `E_VERSION`, so an old client never talks to a newer API. The client then
+  stages the server's manifest in the background and shows a dialog: 现在更新 activates it and
+  reloads; 保持离线 keeps working offline on saved content, with the update still in the activity
+  centre. Dev servers (`pnpm dev`, the e2e harness) accept every build. Tools that connect over
+  the link must announce the running server's build.

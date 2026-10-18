@@ -3,6 +3,7 @@ import { AiList, AiContent } from "../features/ai/index.ts";
 import {
   ActivityCenter,
   useActivityCounts,
+  VersionRejectedPrompt,
 } from "../features/activity/index.ts";
 import {
   LearningProvider,
@@ -159,6 +160,7 @@ function AppContent(): ReactElement {
   const isApp = state.gate === "app";
   return (
     <>
+      <VersionRejectedPrompt />
       {state.gate === "boot" ? (
         <main className="boot-page">
           <StatePanel state="loading" title="正在打开" hint="" />

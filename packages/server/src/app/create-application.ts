@@ -58,6 +58,8 @@ export interface KernelOptions {
   tmpDir?: string;
   serverLogs?: () => string;
   dev?: boolean;
+  /** Clients of another build are refused at the handshake (released servers). */
+  rejectOtherBuilds?: boolean;
   testSeed?: boolean;
   /** Offline import may enqueue jobs without executing background work. */
   backgroundTasks?: boolean;
@@ -382,6 +384,7 @@ export function createKernel(options: KernelOptions): Kernel {
     db,
     uow,
     build: options.build,
+    rejectOtherBuilds: options.rejectOtherBuilds,
     clock,
     authenticate: (connection) => identity.authenticate(connection),
     reportIncident: (error, ctx) => incidents.report(error, ctx),

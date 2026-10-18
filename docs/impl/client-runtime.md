@@ -116,10 +116,11 @@ Pill and centre read a typed `StatusViewModel`; link status is an external store
 
 `createBoot` runs after the first successful React commit: it confirms an installed build
 through IndexedDB before any network operation, then registers the worker and checks for
-updates in the background; explicit offline skips network work. When WELCOME announces a
-different build, the shell installer stages it in the background and the activity centre offers
-the update; the user's explicit action records an activation request, and locking applies a
-ready update. Boot confirmation happens only after React commits a stable gate. Installer
+updates in the background; explicit offline skips network work. When the server refuses this
+build at the handshake (`E_VERSION`; the link stays in `versionMismatch`, offline), the shell
+installer stages the server's manifest in the background and the 需要更新 dialog offers
+现在更新 (finish staging, record the activation request, reload) or 保持离线 (dismiss; the
+activity centre keeps offering the update and locking applies a ready one). Boot confirmation happens only after React commits a stable gate. Installer
 failures leave the existing app usable. Shell internals: `packaging.md`.
 
 ## Design system (`ui/`)

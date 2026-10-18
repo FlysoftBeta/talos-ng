@@ -1,2 +1,6 @@
-export { ActivityCenter, useActivityCounts } from "./connect.tsx";
+export {
+  ActivityCenter,
+  useActivityCounts,
+  VersionRejectedPrompt,
+} from "./connect.tsx";
 export { tasksModule } from "./module.ts";

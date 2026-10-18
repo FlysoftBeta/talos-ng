@@ -78,6 +78,8 @@ async function port() {
   await new Promise((r) => s.close(r));
   return p;
 }
+// Released servers refuse other builds, so tool connections announce the running one.
+let serverBuild = A;
 async function connect(url, pin = rootPin, ca) {
   let client;
   const ready = new Promise((resolve, reject) => {
@@ -94,7 +96,7 @@ async function connect(url, pin = rootPin, ca) {
               socket.once("open", () => resolve(nodeWebSocketCarrier(socket)));
             })
           : connectNodeWebSocket(url),
-      hello: () => ({ v: 1, build: A, device: null, lang: "zh-CN" }),
+      hello: () => ({ v: 1, build: serverBuild, device: null, lang: "zh-CN" }),
     });
     client.onWelcome((w) => {
       clearTimeout(timeout);
@@ -314,11 +316,11 @@ try {
     (m) => m?.build === B,
     "B ready",
   );
-  await page.locator(`[data-testid="ui.status"]`).first().click();
-  await page
-    .getByRole("button", { name: "应用新版本", exact: true })
-    .waitFor({ timeout: 60000 });
-  await page.getByRole("button", { name: "应用新版本", exact: true }).click();
+  serverBuild = B;
+  // B refuses the open A page when it reconnects; the page asks before updating.
+  const required = page.locator('[data-testid="update.required"]');
+  await required.waitFor({ timeout: 60000 });
+  await required.getByRole("button", { name: "现在更新", exact: true }).click();
   await page.waitForFunction(
     `document.querySelector('meta[name="talos-build"]').content===${JSON.stringify(B)}`,
   );

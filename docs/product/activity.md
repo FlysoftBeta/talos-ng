@@ -19,7 +19,7 @@ server-side tasks. It is a sheet over whatever the user is doing and stays reada
   position) waits briefly and is sent as one write; its row says how many changes were
   merged. Offline, queued changes say they send once connected.
 - **最近完成** (collapsible, newest first): finished tasks and completed offline downloads.
-- 本机与版本: storage use, build, update state with 应用新版本.
+- 本机与版本: storage use, build, update state with 应用新版本 (also offered by the 需要更新 dialog when the server refuses this version).
 
 ## Actions
 

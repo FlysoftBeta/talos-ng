@@ -64,6 +64,22 @@ export class UpdateController {
       this.ports.updateChecking = undefined;
     }
   }
+  /** The server refused this build: stage its release in the background and offer it. */
+  rejected(): void {
+    this.ports.status({
+      versionRejected: {
+        updateNow: () => {
+          void this.updateNow().catch(this.ports.report);
+        },
+      },
+    });
+    void this.checkUpdate().catch(this.ports.report);
+  }
+  /** Finishes (or joins) staging the server's release, then activates it. */
+  async updateNow(): Promise<void> {
+    await this.checkUpdate();
+    await this.applyUpdate();
+  }
   async applyUpdate(): Promise<void> {
     if (!this.ports.boot) return;
     this.ports.engine?.sideState(true, true);

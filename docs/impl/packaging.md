@@ -60,8 +60,9 @@ known good build. Rollback counts navigations across tabs rather than guessing h
 elapsed time; the client confirms only after React has committed a stable gate. Installed
 assets are integrity-checked on serving; a corrupt or missing one yields an immediate 503 so
 later boots reach rollback. The manifest endpoint is always network-backed. A build change is
-detected through WELCOME (not independent polling), after the server restarted into the new
-release. Release assets contain only the installable shell and manifest assets; the gallery
+detected at the handshake (not independent polling), after the server restarted into the new
+release: a released server answers a HELLO of any other build with BYE `E_VERSION` (dev
+servers accept every build), so the client never runs online against another server build. Release assets contain only the installable shell and manifest assets; the gallery
 and diagnostics are development-only.
 
 ## Release layout and launcher

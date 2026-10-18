@@ -55,21 +55,44 @@ function setup(options: Partial<LinkHostOptions> = {}, path?: string) {
   );
   return { db, uow, host, incidents, committed };
 }
-async function connect(host: LinkHost): Promise<LinkClient> {
-  const client = new LinkClient({
-    hello: () => ({ v: 1, build: "test", device: "device", lang: "zh-CN" }),
+function client(host: LinkHost, build = "test"): LinkClient {
+  const link = new LinkClient({
+    hello: () => ({ v: 1, build, device: "device", lang: "zh-CN" }),
     connect: async () => {
       const pair = createMemoryCarrierPair();
       host.link.accept(pair.b, {});
       return pair.a;
     },
   });
-  cleanups.push(() => client.stop());
-  client.start();
-  await tick();
-  expect(client.state).toBe("open");
-  return client;
+  cleanups.push(() => link.stop());
+  return link;
 }
+async function connect(host: LinkHost): Promise<LinkClient> {
+  const link = client(host);
+  link.start();
+  await tick();
+  expect(link.state).toBe("open");
+  return link;
+}
+describe("LinkHost handshake", () => {
+  it("refuses other client builds only when asked to", async () => {
+    const lenient = client(setup().host, "old");
+    lenient.start();
+    await tick();
+    expect(lenient.state).toBe("open");
+    const strict = setup({ rejectOtherBuilds: true }).host;
+    const old = client(strict, "old");
+    const mismatch = vi.fn();
+    old.onVersionMismatch(mismatch);
+    old.start();
+    await tick();
+    expect(old.state).toBe("versionMismatch");
+    expect(mismatch).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "E_VERSION" }),
+    );
+    await connect(strict);
+  });
+});
 describe("LinkHost middleware", () => {
   it("enforces public/device/user levels before invoking handlers", async () => {
     let auth: { device?: string; user?: string } = {};

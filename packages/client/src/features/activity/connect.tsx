@@ -12,6 +12,7 @@ import { canClearHistory, selectTasks } from "./jobs.ts";
 import type { Task } from "./jobs.ts";
 import { ActivityController, buildActivity } from "./model.ts";
 import { ActivityView } from "./view.tsx";
+import { VersionRejectedDialog } from "./version-dialog.tsx";
 
 function useJobs(): Task[] {
   const runtime = useRuntime();
@@ -78,6 +79,27 @@ export function ActivityCenter({
       onClear={controller.askClear}
       onDismiss={controller.dismiss}
       onConfirm={controller.confirm}
+    />
+  );
+}
+
+/** Offers the update when the server refuses this build; dismissing keeps working offline. */
+export function VersionRejectedPrompt(): ReactElement | null {
+  const status = useClientSnapshot().status;
+  const [dismissed, setDismissed] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const rejected = status.versionRejected;
+  if (!rejected) return null;
+  return (
+    <VersionRejectedDialog
+      open={!dismissed}
+      update={status.update}
+      updating={updating}
+      onUpdate={() => {
+        setUpdating(true);
+        rejected.updateNow();
+      }}
+      onStayOffline={() => setDismissed(true)}
     />
   );
 }

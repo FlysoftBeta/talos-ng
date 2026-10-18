@@ -203,6 +203,9 @@ export class ApplicationController {
       }),
     );
     this.cleanup.push(
+      this.link.onVersionMismatch(() => this.updates.rejected()),
+    );
+    this.cleanup.push(
       this.link.onWelcome((welcome) => {
         const pending = this.connected(welcome);
         const generation = this.generation;

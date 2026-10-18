@@ -133,6 +133,7 @@ export async function startServer(
       tmpDir: config.tmpDir,
       serverLogs: () => log.snapshot(),
       dev: config.dev,
+      rejectOtherBuilds: !config.dev,
       testSeed: config.testSeed,
       mediaBinaryPath,
       ...(mediaPluginDir ? { mediaPluginDir } : {}),

@@ -11,6 +11,7 @@ import packageTool from "./package.mjs";
 import objectstore from "./objectstore.mjs";
 import product from "./product.mjs";
 import server from "./server.mjs";
+import sourcemap from "./sourcemap.mjs";
 import store from "./store.mjs";
 import tools from "./tools.mjs";
 import virtual from "./virtual.mjs";
@@ -34,6 +35,7 @@ export const policies = {
   objectstore,
   package: packageTool,
   server,
+  sourcemap,
   store,
   tools,
   virtual,

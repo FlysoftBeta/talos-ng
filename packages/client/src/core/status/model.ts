@@ -54,4 +54,6 @@ export interface StatusViewModel {
     message?: string;
     apply?: () => void;
   };
+  /** The server refused this build: the user updates now or keeps working offline. */
+  versionRejected?: { updateNow: () => void };
 }
