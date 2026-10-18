@@ -752,3 +752,23 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   SHA-256-checks the pinned yt-dlp into the packaging cache (`tools/package/media-binary.ts`) and
   passes it with the plugin directory, so music works without setup. The packaged e2e no longer
   needs the seeded accounts: it signs in with the root PIN the first start prints.
+
+- **D-138 — Install layout by kind (owner principle, supersedes D-137's placement rules).** The
+  working directory is the install root and every relative path resolves against it. `config/`
+  (first argument of launcher and `server.js restore`, default `config`) holds only operator
+  configuration: `config.json` (settings) and `model.json` (AI provider, replacing
+  `aiModelsFile`). `data/` holds only business data (database, object storage, backups; the
+  server lock is `data/server.lock`); `logs/` holds operator logs (launcher, server); `tmp/` holds
+  operator scratch (staged updates and the rollback backup, versions being unpacked, the document
+  conversion spool); `versions/` holds the installed versions plus the launcher's `current`,
+  `state.json` and lock, and a confirmed update deletes every other version (a rolled-back
+  candidate is deleted too). `dataDir`/`logsDir`/`tmpDir` are `config.json` keys again; the
+  launcher and the server read them through one resolver (`@talos/launcher` `install/layout.ts`),
+  which removes D-137's reason for fixing the data directory: rollback restores whatever
+  directory the config names. The start message carries `configDir` instead of paths, and
+  `launcher.target` instead of the install root. Server and launcher output, errors included,
+  reaches the console as well as `logs/launcher.log`; a failed restart keeps retrying with
+  backoff instead of leaving the launcher idle. Configuration errors pass the zod error through
+  as is, and `AppError.wrap` keeps the original message of wrapped failures. Clean break: older
+  installs are re-extracted (moving `data/` across); an older launcher applying a newer update
+  rolls back because the new server rejects its start message.

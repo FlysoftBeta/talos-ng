@@ -13,7 +13,9 @@ function fixture(initial: LauncherState = { current: "A" }) {
       stopped: boolean;
     }[] = [],
     incidents: string[] = [],
-    restores: string[] = [];
+    restores: string[] = [],
+    prunes: string[][] = [];
+  const control = { failStart: false };
   const s = new Supervisor({
     now: () => now,
     schedule: (fn, ms) => {
@@ -33,7 +35,11 @@ function fixture(initial: LauncherState = { current: "A" }) {
     restore: async (path) => {
       restores.push(path);
     },
+    prune: async (keep) => {
+      prunes.push([...keep]);
+    },
     start: async (build): Promise<ServerChild> => {
+      if (control.failStart) throw new Error("release missing");
       const child = {
         build,
         exit: () => {},
@@ -62,6 +68,8 @@ function fixture(initial: LauncherState = { current: "A" }) {
     children,
     incidents,
     restores,
+    prunes,
+    control,
     state: () => state,
     timers,
     async tick(ms: number) {
@@ -85,6 +93,7 @@ describe("launcher supervisor", () => {
     f.children[1]!.message({ type: "confirmed" });
     await f.s.idle();
     expect(f.state()).toEqual({ current: "B" });
+    expect(f.prunes).toEqual([["A"], ["B"]]);
     await f.tick(180001);
     expect(f.restores).toEqual([]);
     await f.s.stop();
@@ -98,6 +107,7 @@ describe("launcher supervisor", () => {
     expect(f.state()).toEqual({ current: "A" });
     expect(f.incidents[0]).toContain("回滚 C");
     expect(f.children[1]!.stopped).toBe(true);
+    expect(f.prunes.at(-1)).toEqual(["A"]);
   });
   it("recovers expired pending state after launcher restart", async () => {
     const f = fixture({
@@ -117,6 +127,19 @@ describe("launcher supervisor", () => {
       await f.tick(30000);
     }
     expect(f.children).toHaveLength(11);
+  });
+  it("keeps retrying a restart that cannot start, reporting each failure", async () => {
+    const f = fixture();
+    await f.s.boot();
+    f.control.failStart = true;
+    f.children[0]!.exit();
+    await f.tick(500);
+    await f.tick(1000);
+    expect(f.incidents).toEqual(["release missing", "release missing"]);
+    expect(f.timers.size).toBe(1);
+    f.control.failStart = false;
+    await f.tick(2000);
+    expect(f.children).toHaveLength(2);
   });
   it("rolls back a crashing candidate", async () => {
     const f = fixture();

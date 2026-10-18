@@ -23,8 +23,8 @@ export function verifyRelease(
     manifest = JSON.parse(
       files.get("release.json")!.toString(),
     ) as ReleaseManifest;
-  } catch {
-    throw new AppError("E_INVALID", "缺少更新清单");
+  } catch (error) {
+    throw AppError.wrap("E_INVALID", "缺少更新清单", error);
   }
   if (
     !manifest ||

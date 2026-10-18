@@ -282,8 +282,14 @@ export async function startHttpGateway(
             socket.destroy();
         });
         await new Promise<void>((resolve, reject) => {
-          const failed = () =>
-            reject(new AppError("E_UNAVAILABLE", "无法监听 HTTP 端口"));
+          const failed = (error: Error) =>
+            reject(
+              AppError.wrap(
+                "E_UNAVAILABLE",
+                `无法监听 HTTP 端口 ${options.bindHost ?? "127.0.0.1"}:${port}`,
+                error,
+              ),
+            );
           server.once("error", failed);
           server.listen(port, options.bindHost ?? "127.0.0.1", () => {
             server.off("error", failed);

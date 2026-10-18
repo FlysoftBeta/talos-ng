@@ -108,21 +108,26 @@ seed) are composed in `app/` from per-module participants and predicates.
 
 Two sources, no environment variables.
 
-**Operator settings** live in `talos.config.json` in the install directory (a missing file means
-defaults; unknown keys are rejected; relative paths resolve beside the file), validated by one
-zod schema in `kernel/config`:
+**Operator settings** live in the config directory's `config.json` (install layout:
+`packaging.md`; a missing file means defaults; unknown keys are rejected; relative paths
+resolve against the working directory), validated by one zod schema in `kernel/config`:
 
 | Key | Meaning |
 |---|---|
 | `ports`, `securePorts` | HTTP and HTTPS listeners; default `[8080]` and `[]`; `0` allocates a free port; secure ports need `https` |
 | `bindHost` | default `0.0.0.0` |
 | `https` | `cert`, `key`, optional `ca` (served at `/ca.crt`), `domain`, `redirect` (needs `domain` and a secure port); certificate files are reloaded on change |
-| `aiModelsFile` | JSON file with the AI provider (`baseURL`, `key`, `models` with prices; `modules.md`) |
+| `dataDir`, `logsDir`, `tmpDir` | default `data`, `logs`, `tmp`; business data, operator logs, operator scratch (schema shared with the launcher, `@talos/launcher` `install/layout.ts`) |
 
-Everything else is not configurable. The data directory is the launcher-owned `data/` (the
-launcher's lock, backups and rollback address it), the build id comes from the client release
-manifest, the sync-replica worker count derives from the CPU count (`min(4, cpus − 1)`), and
-the renderer and yt-dlp locations follow fixed rules (`vendor/pdfrender`, `vendor/media/` next to `server.js`).
+The AI provider is the config directory's `model.json` (`baseURL`, `key`, `models` with prices;
+`modules.md`); without it AI is off. Everything else is not configurable: the build id comes
+from the client release manifest, the sync-replica worker count derives from the CPU count
+(`min(4, cpus − 1)`), and the renderer and yt-dlp locations follow fixed rules
+(`vendor/pdfrender`, `vendor/media/` next to `server.js`).
+
+Configuration errors are reported with the validator's own message (the raw zod issues), and
+wrapped lower-level failures keep the original error text (`AppError.wrap`), so the console and
+`launcher.log` say exactly which key or file failed.
 
 **Process wiring** is the parent's business, sent as the first IPC message
 `{ type: "start", config }` before the server opens anything. The shared zod schema
@@ -131,20 +136,24 @@ and in the parent (`sendStart`):
 
 | Field | Meaning |
 |---|---|
-| `dataDir`, `settingsFile`, `assetsDir`, `workerFile?` | absolute paths: data, `talos.config.json`, client release, service-worker file |
+| `configDir`, `assetsDir`, `workerFile?` | absolute paths: config directory (with the working directory it fixes the layout), client release, service-worker file |
 | `dev`, `testSeed` | default `false`; the seed (root PIN `123456`, demo `654321`, fake providers) requires `dev` |
 | `printRootPin` | default `true`; the first-start root PIN goes to stdout |
 | `ytDlp?`, `pluginDir?` | yt-dlp executable and `talos-music` plugin directory; a release finds both next to `server.js`, a checkout needs its dev parent to supply them |
-| `launcher?` | `{ root, updatePending }`; present only under the launcher, enables updates and rollback |
+| `launcher?` | `{ target, updatePending }`; present only under the launcher, enables updates and rollback |
 
-Parents: the launcher forks each release's `server.js`; `pnpm dev` and the real-server e2e
-harness fork `packages/server/bin/*.ts` with the tsx loader. Running `bin/talos-server.ts` directly
-in a checkout builds the same object in-process (`.data`, `--dev` for `dev`). The offline
-`server.js restore <backup> [dataDir]` takes the data directory as an argument.
+Placement is never wiring: where data, logs and tmp live is the operator's `config.json`.
+
+Parents: the launcher forks each version's `server.js`; `pnpm dev` and the real-server e2e
+harness fork `packages/server/bin/*.ts` with the tsx loader (the harness writes a config
+directory with absolute paths). A checkout is laid out like an install rooted at the repository
+(`config/`, `data/`, `logs/`, `tmp/`, all git-ignored); running `bin/talos-server.ts [config-dir]
+[--dev]` directly builds the same wiring in-process. The offline
+`server.js restore <backup> [config-dir]` restores into the configured data directory.
 
 `pnpm dev` ensures the pinned yt-dlp is in the packaging cache (`~/.cache/talos-ng/media`, SHA-256 checked, downloaded on first run), runs the real dev server plus Vite behind a same-origin proxy for `/link`, `/dl`,
 `/app`, `/sw.js` and `/ca.crt`; no service worker is registered in development. Dev mode always
-provisions the first root user with PIN `123456`, so deleting `.data/` gives a known fresh start. `pnpm build`
+provisions the first root user with PIN `123456`, so deleting `data/` gives a known fresh start. `pnpm build`
 then `pnpm start` serves the production client from the real server.
 
 ## Test seed

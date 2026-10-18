@@ -5,6 +5,7 @@ export type { Kernel, KernelOptions } from "./app/create-application.ts";
 export {
   parseConfig,
   loadSettings,
+  serverConfig,
   dataLayout,
 } from "./kernel/config/config.ts";
 export type { ServerConfig } from "./kernel/config/config.ts";

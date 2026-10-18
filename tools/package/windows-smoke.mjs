@@ -95,13 +95,15 @@ try {
     "Windows Node:",
     await execute([join(directory, "runtime/node.exe"), "--version"]),
   );
-  const build = (await readFile(join(directory, "current"), "utf8")).trim();
+  const build = (
+    await readFile(join(directory, "versions", "current"), "utf8")
+  ).trim();
   const listener = createServer();
   await new Promise((r) => listener.listen(0, "127.0.0.1", r));
   const port = listener.address().port;
   await new Promise((r) => listener.close(r));
   await writeFile(
-    join(directory, "talos.config.json"),
+    join(directory, "config", "config.json"),
     JSON.stringify({
       ports: [port],
       securePorts: [],
@@ -115,8 +117,8 @@ try {
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-const launcher = process.argv[2], root = process.argv[3];
-process.argv = [process.execPath, launcher, root];
+const launcher = process.argv[2], root = process.cwd();
+process.argv = [process.execPath, launcher];
 const timer = setInterval(() => {
   if (existsSync(join(root, 'wine-stop.request'))) {
     clearInterval(timer); process.emit('SIGTERM');
@@ -135,7 +137,6 @@ await import(pathToFileURL(launcher).href);
       join(directory, "runtime/node.exe"),
       win(wrapper),
       win(join(directory, "launcher.js")),
-      win(directory),
     ],
     { cwd: directory, env, stdio: ["ignore", logHandle.fd, logHandle.fd] },
   );
@@ -186,7 +187,7 @@ await import(pathToFileURL(launcher).href);
     await execute([
       join(
         directory,
-        "releases",
+        "versions",
         build,
         "vendor/pdfrender/windows/pdfrender.exe",
       ),
@@ -221,10 +222,10 @@ await import(pathToFileURL(launcher).href);
     0,
     "launcher and IPC server shutdown complete\n" + logs,
   );
-  await assert.rejects(readFile(join(directory, "launcher.lock")), {
+  await assert.rejects(readFile(join(directory, "versions", "launcher.lock")), {
     code: "ENOENT",
   });
-  await assert.rejects(readFile(join(directory, "data", "launcher.lock")), {
+  await assert.rejects(readFile(join(directory, "data", "server.lock")), {
     code: "ENOENT",
   });
   assert.match(logs, /服务器已关闭/);

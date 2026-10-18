@@ -33,6 +33,16 @@ export class AppError extends Error {
     this.code = code;
     this.data = data;
   }
+  /** Wraps a lower-level failure, passing its original message through as is. */
+  static wrap(
+    code: ErrorCode,
+    message: string,
+    cause: unknown,
+    data?: unknown,
+  ): AppError {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    return new AppError(code, `${message}：${detail}`, data);
+  }
   toJSON(): AppErrorJSON {
     return this.data === undefined
       ? { code: this.code, message: this.message }

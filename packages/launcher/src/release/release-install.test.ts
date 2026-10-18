@@ -137,8 +137,12 @@ describe("package targets", () => {
 
 describe("release files and lock on disk", () => {
   let root: string;
+  let versions: string;
+  const files = () =>
+    new ReleaseFiles(versions, join(root, "tmp"), "linux-debian-x64");
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), "talos-release-"));
+    versions = join(root, "versions");
     await writeFile(join(root, "target"), "linux-debian-x64\n");
   });
   afterEach(() => rm(root, { recursive: true, force: true }));
@@ -147,87 +151,98 @@ describe("release files and lock on disk", () => {
     expect(installedTarget(root)).toBe("linux-debian-x64");
   });
 
-  it("stages a verified build once, refuses to overwrite and leaves no staging dir", async () => {
-    const files = new ReleaseFiles(root);
+  it("stages a verified build once through tmp, refuses to overwrite and leaves no staging dir", async () => {
     const zip = release("b2", "linux-debian-x64");
-    expect(await files.stage(zip, digest(zip))).toBe("b2");
-    expect(await readFile(join(root, "releases/b2/server.js"), "utf8")).toBe(
+    expect(await files().stage(zip, digest(zip))).toBe("b2");
+    expect(await readFile(join(versions, "b2/server.js"), "utf8")).toBe(
       "server.js:b2",
     );
-    await expect(files.stage(zip, digest(zip))).rejects.toMatchObject({
+    await expect(files().stage(zip, digest(zip))).rejects.toMatchObject({
       code: "E_CONFLICT",
     });
-    expect(await readdir(join(root, "releases"))).toEqual(["b2"]);
+    expect(await readdir(versions)).toEqual(["b2"]);
+    expect(await readdir(join(root, "tmp/versions"))).toEqual([]);
   });
 
   it("refuses a build for another platform or a wrong outer hash without touching disk", async () => {
-    const files = new ReleaseFiles(root);
     const win = release("b3", "win32-x64");
-    await expect(files.stage(win, digest(win))).rejects.toMatchObject({
+    await expect(files().stage(win, digest(win))).rejects.toMatchObject({
       code: "E_INVALID",
     });
     const ok = release("b3", "linux-debian-x64");
-    await expect(files.stage(ok, "0".repeat(64))).rejects.toMatchObject({
+    await expect(files().stage(ok, "0".repeat(64))).rejects.toMatchObject({
       code: "E_INTEGRITY",
     });
-    await expect(readdir(join(root, "releases"))).rejects.toMatchObject({
+    await expect(readdir(versions)).rejects.toMatchObject({
       code: "ENOENT",
     });
   });
 
-  it("recovers from a stale staging directory left by a crash", async () => {
-    await mkdir(join(root, "releases/b4.staging"), { recursive: true });
-    await writeFile(join(root, "releases/b4.staging/junk"), "x");
-    const files = new ReleaseFiles(root);
+  it("recovers from a stale partial version left in tmp by a crash", async () => {
+    await mkdir(join(root, "tmp/versions/b4"), { recursive: true });
+    await writeFile(join(root, "tmp/versions/b4/junk"), "x");
     const zip = release("b4", "linux-debian-x64");
-    await files.stage(zip, digest(zip));
-    expect((await readdir(join(root, "releases"))).sort()).toEqual(["b4"]);
-    expect((await readdir(join(root, "releases/b4"))).includes("junk")).toBe(
-      false,
-    );
+    await files().stage(zip, digest(zip));
+    expect(await readdir(versions)).toEqual(["b4"]);
+    expect((await readdir(join(versions, "b4"))).includes("junk")).toBe(false);
+  });
+
+  it("prunes every version directory but the kept ones, never the state files", async () => {
+    for (const build of ["b5", "b6"]) {
+      const zip = release(build, "linux-debian-x64");
+      await files().stage(zip, digest(zip));
+    }
+    await mkdir(join(versions, "b7.incoming"));
+    await files().save({ current: "b6" });
+    await files().prune(["b6"]);
+    expect((await readdir(versions)).sort()).toEqual([
+      "b6",
+      "current",
+      "state.json",
+    ]);
   });
 
   it("state is the commit record: read repairs the current pointer and validates pending", async () => {
-    const files = new ReleaseFiles(root);
     const state = {
       current: "B",
       pending: { build: "C", previous: "B", deadline: 5, backup: "bk" },
     };
-    await files.save(state);
-    await writeFile(join(root, "current"), "stale\n");
-    expect(await files.read()).toEqual(state);
-    expect(await readFile(join(root, "current"), "utf8")).toBe("B\n");
+    await files().save(state);
+    await writeFile(join(versions, "current"), "stale\n");
+    expect(await files().read()).toEqual(state);
+    expect(await readFile(join(versions, "current"), "utf8")).toBe("B\n");
     await writeFile(
-      join(root, "launcher-state.json"),
+      join(versions, "state.json"),
       JSON.stringify({
         current: "B",
         pending: { build: "../C", previous: "B", deadline: 5 },
       }),
     );
-    await expect(files.read()).rejects.toThrow();
+    await expect(files().read()).rejects.toThrow();
     await writeFile(
-      join(root, "launcher-state.json"),
+      join(versions, "state.json"),
       JSON.stringify({
         current: "B",
         pending: { build: "C", previous: "B", deadline: 1.5 },
       }),
     );
-    await expect(files.read()).rejects.toThrow();
+    await expect(files().read()).rejects.toThrow();
   });
 
   it("lock: reclaims a dead owner but never a live one or a corrupt file", async () => {
-    const lock = join(root, "launcher.lock");
+    const lock = join(root, "data/server.lock");
+    await mkdir(join(root, "data"));
     await writeFile(lock, String(process.pid));
-    await expect(acquireLock(root, true)).rejects.toMatchObject({
+    await expect(acquireLock(lock, true)).rejects.toMatchObject({
       code: "E_BUSY",
     });
     await writeFile(lock, "garbage");
-    await expect(acquireLock(root, true)).rejects.toMatchObject({
+    await expect(acquireLock(lock, true)).rejects.toMatchObject({
       code: "E_BUSY",
     });
     // a pid that cannot exist (above the Linux/Windows pid ceiling)
     await writeFile(lock, "2147483646");
-    const unlock = await acquireLock(root, true);
+    const unlock = await acquireLock(lock, true);
     expect(await readFile(lock, "utf8")).toBe(String(process.pid));
     await unlock();
     await expect(readFile(lock, "utf8")).rejects.toMatchObject({

@@ -6,6 +6,10 @@ export default {
       reason: "dev.mjs reuses the server runtime configuration loader.",
     },
     {
+      to: "packages/launcher/src/install/layout.ts",
+      reason: "dev.mjs lays out a checkout run like an install.",
+    },
+    {
       to: "packages/launcher/src/process/server-start.ts",
       reason:
         "dev.mjs and the real-server harness send the server its typed start message.",

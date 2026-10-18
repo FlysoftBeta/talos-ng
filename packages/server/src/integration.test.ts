@@ -294,9 +294,9 @@ it("startServer binds every port and closes idempotently", async () => {
   const dir = await mkdtemp(join(tmpdir(), "talos-main-"));
   try {
     await mkdir(join(dir, "assets"));
-    const aiModelsFile = join(dir, "ai.json");
+    const modelFile = join(dir, "model.json");
     await writeFile(
-      aiModelsFile,
+      modelFile,
       JSON.stringify({
         baseURL: "http://127.0.0.1:1/v1",
         key: "test-secret",
@@ -314,9 +314,11 @@ it("startServer binds every port and closes idempotently", async () => {
     const server = await startServer(
       parseConfig({
         ports: [0, 0],
-        aiModelsFile,
+        modelFile,
         bindHost: "127.0.0.1",
-        dataDir: dir,
+        dataDir: join(dir, "data"),
+        logsDir: join(dir, "logs"),
+        tmpDir: join(dir, "tmp"),
         assetsDir: join(dir, "assets"),
       }),
       { printRootPin: () => {} },
@@ -331,7 +333,7 @@ it("startServer binds every port and closes idempotently", async () => {
       );
     await Promise.all([server.close(), server.close()]);
     expect(
-      await stat(join(dir, "talos.db-wal")).then(
+      await stat(join(dir, "data", "talos.db-wal")).then(
         (s) => s.size,
         () => 0,
       ),

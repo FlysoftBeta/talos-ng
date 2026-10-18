@@ -32,6 +32,8 @@ export interface LibraryOptions {
   now?: () => number;
   id?: () => string;
   converters?: ConverterRegistry;
+  /** Where conversions spool the source; default the OS temp directory. */
+  tmpDir?: string;
   onDeleteDocument?: (id: string, tx: WriteContext) => void;
   onDeleteCollection?: (id: string, tx: WriteContext) => void;
 }
@@ -65,6 +67,7 @@ export class LibraryService {
           row.source!,
           row.filename!,
           ctx,
+          options.tmpDir,
         );
         await options.objects.publish(
           async () => {

@@ -78,7 +78,7 @@ export async function loadHttpAssets(
       await walk("");
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT")
-        throw new AppError("E_UNAVAILABLE", "无法读取客户端资源目录");
+        throw AppError.wrap("E_UNAVAILABLE", "无法读取客户端资源目录", error);
     }
   }
   if (workerFile) await addWorker(files, workerFile);
@@ -94,6 +94,6 @@ async function addWorker(
     files.set("/sw.js", { bytes: await readFile(path), mime: MIME[".js"]! });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT")
-      throw new AppError("E_UNAVAILABLE", "无法读取离线启动程序");
+      throw AppError.wrap("E_UNAVAILABLE", "无法读取离线启动程序", error);
   }
 }

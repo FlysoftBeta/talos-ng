@@ -47,12 +47,12 @@ export async function startServer(
   const config = parseConfig(input);
   const layout = dataLayout(config.dataDir);
   await Promise.all(
-    [layout.root, layout.logs, layout.backups].map((path) =>
+    [layout.root, layout.backups, config.logsDir, config.tmpDir].map((path) =>
       mkdir(path, { recursive: true }),
     ),
   );
-  const unlock = await acquireLock(layout.root, true);
-  const log = new Logger({ directory: layout.logs, build: "dev" });
+  const unlock = await acquireLock(layout.lock, true);
+  const log = new Logger({ directory: config.logsDir, build: "dev" });
   let db: Db;
   try {
     db = new Db(layout.db);
@@ -79,13 +79,17 @@ export async function startServer(
     if (config.https)
       certificate = new X509Certificate(await readFile(config.https.cert));
     let aiProvider = options.aiProvider;
-    if (config.aiModelsFile) {
+    if (config.modelFile && existsSync(config.modelFile)) {
       try {
         aiProvider = new ResponsesProvider(
-          JSON.parse(await readFile(config.aiModelsFile, "utf8")) as unknown,
+          JSON.parse(await readFile(config.modelFile, "utf8")) as unknown,
         );
-      } catch {
-        throw new AppError("E_INVALID", "无法读取 AI 模型配置");
+      } catch (error) {
+        throw AppError.wrap(
+          "E_INVALID",
+          `无法读取 AI 模型配置 ${config.modelFile}`,
+          error,
+        );
       }
     }
     // A release ships yt-dlp and its plugin next to server.js; in a checkout the
@@ -106,6 +110,7 @@ export async function startServer(
       ops: {
         ...options.ops,
         dataDir: layout.root,
+        tmpDir: config.tmpDir,
         httpsStatus: () => ({
           domain: config.https?.domain ?? null,
           listeners: [...(gateway?.addresses ?? [])],
@@ -125,6 +130,7 @@ export async function startServer(
           }
         : {}),
       build: assets.manifest.build,
+      tmpDir: config.tmpDir,
       serverLogs: () => log.snapshot(),
       dev: config.dev,
       testSeed: config.testSeed,

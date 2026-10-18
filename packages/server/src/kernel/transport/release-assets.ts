@@ -29,7 +29,7 @@ export async function loadReleaseAssets(
     text = await readFile(join(directory, "app", "manifest.json"), "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw new AppError("E_UNAVAILABLE", "无法读取客户端资源清单");
+    throw AppError.wrap("E_UNAVAILABLE", "无法读取客户端资源清单", error);
   }
   try {
     const manifest = manifestSchema.parse(JSON.parse(text) as unknown);
@@ -60,6 +60,6 @@ export async function loadReleaseAssets(
     return { manifest, files };
   } catch (error) {
     if (error instanceof AppError) throw error;
-    throw new AppError("E_INVALID", "客户端资源清单无效");
+    throw AppError.wrap("E_INVALID", "客户端资源清单无效", error);
   }
 }

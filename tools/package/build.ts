@@ -214,22 +214,27 @@ for (const platform of packageTargets) {
   );
   const install = await runtime(platform);
   for (const [name, data] of payload)
-    install.set(`releases/${build}/${name}`, data);
+    install.set(`versions/${build}/${name}`, data);
   install.set("target", Buffer.from(platform + "\n"));
-  install.set("current", Buffer.from(build + "\n"));
+  install.set("versions/current", Buffer.from(build + "\n"));
   install.set("package.json", Buffer.from('{"type":"module"}'));
   install.set(
     "launcher.js",
     await readFile(join(root, "packages/launcher/dist/launcher.js")),
   );
+  // Operator files live in config/ (install/layout.ts); data/, logs/ and tmp/
+  // are created on first start and may be moved in config.json.
   install.set(
-    "talos.config.json",
+    "config/config.json",
     Buffer.from(
       JSON.stringify(
         {
           ports: [8080],
           securePorts: [],
           bindHost: "0.0.0.0",
+          dataDir: "data",
+          logsDir: "logs",
+          tmpDir: "tmp",
         },
         null,
         2,
@@ -239,31 +244,31 @@ for (const platform of packageTargets) {
   install.set(
     "start.cmd",
     Buffer.from(
-      '@echo off\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\node.exe" "%~dp0launcher.js" "%~dp0."\r\n',
+      '@echo off\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\node.exe" "%~dp0launcher.js" %*\r\n',
     ),
   );
   install.set(
     "start.sh",
     Buffer.from(
-      '#!/bin/sh\ncd -- "$(dirname -- "$0")" || exit 1\nexec ./runtime/node ./launcher.js .\n',
+      '#!/bin/sh\ncd -- "$(dirname -- "$0")" || exit 1\nexec ./runtime/node ./launcher.js "$@"\n',
     ),
   );
   install.set(
     "migrate.cmd",
     Buffer.from(
-      '@echo off\r\nsetlocal\r\nset /p TALOS_CURRENT=<"%~dp0current"\r\n"%~dp0runtime\\node.exe" --disable-warning=ExperimentalWarning "%~dp0releases\\%TALOS_CURRENT%\\migrate.js" %*\r\nexit /b %ERRORLEVEL%\r\n',
+      '@echo off\r\nsetlocal\r\nset /p TALOS_CURRENT=<"%~dp0versions\\current"\r\n"%~dp0runtime\\node.exe" --disable-warning=ExperimentalWarning "%~dp0versions\\%TALOS_CURRENT%\\migrate.js" %*\r\nexit /b %ERRORLEVEL%\r\n',
     ),
   );
   install.set(
     "migrate.sh",
     Buffer.from(
-      '#!/bin/sh\ndir=$(cd -- "$(dirname -- "$0")" && pwd) || exit 1\nread -r current < "$dir/current" || exit 1\nexec "$dir/runtime/node" --disable-warning=ExperimentalWarning "$dir/releases/$current/migrate.js" "$@"\n',
+      '#!/bin/sh\ndir=$(cd -- "$(dirname -- "$0")" && pwd) || exit 1\nread -r current < "$dir/versions/current" || exit 1\nexec "$dir/runtime/node" --disable-warning=ExperimentalWarning "$dir/versions/$current/migrate.js" "$@"\n',
     ),
   );
   install.set(
     "install-task.ps1",
     Buffer.from(String.raw`$ErrorActionPreference = "Stop"
-$action = New-ScheduledTaskAction -Execute "$PSScriptRoot\runtime\node.exe" -Argument ('"{0}" "{1}"' -f "$PSScriptRoot\launcher.js", $PSScriptRoot) -WorkingDirectory $PSScriptRoot
+$action = New-ScheduledTaskAction -Execute "$PSScriptRoot\runtime\node.exe" -Argument ('"{0}"' -f "$PSScriptRoot\launcher.js") -WorkingDirectory $PSScriptRoot
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 Register-ScheduledTask -TaskName "TalosII" -Action $action -Trigger $trigger -Description "Talos II 当前用户登录时启动（Office 捕获需要交互桌面）"
 `),
@@ -271,13 +276,42 @@ Register-ScheduledTask -TaskName "TalosII" -Action $action -Trigger $trigger -De
   install.set(
     "talos.service",
     Buffer.from(
-      "[Unit]\nDescription=Talos II\nAfter=network.target\n[Service]\nWorkingDirectory=%h/talos\nExecStart=%h/talos/runtime/node %h/talos/launcher.js %h/talos\nRestart=on-failure\nKillMode=mixed\nTimeoutStopSec=20\n[Install]\nWantedBy=default.target\n",
+      "[Unit]\nDescription=Talos II\nAfter=network.target\n[Service]\nWorkingDirectory=%h/talos\nExecStart=%h/talos/runtime/node %h/talos/launcher.js\nRestart=on-failure\nKillMode=mixed\nTimeoutStopSec=20\n[Install]\nWantedBy=default.target\n",
     ),
   );
   install.set(
     "README.md",
     Buffer.from(
-      `# Talos II ${build} (${platform})\n\n解压到独立目录。Windows 双击 start.cmd；Linux 执行 sh start.sh。可选自启动：Windows 在当前用户 PowerShell 中运行 install-task.ps1 注册登录任务；Linux 将 talos.service 中路径改为实际安装目录，作为用户 systemd 单元安装并启用。Office 捕获要求服务器运行在打开 Office 的同一交互用户会话。浏览器访问 http://localhost:8080，根管理员 PIN 首次启动时输出，请妥善保存。数据保存在 data/，切勿删除。\n\n修改 talos.config.json 配置端口、bindHost、AI 模型文件 aiModelsFile 及 HTTPS cert/key/ca/domain。证书路径相对安装目录，证书变更自动重载。HTTP→HTTPS 可设 redirect:true，308 响应不缓存。首次离线安装需要 HTTPS 或 localhost。\n\n在运维面板上传完全匹配目标 ${platform} 的更新包 -update.zip（发布页同名资产；在线检查默认读取最新发布的 talos-${platform}-update.json），准备后应用，并在三分钟内确认。未确认会回滚应用及完整备份；期间暂停业务写入以避免回滚丢失新写入。更新清单 SHA-256 校验防损坏；仅安装可信来源的软件包。\n\n迁移旧版数据：停止旧版应用，复制其 data.db 和 storage/objects；在安装目录依次运行 migrate inspect → run → verify（Windows 用 migrate.cmd，Linux 用 sh migrate.sh），例如 \`sh migrate.sh run --source 旧/data.db --blobs 旧/storage/objects --target 空目录\`，inspect 和 verify 参数相同（run 之外可加 --resume）。--target 必须是空目录；verify 无误后停止启动器，用该目录替换安装目录下的 data/（先移走旧的），再启动。详见 docs/impl/ops-migrate.md。\n\n恢复：停止启动器，使用 runtime/node（Windows runtime\\node.exe）运行 releases/<current>/server.js restore <备份.talos-backup 或 .backup 目录>。备份以流式保存 SQLite 与所有账本对象，无配置大小上限；下载为 .talos-backup 流式归档，恢复也可直接使用 data/backups/<编号>.backup 目录；恢复前保留 data/。data/backups/ 默认保留五份，可调整。\n\nLinux 系统库及 pdfrender GPL 许可见 releases/${build}/vendor/pdfrender/README.md 和各平台目录。两个 Linux 构建需要匹配发行版 ABI、字体、glibc、libstdc++、Cairo、fontconfig、FreeType、JPEG、OpenJPEG、WebP、zstd、zlib、PNG 等。Windows 已包含非系统 DLL，无需安装 Node。\n\n启动器拒绝重复实例。异常断电留下 launcher.lock 时，先确认其中 PID 已退出再删除锁。日志 data/logs/launcher.log 自动轮转。系统服务停止应发送 SIGTERM，Windows 控制台关闭通过 SIGHUP 尽力退出；强制结束无法保证清理。\n`,
+      `# Talos II ${build} (${platform})
+
+解压到独立目录。Windows 双击 start.cmd；Linux 执行 sh start.sh。启动器以安装目录为工作目录，唯一参数是配置目录（默认 config）。可选自启动：Windows 在当前用户 PowerShell 中运行 install-task.ps1 注册登录任务；Linux 将 talos.service 中路径改为实际安装目录，作为用户 systemd 单元安装并启用。Office 捕获要求服务器运行在打开 Office 的同一交互用户会话。浏览器访问 http://localhost:8080，根管理员 PIN 首次启动时输出，请妥善保存。
+
+## 目录
+
+- config/：运维配置。config.json 配置端口、bindHost、HTTPS（cert/key/ca/domain/redirect）及 dataDir/logsDir/tmpDir；model.json 是 AI 服务商与模型（不存在则不启用 AI）。
+- data/：业务数据（数据库、对象存储、备份），切勿删除。
+- logs/：启动器日志 launcher.log（自动轮转）与服务器日志。
+- tmp/：运维临时文件（下载的更新包、解压中的版本、服务器临时文件），停止后可清空。
+- versions/：各版本目录及启动器状态；新版本确认后旧版本自动删除。
+
+所有相对路径（包括证书路径）都相对安装目录解析；data、logs、tmp 可在 config.json 中改到别处，versions 与 config 位置固定。证书变更自动重载。HTTP→HTTPS 可设 redirect:true，308 响应不缓存。首次离线安装需要 HTTPS 或 localhost。
+
+## 更新
+
+在运维面板上传完全匹配目标 ${platform} 的更新包 -update.zip（发布页同名资产；在线检查默认读取最新发布的 talos-${platform}-update.json），准备后应用，并在三分钟内确认。未确认会回滚应用及完整备份；期间暂停业务写入以避免回滚丢失新写入。更新清单 SHA-256 校验防损坏；仅安装可信来源的软件包。
+
+## 迁移旧版数据
+
+停止旧版应用，复制其 data.db 和 storage/objects；在安装目录依次运行 migrate inspect → run → verify（Windows 用 migrate.cmd，Linux 用 sh migrate.sh），例如 \`sh migrate.sh run --source 旧/data.db --blobs 旧/storage/objects --target 空目录\`，inspect 和 verify 参数相同（run 之外可加 --resume）。--target 必须是空目录；verify 无误后停止启动器，用该目录替换数据目录 data/（先移走旧的），再启动。详见 docs/impl/ops-migrate.md。
+
+## 恢复
+
+停止启动器，在安装目录使用 runtime/node（Windows runtime\\node.exe）运行 versions/<current>/server.js restore <备份.talos-backup 或 .backup 目录> [配置目录]。备份以流式保存 SQLite 与所有账本对象，无配置大小上限；下载为 .talos-backup 流式归档，恢复也可直接使用 data/backups/<编号>.backup 目录；data/backups/ 默认保留五份，可调整。
+
+Linux 系统库及 pdfrender GPL 许可见 versions/${build}/vendor/pdfrender/README.md 和各平台目录。两个 Linux 构建需要匹配发行版 ABI、字体、glibc、libstdc++、Cairo、fontconfig、FreeType、JPEG、OpenJPEG、WebP、zstd、zlib、PNG 等。Windows 已包含非系统 DLL，无需安装 Node。
+
+启动器拒绝重复实例。异常断电留下 versions/launcher.lock 时，先确认其中 PID 已退出再删除锁。启动器与服务器的输出和错误同时显示在控制台并写入 logs/launcher.log。系统服务停止应发送 SIGTERM，Windows 控制台关闭通过 SIGHUP 尽力退出；强制结束无法保证清理。
+`,
     ),
   );
   const name = `talos-${build}-${platform}.${platform === "win32-x64" ? "zip" : "tar.gz"}`;

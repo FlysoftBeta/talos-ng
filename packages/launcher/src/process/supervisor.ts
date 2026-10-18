@@ -23,6 +23,8 @@ export interface SupervisorOptions {
   start(build: string): Promise<ServerChild>;
   restore(backup: string, previous: string): Promise<void>;
   incident(message: string): Promise<void>;
+  /** Deletes every installed version but these. */
+  prune(keep: readonly string[]): Promise<void>;
   deadlineMs?: number;
 }
 /** Serialized transitions. The durable pending record precedes launching new code. */
@@ -35,12 +37,13 @@ export class Supervisor {
   private crashes = 0;
   private chain: Promise<void> = Promise.resolve();
   constructor(private readonly io: SupervisorOptions) {}
+  private static message(error: unknown): string {
+    return error instanceof Error ? error.message : "启动器失败";
+  }
   private enqueue(fn: () => Promise<void>): Promise<void> {
     const next = this.chain.then(fn);
     this.chain = next.catch(async (error) => {
-      await this.io.incident(
-        error instanceof Error ? error.message : "启动器失败",
-      );
+      await this.io.incident(Supervisor.message(error));
     });
     return next;
   }
@@ -49,8 +52,40 @@ export class Supervisor {
       this.state = await this.io.read();
       if (this.state.pending && this.state.pending.deadline <= this.io.now())
         await this.rollback("确认期限已过");
-      else await this.launch();
+      else {
+        if (!this.state.pending) await this.prune([this.state.current]);
+        await this.launch();
+      }
     });
+  }
+  /** Old versions go once nothing can roll back to them; failing to delete one is only an incident. */
+  private async prune(keep: string[]): Promise<void> {
+    try {
+      await this.io.prune(keep);
+    } catch (error) {
+      await this.io.incident(`无法删除旧版本：${Supervisor.message(error)}`);
+    }
+  }
+  private scheduleRestart(): void {
+    this.timer = this.io.schedule(
+      () => {
+        void this.enqueue(async () => {
+          if (this.stopped) return;
+          if (this.state.pending) {
+            await this.rollback("候选版本退出");
+            return;
+          }
+          try {
+            await this.launch();
+          } catch (error) {
+            // A failed restart keeps retrying; only the first boot gives up.
+            await this.io.incident(Supervisor.message(error));
+            this.scheduleRestart();
+          }
+        }).catch(() => {});
+      },
+      Math.min(30_000, 500 * 2 ** Math.min(this.crashes++, 6)),
+    );
   }
   private async launch(): Promise<void> {
     if (this.stopped) return;
@@ -67,16 +102,7 @@ export class Supervisor {
     child.onExit(() => {
       if (this.child !== child || this.stopped) return;
       this.child = undefined;
-      this.timer = this.io.schedule(
-        () => {
-          void this.enqueue(async () => {
-            if (this.stopped) return;
-            if (this.state.pending) await this.rollback("候选版本退出");
-            else await this.launch();
-          }).catch(() => {});
-        },
-        Math.min(30_000, 500 * 2 ** Math.min(this.crashes++, 6)),
-      );
+      this.scheduleRestart();
     });
     if (this.state.pending) {
       this.io.cancel(this.watchdog);
@@ -102,6 +128,7 @@ export class Supervisor {
       this.state = confirmed;
       this.io.cancel(this.watchdog);
       this.crashes = 0;
+      await this.prune([confirmed.current]);
     });
   }
   apply(build: string, backup: string): Promise<void> {
@@ -144,6 +171,8 @@ export class Supervisor {
     const restored = { current: pending.previous };
     await this.io.save(restored);
     this.state = restored;
+    // The rejected candidate goes too, so the same update can be staged again.
+    await this.prune([restored.current]);
     await this.io.incident(
       `回滚 ${pending.build} → ${pending.previous}：${reason}`,
     );

@@ -6,6 +6,7 @@ import { gunzipSync } from "node:zlib";
 import {
   verifyRelease,
   ReleaseFiles,
+  installedTarget,
   digest,
 } from "../../packages/launcher/src/index.ts";
 
@@ -66,15 +67,21 @@ export async function checkLinuxStructure(root, build, target, other) {
   assert.equal(entries.get("target").toString().trim(), target);
   assert.match(
     entries.get("start.sh").toString(),
-    /exec \.\/runtime\/node \.\/launcher.js \./,
+    /exec \.\/runtime\/node \.\/launcher.js "\$@"/,
   );
   for (const [name, data] of files)
-    assert.deepEqual(entries.get(`releases/${build}/${name}`), data, name);
+    assert.deepEqual(entries.get(`versions/${build}/${name}`), data, name);
+  assert.equal(entries.get("versions/current").toString().trim(), build);
+  assert.ok(entries.has("config/config.json"));
   const scratch = await mkdtemp(join(tmpdir(), "target-guard-"));
   try {
     await writeFile(join(scratch, "target"), other);
     await assert.rejects(
-      new ReleaseFiles(scratch).stage(bytes, digest(bytes)),
+      new ReleaseFiles(
+        join(scratch, "versions"),
+        join(scratch, "tmp"),
+        installedTarget(scratch),
+      ).stage(bytes, digest(bytes)),
       /Update target mismatch/,
     );
     assert.deepEqual(

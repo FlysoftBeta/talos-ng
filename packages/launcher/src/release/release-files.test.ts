@@ -10,14 +10,21 @@ import { ReleaseFiles } from "./release-files.ts";
 it("uses pointer files, refuses a second instance, rotates bounded logs", async () => {
   const root = await mkdtemp(join(tmpdir(), "talos-launcher-"));
   try {
-    const unlock = await acquireLock(root);
-    await expect(acquireLock(root)).rejects.toMatchObject({ code: "E_BUSY" });
+    const lock = join(root, "versions", "launcher.lock");
+    const unlock = await acquireLock(lock);
+    await expect(acquireLock(lock)).rejects.toMatchObject({ code: "E_BUSY" });
     await unlock();
-    await atomicFile(join(root, "current"), "A\n");
-    const files = new ReleaseFiles(root);
+    await atomicFile(join(root, "versions", "current"), "A\n");
+    const files = new ReleaseFiles(
+      join(root, "versions"),
+      join(root, "tmp"),
+      "linux-debian-x64",
+    );
     expect(await files.read()).toEqual({ current: "A" });
     await files.save({ current: "B" });
-    expect(await readFile(join(root, "current"), "utf8")).toBe("B\n");
+    expect(await readFile(join(root, "versions", "current"), "utf8")).toBe(
+      "B\n",
+    );
     const log = new RotatingLog(join(root, "log"), 3);
     await log.write("1234");
     await log.write("next");

@@ -403,7 +403,7 @@ it("refuses restore while a server holds its data lock", async () => {
   let unlock: (() => Promise<void>) | undefined;
   try {
     const backup = await f.api.ops.backup.create({});
-    unlock = await acquireLock(f.root);
+    unlock = await acquireLock(join(f.root, "server.lock"));
     await expect(
       restoreBackup(f.kernel.ops.backups.path(backup.id), f.root),
     ).rejects.toMatchObject({ code: "E_BUSY" });

@@ -1,71 +1,112 @@
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, rm, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { it, expect } from "vitest";
-import { parseStartMessage } from "@talos/launcher";
-import { parseConfig, loadSettings, dataLayout } from "./config.ts";
+import { parseStartMessage, readInstallLayout } from "@talos/launcher";
+import { parseConfig, loadSettings, serverConfig } from "./config.ts";
 
-const wiring = {
+const placement = {
   dataDir: join(tmpdir(), "talos-data"),
+  logsDir: join(tmpdir(), "talos-logs"),
+  tmpDir: join(tmpdir(), "talos-tmp"),
   assetsDir: join(tmpdir(), "talos-assets"),
 };
 
 it("settings defaults and HTTPS validation", () => {
-  expect(parseConfig({ ...wiring }).ports).toEqual([8080]);
-  expect(() => parseConfig({ ...wiring, ports: [-1] })).toThrow();
-  expect(() => parseConfig({ ...wiring, securePorts: [443] })).toThrow();
-  expect(() => parseConfig({ ...wiring, ports: [8080, 8080] })).toThrow();
+  expect(parseConfig({ ...placement }).ports).toEqual([8080]);
+  expect(() => parseConfig({ ...placement, ports: [-1] })).toThrow();
+  expect(() => parseConfig({ ...placement, securePorts: [443] })).toThrow();
+  expect(() => parseConfig({ ...placement, ports: [8080, 8080] })).toThrow();
   expect(() =>
     parseConfig({
-      ...wiring,
+      ...placement,
       https: { cert: "a", key: "secret", redirect: true },
     }),
   ).toThrow();
 });
 
-it("loads operator settings relative to the file and rejects malformed or unknown keys", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "talos-config-"));
+it("lays out an install from the config directory, resolving every path against the working directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "talos-config-"));
   try {
-    const file = join(dir, "talos.config.json");
-    await expect(loadSettings(file)).resolves.toMatchObject({ ports: [8080] });
+    const config = join(root, "config");
+    const layout = await readInstallLayout("config", root);
+    // A missing config.json means defaults.
+    expect(layout).toEqual({
+      configDir: config,
+      configFile: join(config, "config.json"),
+      modelFile: join(config, "model.json"),
+      dataDir: join(root, "data"),
+      logsDir: join(root, "logs"),
+      tmpDir: join(root, "tmp"),
+      versionsDir: join(root, "versions"),
+    });
+    await expect(loadSettings(layout, root)).resolves.toMatchObject({
+      ports: [8080],
+    });
+    await mkdir(config);
     await writeFile(
-      file,
+      layout.configFile,
       JSON.stringify({
         ports: [123],
         securePorts: [8443],
-        aiModelsFile: "ai.json",
-        https: { cert: "cert.pem", key: "key.pem", ca: "ca.pem" },
+        dataDir: "./store",
+        tmpDir: "/var/tmp/talos",
+        https: { cert: "certs/cert.pem", key: "certs/key.pem", ca: "ca.pem" },
       }),
     );
-    const settings = await loadSettings(file);
-    expect(settings.ports).toEqual([123]);
-    expect(settings.aiModelsFile).toBe(join(dir, "ai.json"));
-    expect(settings.https).toMatchObject({
-      cert: join(dir, "cert.pem"),
-      key: join(dir, "key.pem"),
-      ca: join(dir, "ca.pem"),
+    const moved = await readInstallLayout(config, root);
+    expect(moved).toMatchObject({
+      dataDir: join(root, "store"),
+      logsDir: join(root, "logs"),
+      tmpDir: "/var/tmp/talos",
+      versionsDir: join(root, "versions"),
     });
-    expect(dataLayout(wiring.dataDir).db).toBe(
-      join(wiring.dataDir, "talos.db"),
-    );
-    // Process wiring is not operator configuration.
-    for (const key of [{ dev: true }, { dataDir: "data" }, { dbReaders: 2 }]) {
-      await writeFile(file, JSON.stringify(key));
-      await expect(loadSettings(file)).rejects.toMatchObject({
-        code: "E_INVALID",
-      });
-    }
-    await writeFile(file, "secret invalid json");
-    await expect(loadSettings(file)).rejects.toThrow("无法读取服务器配置");
+    const settings = await loadSettings(moved, root);
+    expect(settings.ports).toEqual([123]);
+    expect(settings.https).toMatchObject({
+      cert: join(root, "certs/cert.pem"),
+      key: join(root, "certs/key.pem"),
+      ca: join(root, "ca.pem"),
+    });
+    const full = await serverConfig(moved, { assetsDir: placement.assetsDir });
+    expect(full).toMatchObject({
+      dataDir: join(root, "store"),
+      tmpDir: "/var/tmp/talos",
+      modelFile: join(config, "model.json"),
+    });
   } finally {
-    await rm(dir, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it("rejects wiring, removed and unknown keys in config.json by name", async () => {
+  const root = await mkdtemp(join(tmpdir(), "talos-config-"));
+  try {
+    const layout = await readInstallLayout("config", root);
+    await mkdir(layout.configDir);
+    for (const [key, name] of [
+      [{ dev: true }, "dev"],
+      [{ aiModelsFile: "ai.json" }, "aiModelsFile"],
+      [{ dbReaders: 2 }, "dbReaders"],
+    ] as const) {
+      await writeFile(layout.configFile, JSON.stringify(key));
+      await expect(loadSettings(layout)).rejects.toThrow(name);
+    }
+    await writeFile(layout.configFile, JSON.stringify({ dataDir: "" }));
+    await expect(readInstallLayout("config", root)).rejects.toThrow("dataDir");
+    await writeFile(layout.configFile, "secret invalid json");
+    await expect(readInstallLayout("config", root)).rejects.toThrow(
+      "不是有效的 JSON",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
 
 it("validates the parent's start message and the dev-only test seed", () => {
   const config = {
-    ...wiring,
-    settingsFile: join(tmpdir(), "talos.config.json"),
+    configDir: join(tmpdir(), "config"),
+    assetsDir: placement.assetsDir,
   };
   const parsed = parseStartMessage({ type: "start", config });
   expect(parsed).toMatchObject({
@@ -80,14 +121,18 @@ it("validates the parent's start message and the dev-only test seed", () => {
   expect(() =>
     parseStartMessage({
       type: "start",
-      config: { ...config, dataDir: "relative" },
+      config: { ...config, configDir: "relative" },
     }),
   ).toThrow();
+  // Placement is the operator's (config.json), never the parent's.
   expect(() =>
-    parseStartMessage({ type: "start", config: { ...config, extra: 1 } }),
+    parseStartMessage({
+      type: "start",
+      config: { ...config, dataDir: placement.dataDir },
+    }),
   ).toThrow();
-  expect(() => parseConfig({ ...wiring, testSeed: true })).toThrow();
-  expect(parseConfig({ ...wiring, dev: true, testSeed: true }).testSeed).toBe(
-    true,
-  );
+  expect(() => parseConfig({ ...placement, testSeed: true })).toThrow();
+  expect(
+    parseConfig({ ...placement, dev: true, testSeed: true }).testSeed,
+  ).toBe(true);
 });

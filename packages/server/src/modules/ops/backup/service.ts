@@ -14,6 +14,7 @@ import {
   stat,
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { dataLayout } from "../../../kernel/config/config.ts";
 import type { ObjectLedger } from "../../../kernel/objects/objects.ts";
 import { Db } from "../../../kernel/persistence/db.ts";
 import type { BackupRow, OpsRepo } from "../repo.ts";
@@ -181,7 +182,7 @@ export async function restoreBackup(
   dataDir: string,
 ): Promise<void> {
   const root = resolve(dataDir);
-  const unlock = await acquireLock(root, true);
+  const unlock = await acquireLock(dataLayout(root).lock, true);
   let temp: string | undefined;
   let reader: BackupReader | undefined;
   try {
@@ -220,8 +221,8 @@ export async function restoreBackup(
     const testPath = join(temp, "talos.db");
     try {
       await stat(testPath);
-    } catch {
-      throw new AppError("E_INVALID", "备份缺少数据库");
+    } catch (error) {
+      throw AppError.wrap("E_INVALID", "备份缺少数据库", error);
     }
     let db: BackupSnapshot | undefined;
     try {
@@ -244,7 +245,7 @@ export async function restoreBackup(
       }
     } catch (error) {
       if (error instanceof AppError) throw error;
-      throw new AppError("E_INTEGRITY", "备份数据库损坏");
+      throw AppError.wrap("E_INTEGRITY", "备份数据库损坏", error);
     } finally {
       db?.close();
     }

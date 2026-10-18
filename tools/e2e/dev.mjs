@@ -2,6 +2,10 @@ import { fork } from "node:child_process";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  configDirectory,
+  readInstallLayout,
+} from "../../packages/launcher/src/install/layout.ts";
 import { sendStart } from "../../packages/launcher/src/process/server-start.ts";
 import { loadSettings } from "../../packages/server/src/kernel/config/config.ts";
 import { installedYtDlp } from "../package/media-binary.ts";
@@ -16,10 +20,17 @@ const requireClient = createRequire(
 const { createServer } = await import(
   pathToFileURL(requireClient.resolve("vite")).href
 );
-const settingsFile = join(root, "talos.config.json");
-const settings = await loadSettings(settingsFile);
+// A checkout is laid out like an install rooted at the repository:
+// config/ (git-ignored, optional), data/, logs/, tmp/.
+const configDir = configDirectory(process.argv[2], root);
+const settings = await loadSettings(
+  await readInstallLayout(configDir, root),
+  root,
+);
 if (!settings.ports[0])
-  throw new Error("pnpm dev requires a nonzero HTTP port in talos.config.json");
+  throw new Error(
+    "pnpm dev requires a nonzero HTTP port in config/config.json",
+  );
 const host =
   settings.bindHost === "0.0.0.0" || settings.bindHost === "::"
     ? "127.0.0.1"
@@ -52,8 +63,7 @@ const child = fork(join(root, "packages/server/bin/talos-server.ts"), [], {
   stdio: "inherit",
 });
 sendStart(child, {
-  dataDir: join(root, ".data"),
-  settingsFile,
+  configDir,
   assetsDir: join(root, "packages/client/dist"),
   workerFile: join(root, "packages/shell/dist/sw.js"),
   dev: true,

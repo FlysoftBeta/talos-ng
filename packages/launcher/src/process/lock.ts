@@ -1,14 +1,14 @@
 import { mkdir, open, readFile, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname } from "node:path";
 import { AppError } from "@talos/base";
 import { retry } from "../filesystem/retry-busy.ts";
 
+/** Exclusive PID lock file; `reclaimDead` removes one whose owner has exited. */
 export async function acquireLock(
-  root: string,
+  path: string,
   reclaimDead = false,
 ): Promise<() => Promise<void>> {
-  await mkdir(root, { recursive: true });
-  const path = join(root, "launcher.lock");
+  await mkdir(dirname(path), { recursive: true });
   if (reclaimDead) {
     try {
       const pid = Number(await readFile(path, "utf8"));
@@ -32,7 +32,7 @@ export async function acquireLock(
     if ((error as NodeJS.ErrnoException).code === "EEXIST")
       throw new AppError(
         "E_BUSY",
-        "启动器已运行，或存在未清理的锁；确认进程已退出后删除 launcher.lock",
+        `进程已运行，或存在未清理的锁；确认进程已退出后删除 ${path}`,
       );
     throw error;
   }

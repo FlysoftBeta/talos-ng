@@ -1,8 +1,13 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { parseStartMessage, serverWiringSchema } from "@talos/launcher";
+import {
+  configDirectory,
+  parseStartMessage,
+  readInstallLayout,
+  serverWiringSchema,
+} from "@talos/launcher";
 import type { ServerWiring } from "@talos/launcher";
-import { loadSettings, parseConfig, startServer } from "../src/index.ts";
+import { serverConfig, startServer } from "../src/index.ts";
 import type { RunningServer } from "../src/index.ts";
 import { restoreBackup } from "../src/modules/ops/index.ts";
 import type { ModelProvider } from "../src/modules/ai/index.ts";
@@ -42,12 +47,20 @@ function receiveWiring(control: (type: string) => void): Promise<ServerWiring> {
   });
 }
 
-/** The same wiring, built in-process for `node bin/talos-server.ts [--dev]` in a checkout. */
+/** The first argument that is not a flag: the config directory. */
+function configArgument(): string | undefined {
+  return process.argv.slice(2).find((arg) => !arg.startsWith("--"));
+}
+
+/**
+ * The same wiring, built in-process for `node bin/talos-server.ts
+ * [config-dir] [--dev]` in a checkout; like an install, the working
+ * directory is the root.
+ */
 function checkoutWiring(): ServerWiring {
   const root = checkoutRoot();
   return serverWiringSchema.parse({
-    dataDir: join(root, ".data"),
-    settingsFile: join(root, "talos.config.json"),
+    configDir: configDirectory(configArgument()),
     assetsDir: join(root, "packages", "client", "dist"),
     workerFile: join(root, "packages", "shell", "dist", "sw.js"),
     dev: process.argv.includes("--dev"),
@@ -61,11 +74,13 @@ export async function runServer(
   replicaEntry?: string,
 ): Promise<void> {
   if (process.argv[2] === "restore") {
-    // `restore <backup> [dataDir]`: offline, run by the launcher on rollback.
-    const [, , , backup, dataDir] = process.argv;
+    // `restore <backup> [config-dir]` from the install root: offline, run by
+    // the launcher on rollback and by operators.
+    const [, , , backup, configDir] = process.argv;
     if (!backup)
-      throw new Error("用法：talos-server restore <备份> [数据目录]");
-    await restoreBackup(backup, dataDir ?? checkoutWiring().dataDir);
+      throw new Error("用法：talos-server restore <备份> [配置目录]");
+    const layout = await readInstallLayout(configDirectory(configDir));
+    await restoreBackup(resolve(backup), layout.dataDir);
     process.stdout.write("备份已恢复\n");
     return;
   }
@@ -86,17 +101,14 @@ export async function runServer(
         if (process.connected) process.disconnect();
       });
   };
-  const { settingsFile, ...wiring } = process.send
+  const { configDir, ...wiring } = process.send
     ? await receiveWiring((type) => {
         if (type === "update-failed")
           server?.kernel.ops.updates.reject("更新无法应用，请查看启动器日志");
         if (type === "shutdown") stop();
       })
     : checkoutWiring();
-  const config = parseConfig({
-    ...(await loadSettings(settingsFile)),
-    ...wiring,
-  });
+  const config = await serverConfig(await readInstallLayout(configDir), wiring);
   const launcher = wiring.launcher;
   const running = await startServer(config, {
     aiProvider,
@@ -105,7 +117,7 @@ export async function runServer(
       bridge: launcher
         ? {
             pending: launcher.updatePending,
-            root: launcher.root,
+            target: launcher.target,
             confirm: () => {
               process.send?.({ type: "confirmed" });
             },

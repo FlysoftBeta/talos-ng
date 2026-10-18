@@ -1,13 +1,18 @@
-import { readFile } from "node:fs/promises";
-import { dirname, resolve, join } from "node:path";
+import { isAbsolute, resolve, join } from "node:path";
 import { z } from "zod";
 import { AppError } from "@talos/base";
-import { serverWiringObject } from "@talos/launcher";
+import {
+  installPathsObject,
+  readOperatorFile,
+  serverWiringObject,
+} from "@talos/launcher";
+import type { InstallLayout } from "@talos/launcher";
 
 /**
- * Two sources, never mixed: operator settings from `talos.config.json`
- * (below) and process wiring from the parent process (`@talos/launcher`
- * server-start). Nothing is read from environment variables.
+ * Two sources, never mixed: operator settings from the config directory's
+ * `config.json` (below; its path keys belong to the install layout in
+ * `@talos/launcher`) and process wiring from the parent process
+ * (`@talos/launcher` server-start). Nothing is read from environment variables.
  */
 const port = z.number().int().min(0).max(65535);
 const settingsObject = z
@@ -27,10 +32,19 @@ const settingsObject = z
         redirect: z.boolean().default(false),
       })
       .optional(),
-    aiModelsFile: z.string().optional(),
+    ...installPathsObject.shape,
   })
   .strict();
-const wiringObject = serverWiringObject.omit({ settingsFile: true });
+const absolute = z.string().refine(isAbsolute, "必须是绝对路径");
+/** Where this process keeps its files, resolved from the install layout. */
+const placementObject = z.object({
+  dataDir: absolute,
+  logsDir: absolute,
+  tmpDir: absolute,
+  /** AI provider and models (`model.json`); a missing file means no AI. */
+  modelFile: absolute.optional(),
+});
+const wiringObject = serverWiringObject.omit({ configDir: true });
 
 function checkSettings(
   config: z.infer<typeof settingsObject>,
@@ -57,6 +71,8 @@ export type Settings = z.infer<typeof settingsSchema>;
 
 /** Settings plus wiring: everything `startServer` needs. */
 export const configSchema = settingsObject
+  .omit({ dataDir: true, logsDir: true, tmpDir: true })
+  .merge(placementObject)
   .merge(wiringObject)
   .superRefine((config, ctx) => {
     checkSettings(config, ctx);
@@ -68,55 +84,61 @@ export type ServerConfig = z.infer<typeof configSchema>;
 export function parseConfig(value: unknown): ServerConfig {
   const parsed = configSchema.safeParse(value);
   if (!parsed.success)
-    throw new AppError("E_INVALID", "服务器配置无效", {
-      fields: parsed.error.issues.map((i) => i.path.join(".")),
-    });
+    throw AppError.wrap("E_INVALID", "服务器配置无效", parsed.error);
   return parsed.data;
 }
 
 /**
- * Reads the operator settings. A missing file means defaults; relative paths
- * resolve beside the file.
+ * Reads the operator settings of `layout.configFile`. A missing file means
+ * defaults; relative certificate paths resolve against the working directory
+ * like every other install path.
  */
-export async function loadSettings(file: string): Promise<Settings> {
-  let input: unknown = {};
-  try {
-    input = JSON.parse(await readFile(file, "utf8"));
-    if (!input || typeof input !== "object" || Array.isArray(input))
-      throw new Error();
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT")
-      throw new AppError("E_INVALID", "无法读取服务器配置");
-  }
-  const parsed = settingsSchema.safeParse(input);
+export async function loadSettings(
+  layout: Pick<InstallLayout, "configFile">,
+  cwd: string = process.cwd(),
+): Promise<Settings> {
+  const parsed = settingsSchema.safeParse(
+    await readOperatorFile(layout.configFile),
+  );
   if (!parsed.success)
-    throw new AppError("E_INVALID", "服务器配置无效", {
-      fields: parsed.error.issues.map((i) => i.path.join(".")),
-    });
+    throw AppError.wrap("E_INVALID", `${layout.configFile} 无效`, parsed.error);
   const settings = parsed.data;
-  const base = dirname(resolve(file));
   if (settings.https)
     for (const key of ["cert", "key", "ca"] as const) {
       const path = settings.https[key];
-      if (path) settings.https[key] = resolve(base, path);
+      if (path) settings.https[key] = resolve(cwd, path);
     }
-  if (settings.aiModelsFile)
-    settings.aiModelsFile = resolve(base, settings.aiModelsFile);
   return settings;
 }
+
+/** The server's full configuration: settings, the resolved layout and the parent's wiring. */
+export async function serverConfig(
+  layout: InstallLayout,
+  wiring: z.input<typeof wiringObject>,
+): Promise<ServerConfig> {
+  // The layout's resolved directories replace the settings' relative path keys.
+  return parseConfig({
+    ...(await loadSettings(layout)),
+    ...wiring,
+    dataDir: layout.dataDir,
+    logsDir: layout.logsDir,
+    tmpDir: layout.tmpDir,
+    modelFile: layout.modelFile,
+  });
+}
+
+/** The data directory holds business data only: database, object storage, backups. */
 export function dataLayout(dataDir: string): {
   root: string;
   db: string;
-  objects: string;
+  lock: string;
   backups: string;
-  logs: string;
 } {
   const root = resolve(dataDir);
   return {
     root,
     db: join(root, "talos.db"),
-    objects: root,
+    lock: join(root, "server.lock"),
     backups: join(root, "backups"),
-    logs: join(root, "logs"),
   };
 }

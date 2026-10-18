@@ -8,6 +8,7 @@ import {
   mkdtemp,
   mkdir,
   readFile,
+  readdir,
   writeFile,
   chmod,
   rm,
@@ -194,8 +195,10 @@ try {
     ],
     { stdio: "ignore" },
   );
+  // The packaged config/config.json is replaced; certificate paths resolve
+  // against the install root, the launcher's working directory.
   await writeFile(
-    join(installation, "talos.config.json"),
+    join(installation, "config", "config.json"),
     JSON.stringify({
       ports: [http],
       securePorts: [https],
@@ -211,7 +214,7 @@ try {
   );
   launcher = spawn(
     join(installation, "runtime/node"),
-    [join(installation, "launcher.js"), installation],
+    [join(installation, "launcher.js")],
     { cwd: installation, stdio: ["ignore", "pipe", "pipe"] },
   );
   launcher.stdout.on("data", (b) => {
@@ -338,11 +341,17 @@ try {
   await page.getByRole("button", { name: "确认当前版本", exact: true }).click();
   await eventually(
     () =>
-      readFile(join(installation, "launcher-state.json"), "utf8").then(
+      readFile(join(installation, "versions/state.json"), "utf8").then(
         JSON.parse,
       ),
     (s) => s?.current === B && !s.pending,
     "B confirmed",
+  );
+  // A confirmed version deletes the one it replaced.
+  await eventually(
+    () => readdir(join(installation, "versions")),
+    (names) => names && !names.includes(A) && names.includes(B),
+    "A pruned",
   );
   // The same packaged B payload, with a deliberately failing server and fresh manifest hashes.
   const { files, manifest } = verifyRelease(updateB);
@@ -360,7 +369,7 @@ try {
   await connection.api.ops.update.apply({});
   connection.client.stop();
   await eventually(
-    () => readFile(join(installation, "data/logs/launcher.log"), "utf8"),
+    () => readFile(join(installation, "logs/launcher.log"), "utf8"),
     (s) => s?.includes(`回滚 ${C}`),
     "C rolled back",
   );
@@ -392,10 +401,9 @@ try {
   await run(
     join(installation, "runtime/node"),
     [
-      join(installation, "releases", B, "server.js"),
+      join(installation, "versions", B, "server.js"),
       "restore",
-      join(installation, "data/backups", backup.id + ".backup"),
-      join(installation, "data"),
+      join("data/backups", backup.id + ".backup"),
     ],
     { cwd: installation },
   );

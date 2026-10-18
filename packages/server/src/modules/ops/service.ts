@@ -83,7 +83,10 @@ export class OpsService {
     this.updates = new Updates(
       this.repo,
       this.backups,
-      join(options.dataDir ?? ".data", "updates"),
+      join(
+        options.tmpDir ?? join(options.dataDir ?? ".data", ".tmp"),
+        "updates",
+      ),
       deps.build,
       deps.now,
       options.bridge,

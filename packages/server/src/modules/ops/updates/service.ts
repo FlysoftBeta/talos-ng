@@ -4,10 +4,12 @@ import {
   assertTarget,
   atomicFile,
   digest,
-  installedTarget,
+  hostTarget,
   MAX_ARCHIVE,
+  parseTarget,
   verifyRelease,
 } from "@talos/launcher";
+import type { ReleaseManifest } from "@talos/launcher";
 import { mkdir, readFile, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { Backups } from "../backup/service.ts";
@@ -17,8 +19,8 @@ export interface UpdateBridge {
   apply(message: { archive: string; sha256: string; backup: string }): void;
   confirm(): void;
   pending: boolean;
-  /** The launcher's install directory, whose `target` file names the platform; none means the host's. */
-  root?: string;
+  /** The installed package target the launcher reported; none means the host's. */
+  target?: string;
 }
 interface CloudManifest {
   v: 1;
@@ -62,7 +64,7 @@ export const fetchBytes: FetchBytes = async (url, limit) => {
     return Buffer.concat(chunks);
   } catch (error) {
     if (error instanceof AppError) throw error;
-    throw new AppError("E_UNAVAILABLE", "无法连接更新服务器");
+    throw AppError.wrap("E_UNAVAILABLE", "无法连接更新服务器", error);
   } finally {
     clearTimeout(timer);
   }
@@ -90,6 +92,9 @@ export class Updates {
       launcher: !!bridge,
     };
   }
+  private target(): ReleaseManifest["platform"] {
+    return this.bridge?.target ? parseTarget(this.bridge.target) : hostTarget();
+  }
   status(): ResultOf<typeof contract.ops.update.status> {
     return { ...this.state };
   }
@@ -115,7 +120,7 @@ export class Updates {
   }
   private async prepare(bytes: Uint8Array, expected?: string): Promise<void> {
     const { manifest } = verifyRelease(bytes, expected);
-    assertTarget(manifest.platform, installedTarget(this.bridge?.root));
+    assertTarget(manifest.platform, this.target());
     if (manifest.build === this.state.build)
       throw new AppError("E_CONFLICT", "此版本已安装");
     this.state.progress = 0.5;
@@ -163,8 +168,7 @@ export class Updates {
     if (!settings.cloudEnabled)
       throw new AppError("E_UNAVAILABLE", "云端更新未开启");
     const manifestUrl =
-      settings.manifestUrl ||
-      defaultManifestUrl(installedTarget(this.bridge?.root));
+      settings.manifestUrl || defaultManifestUrl(this.target());
     this.state.phase = "checking";
     try {
       this.latest = await this.fetchManifest(manifestUrl);
@@ -186,7 +190,7 @@ export class Updates {
       ) as CloudManifest;
     } catch (error) {
       if (error instanceof AppError) throw error;
-      throw new AppError("E_INVALID", "更新清单无效");
+      throw AppError.wrap("E_INVALID", "更新清单无效", error);
     }
     if (
       !m ||

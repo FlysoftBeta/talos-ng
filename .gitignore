@@ -6,7 +6,6 @@ coverage/
 .env.*
 !.env.example
 .DS_Store
-.data/
 
 # Isolated audit/test temporary data (large backup fixtures).
 .tmp/
@@ -17,5 +16,9 @@ packages/client/screenshots/
 # Finished process documents (task prompts, results, audits) — kept on disk, out of git.
 archive/
 
-# Operator settings of a checkout run (pnpm dev)
-/talos.config.json
+# A checkout run (pnpm dev) is laid out like an install rooted here
+/config/
+/data/
+/logs/
+/tmp/
+/versions/

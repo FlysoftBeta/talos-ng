@@ -164,7 +164,7 @@ describe("update manifest and check", () => {
       },
     });
     await expect(f.updates.check()).rejects.toThrow();
-    expect(f.updates.status().lastError).toBe("更新清单无效");
+    expect(f.updates.status().lastError).toBe("更新清单无效：network down");
     bad = false;
     const status = await f.updates.check();
     expect(status).toMatchObject({

@@ -66,30 +66,62 @@ and diagnostics are development-only.
 
 ## Release layout and launcher
 
+The install directory is the working directory of the launcher and the server, and every
+relative path (including certificate paths) resolves against it. Each top-level directory
+holds one kind of thing, so an operator can tell at a glance what may be moved, cleared or
+must be kept:
+
 ```
-runtime/node[.exe]     bundled Node runtime        launcher.js     bundled supervisor
-current                UTF-8 pointer FILE (never a symlink)
-launcher-state.json    atomic durable commit record (pending deadline, rollback path)
-launcher.lock          exclusive launcher PID lock
-releases/<build>/      immutable server.js, migrate.js, client/, shell/, vendor/, release.json
-migrate.cmd, migrate.sh   run releases/<current>/migrate.js with the bundled runtime
-talos.config.json, target   data/ talos.db, objects/, backups/, updates/, logs/
+runtime/node[.exe], launcher.js, target     bundled runtime, supervisor, package target
+config/       operator configuration only: config.json (settings), model.json (AI provider)
+data/         business data only: talos.db, objects/ (with upload stages/trash), backups/
+logs/         operator logs: launcher.log (rotated), server.jsonl
+tmp/          operator scratch: downloaded/staged updates and the rollback backup,
+              versions being unpacked, server temp files (document conversion spool)
+versions/     <build>/ immutable server.js, migrate.js, client/, shell/, vendor/, release.json;
+              current (UTF-8 pointer FILE, never a symlink), state.json (atomic durable
+              commit record: pending deadline, rollback path), launcher.lock (PID lock)
+migrate.cmd, migrate.sh   run versions/<current>/migrate.js with the bundled runtime
 ```
 
-The launcher forks `server.js` with an IPC channel and sends one `{type:"start", config}` message (data directory,
-`talos.config.json`, client and service-worker paths, `launcher: {root, updatePending}`; `server.md`). The server reads no
-environment variables; yt-dlp and its plugin are found at `vendor/media/` next to `server.js`. Rollback runs
-`server.js restore <backup> <data>` of the previous release.
+Rules (`packages/launcher/src/install/layout.ts`, shared by launcher and server):
+
+- **Everything non-operational is in `data/`**; nothing operational is. Backups are business
+  data. The server's own lock is `data/server.lock` (it guards the database, also against an
+  offline restore).
+- **`config/` is passed as the first argument** (`launcher.js [config-dir]`,
+  `server.js restore <backup> [config-dir]`), default `config` under the working directory.
+  A missing `config.json` means defaults; a missing `model.json` means no AI.
+- **`dataDir`, `logsDir`, `tmpDir` may be moved in `config.json`**; `versions/` and the
+  config directory are fixed. Launcher and server read the same keys with the same resolver,
+  so a moved data directory is also what rollback restores.
+- **`tmp/` may be cleared while stopped.** A version is unpacked under `tmp/versions/` and
+  moved into `versions/` whole (copied beside first when `tmp/` is on another volume).
+- **Old versions are deleted on confirmation**: once the candidate is confirmed nothing can
+  roll back to the previous version, so every other version directory goes; a rolled-back
+  candidate is deleted too (so the same update can be staged again), and a boot without a
+  pending update prunes leftovers.
+
+The launcher forks `server.js` with an IPC channel and sends one `{type:"start", config}` message
+(config directory, client and service-worker paths, `launcher: {target, updatePending}`;
+`server.md`). The server reads no environment variables; yt-dlp and its plugin are found at
+`vendor/media/` next to `server.js`. Rollback runs `server.js restore <backup> <config-dir>` of
+the previous version. Everything the server and the launcher print, errors included, reaches the
+console as well as `logs/launcher.log`; a server that keeps failing to start is restarted with
+backoff (also when the restart itself fails), so the console shows why.
 
 `@talos/launcher` is bundled so installed releases need no npm modules; it depends only on
 `base` and zod compiled in, plus two small public APIs shared with the server: the archive API, so the
 server's preflight validation and the launcher's final validation use identical ZIP rules, and the
-start-message schema (these are the server-to-launcher edges). In-app updates do not replace the
-launcher, so a new release's `server.js` must keep accepting the start message an older launcher sends.
+start-message schema and the install layout (these are the server-to-launcher edges). In-app updates
+do not replace the launcher, so a new release's `server.js` must keep accepting the start message an
+older launcher sends. The `config/`/`versions/` layout was a deliberate break: installs from before it
+are re-extracted from a full package (move the old `data/` across); an older launcher that applies a
+newer update gets a server that rejects its start message, and rolls back.
 
-- **Atomic pointer, not symlinks or directory swaps**: `current` is a pointer file repaired
-  from the durable state record after a crash; no directory is renamed over running files
-  (Windows-safe). Data lives outside every release.
+- **Atomic pointer, not symlinks or directory swaps**: `versions/current` is a pointer file
+  repaired from the durable state record after a crash; no directory is renamed over running
+  files (Windows-safe). Data lives outside every version.
 - **Staging** verifies the ZIP, the target, manifest cardinality, every SHA-256 and size
   before publishing a new release directory; duplicate builds are rejected. ZIP32 only,
   STORED or DEFLATE, 512 MiB archive, 1 GiB expanded, 512 MiB per entry (checked before

@@ -2,23 +2,18 @@ import { ChildLogOutput } from "./logging/child-log-output.ts";
 import { RotatingLog } from "./logging/rotating-log.ts";
 import { fork, spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { resolve, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { dirname } from "node:path";
+import { join } from "node:path";
+import { configDirectory, readInstallLayout } from "./install/layout.ts";
 import { acquireLock } from "./process/lock.ts";
 import { Supervisor } from "./process/supervisor.ts";
 import type { ServerChild } from "./process/supervisor.ts";
 import { sendStart } from "./process/server-start.ts";
 import { ReleaseFiles } from "./release/release-files.ts";
 import { installedTarget, assertTarget, hostTarget } from "./release/target.ts";
-const root = resolve(
-  process.argv[2] ?? dirname(fileURLToPath(import.meta.url)),
-);
-const target = installedTarget(root);
-assertTarget(hostTarget(), target);
-const unlock = await acquireLock(root);
-const files = new ReleaseFiles(root);
-const log = new RotatingLog(join(root, "data", "logs", "launcher.log"));
+// The working directory is the install root (install/layout.ts); the only
+// argument is the config directory.
+const root = process.cwd();
+const configDir = configDirectory(process.argv[2]);
 let consoleOutput: NodeJS.WriteStream | undefined;
 try {
   consoleOutput = process.stdout;
@@ -28,22 +23,41 @@ try {
 } catch {
   /* A detached console may have no stdout. */
 }
+/** Everything the launcher or the server reports reaches the console as well as the log. */
+function echo(data: string | Uint8Array): void {
+  try {
+    consoleOutput?.write(data);
+  } catch {
+    consoleOutput = undefined;
+  }
+}
+const target = installedTarget(root);
+assertTarget(hostTarget(), target);
+const layout = await readInstallLayout(configDir, root);
+const files = new ReleaseFiles(layout.versionsDir, layout.tmpDir, target);
+const unlock = await acquireLock(join(layout.versionsDir, "launcher.lock"));
+const log = new RotatingLog(join(layout.logsDir, "launcher.log"));
+const report = (text: string): Promise<void> => {
+  echo(text);
+  return log.write(text);
+};
 const supervisor = new Supervisor({
   now: Date.now,
   schedule: (fn, ms) => setTimeout(fn, ms),
   cancel: (t) => clearTimeout(t as ReturnType<typeof setTimeout>),
   read: () => files.read(),
   save: (s) => files.save(s),
-  incident: (s) => log.write(`${new Date().toISOString()} ${s}\n`),
+  incident: (s) => report(`${new Date().toISOString()} ${s}\n`),
+  prune: (keep) => files.prune(keep),
   restore: async (backup, previous) => {
     await new Promise<void>((resolve, reject) => {
       const child = spawn(
         process.execPath,
         [
-          join(root, "releases", previous, "server.js"),
+          join(files.version(previous), "server.js"),
           "restore",
           backup,
-          join(root, "data"),
+          configDir,
         ],
         {
           cwd: root,
@@ -57,7 +71,7 @@ const supervisor = new Supervisor({
     });
   },
   start: async (build): Promise<ServerChild> => {
-    const release = join(root, "releases", build);
+    const release = files.version(build);
     const manifest = JSON.parse(
       await readFile(join(release, "release.json"), "utf8"),
     ) as { platform: string };
@@ -69,11 +83,10 @@ const supervisor = new Supervisor({
       silent: true,
     });
     sendStart(child, {
-      dataDir: join(root, "data"),
-      settingsFile: join(root, "talos.config.json"),
+      configDir,
       assetsDir: join(release, "client"),
       workerFile: join(release, "shell", "sw.js"),
-      launcher: { root, updatePending: !!state.pending },
+      launcher: { target, updatePending: !!state.pending },
     });
     const stdout = new ChildLogOutput((line) => {
       void log.write(line);
@@ -82,18 +95,17 @@ const supervisor = new Supervisor({
       void log.write(line);
     });
     child.stdout?.on("data", (data: Buffer) => {
-      try {
-        consoleOutput?.write(data);
-      } catch {
-        consoleOutput = undefined;
-      }
+      echo(data);
       stdout.push(data);
     });
     child.stdout?.on("end", () => stdout.end());
-    child.stderr?.on("data", (data: Buffer) => stderr.push(data));
+    child.stderr?.on("data", (data: Buffer) => {
+      echo(data);
+      stderr.push(data);
+    });
     child.stderr?.on("end", () => stderr.end());
     child.on("error", (error) => {
-      void log.write(String(error));
+      void report(`${String(error)}\n`);
     });
     child.on("message", (message: unknown) => {
       if (!message || typeof message !== "object") return;
@@ -112,7 +124,7 @@ const supervisor = new Supervisor({
           const next = await files.stage(bytes, sha);
           await supervisor.apply(next, backup);
         })().catch((error) => {
-          void log.write(String(error));
+          void report(`${String(error)}\n`);
           if (child.connected)
             child.send({
               type: "update-failed",
@@ -159,7 +171,7 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const)
 try {
   await supervisor.boot();
 } catch (error) {
-  await log.write(String(error));
+  await report(`${String(error)}\n`);
   await supervisor.stop();
   await unlock();
   process.exitCode = 1;

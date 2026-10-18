@@ -59,11 +59,19 @@ export async function createRealServer() {
     },
     async start() {
       if (child) throw new Error("Server already started");
-      // Operator settings come from a real settings file; the rest is wiring.
-      const settingsFile = path.join(directory, "talos.config.json");
+      // Operator settings and placement come from a real config directory;
+      // the rest is wiring. Paths are absolute: the child's cwd is the repo.
+      const configDir = path.join(directory, "config");
+      await mkdir(configDir, { recursive: true });
       await writeFile(
-        settingsFile,
-        JSON.stringify({ ports: [port], bindHost: "127.0.0.1" }),
+        path.join(configDir, "config.json"),
+        JSON.stringify({
+          ports: [port],
+          bindHost: "127.0.0.1",
+          dataDir: data,
+          logsDir: path.join(directory, "logs"),
+          tmpDir: path.join(directory, "tmp"),
+        }),
       );
       child = fork(
         path.join(ROOT, "packages/server/bin/testing/server.ts"),
@@ -75,8 +83,7 @@ export async function createRealServer() {
         },
       );
       sendStart(child, {
-        dataDir: data,
-        settingsFile,
+        configDir,
         assetsDir: assets,
         workerFile: path.join(ROOT, "packages/shell/dist/sw.js"),
         dev: true,

@@ -1,5 +1,5 @@
 import { AppError } from "@talos/base";
-import { mkdtemp, writeFile, access } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -41,8 +41,10 @@ export async function convertObject(
   source: string,
   name: string,
   ctx: JobContext,
+  tmpDir: string = tmpdir(),
 ): Promise<Stage> {
-  const dir = await mkdtemp(path.join(tmpdir(), "talos-library-"));
+  await mkdir(tmpDir, { recursive: true });
+  const dir = await mkdtemp(path.join(tmpDir, "talos-library-"));
   const stage = await store.stage(ctx.id);
   let output: Awaited<ReturnType<ObjectStore["stage"]>> | undefined;
   let prepared = false;

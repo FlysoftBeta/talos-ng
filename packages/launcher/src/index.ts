@@ -34,3 +34,10 @@ export {
   sendStart,
 } from "./process/server-start.ts";
 export type { ServerWiring } from "./process/server-start.ts";
+export {
+  installPathsObject,
+  configDirectory,
+  readOperatorFile,
+  readInstallLayout,
+} from "./install/layout.ts";
+export type { InstallLayout } from "./install/layout.ts";

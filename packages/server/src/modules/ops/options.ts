@@ -13,6 +13,8 @@ import type { OfficeCapture } from "./office/adapter.ts";
 import type { FetchBytes, UpdateBridge } from "./updates/service.ts";
 export interface OpsOptions {
   dataDir?: string;
+  /** Staged updates and the rollback backup; kernels without a layout (tests) use `<dataDir>/.tmp`. */
+  tmpDir?: string;
   bridge?: UpdateBridge;
   hostTools?: HostTools;
   officeCapture?: OfficeCapture;

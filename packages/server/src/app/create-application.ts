@@ -54,6 +54,8 @@ export interface KernelOptions {
   ops?: OpsOptions;
   aiProvider?: ModelProvider;
   build: string;
+  /** Server temp files that must live on disk; default the OS temp directory. */
+  tmpDir?: string;
   serverLogs?: () => string;
   dev?: boolean;
   testSeed?: boolean;
@@ -243,6 +245,7 @@ export function createKernel(options: KernelOptions): Kernel {
     uploads,
     jobs,
     now,
+    ...(options.tmpDir ? { tmpDir: options.tmpDir } : {}),
     onDeleteDocument: (id) => clearSourceJobs(netbooks.removeDocument(id)),
     onDeleteCollection: (id, tx) => {
       authority.revokeResource(`coll:${id}`, tx);
