@@ -155,7 +155,15 @@ Builds every workspace artifact and writes to ignored `dist/release/`: `full/` h
 installs (`.zip` for Windows, `.tar.gz` for Linux, recording native executable modes);
 `update/` holds the per-platform `-update.zip` with `release.json` and a `.zip.json` cloud
 manifest (`{v, build, url, size, sha256}`, relative url). CI uploads the two directories as
-separate artifacts (`talos-update-<target>`, `talos-full-<target>`). On a tag the release job
+separate artifacts (`talos-update-<target>`, `talos-full-<target>`), each uploaded from inside
+its directory so the release job merges them into one flat set of assets.
+
+**Publishing.** A release is cut only by running the `build` workflow manually on `main` with a
+`version` input (`MAJOR.MINOR.PATCH`, e.g. `1.0.2`); there is no tag trigger. After `check` and
+all three packages pass, the release job refuses an existing tag or release, creates `v<version>`
+on the exact packaged commit together with the GitHub release (generated notes, marked latest),
+and uploads every asset plus `SHA256SUMS`. The build id stays the commit's short hash (launcher
+build ids allow no dots, and an installed launcher validates every update's id). The job
 also publishes a fixed-name `talos-<platform>-update.json` whose url is the absolute versioned
 asset, so `releases/latest/download/talos-<platform>-update.json` always names the newest
 update; the server uses it when no manifest URL is configured (cloud updates stay opt-in). `--target <id>` or `TALOS_PACKAGE_TARGET`

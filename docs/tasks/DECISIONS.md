@@ -772,3 +772,10 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   as is, and `AppError.wrap` keeps the original message of wrapped failures. Clean break: older
   installs are re-extracted (moving `data/` across); an older launcher applying a newer update
   rolls back because the new server rejects its start message.
+- **D-139 — Releases are published by manual workflow dispatch (owner preference).** The `build`
+  workflow's `workflow_dispatch` takes a `version`; on `main` it runs `check` and the package
+  matrix, then creates tag `v<version>` on that commit and the GitHub release with all assets.
+  The tag-push trigger is gone: v1.0.1 showed the failure mode (a release created by hand first
+  made the tag run's `gh release create` fail, leaving a release without assets). Release runs
+  need a green `check`; push runs still publish artifacts regardless. Build ids stay commit
+  hashes because installed launchers reject dotted ids.

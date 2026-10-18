@@ -47,4 +47,7 @@ Each artifact carries only its own platform's `better-sqlite3` and `sharp` binar
 `node_modules/` (pinned by `tools/package/native-manifest.json`, see
 [packaging](docs/impl/packaging.md)); `pnpm install` also fetches the win32 sharp package
 so Windows releases can be assembled on Linux.
+To publish release `v1.2.3`, run the `build` workflow on `main` from the Actions tab
+(or `gh workflow run build.yml --ref main -f version=1.2.3`); it checks, packages all three
+targets and creates the tag and GitHub release with every asset.
 See [release assembly and operator instructions](tools/package/README.md).
