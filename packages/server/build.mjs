@@ -3,7 +3,7 @@ import { build } from "esbuild";
 await build({
   entryPoints: ["bin/talos-server.ts"],
   outfile: "dist/server.js",
-  // Written next to the bundle but never packaged; CI publishes it for tools/sourcemap.
+  // Packaged as source-maps/server.js.map so the server can restore its own incident stacks.
   sourcemap: "external",
   bundle: true,
   platform: "node",

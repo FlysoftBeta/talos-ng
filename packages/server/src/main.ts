@@ -1,4 +1,5 @@
 import { AppError } from "@talos/base";
+import { SourceMaps } from "./kernel/diagnostics/source-maps.ts";
 import type { ModelProvider } from "./modules/ai/index.ts";
 import { ResponsesProvider } from "./modules/ai/index.ts";
 import { existsSync, watchFile, unwatchFile } from "node:fs";
@@ -130,6 +131,12 @@ export async function startServer(
           }
         : {}),
       build: assets.manifest.build,
+      sourceMaps: new SourceMaps(
+        existsSync(join(import.meta.dirname, "source-maps"))
+          ? join(import.meta.dirname, "source-maps")
+          : join(config.assetsDir, "source-maps"),
+        assets.manifest.build,
+      ),
       tmpDir: config.tmpDir,
       serverLogs: () => log.snapshot(),
       dev: config.dev,

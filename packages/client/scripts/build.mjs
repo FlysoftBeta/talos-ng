@@ -61,7 +61,7 @@ for (const name of ["polyfills", "main", "gallery", "ai-renderer"]) {
       emptyOutDir: false,
       assetsInlineLimit: 0,
       minify: true,
-      // Hidden: no sourceMappingURL, and the maps are moved out of the served tree below.
+      // Hidden: no sourceMappingURL, and the maps are moved out of the served tree below; the server restores incident stacks with them.
       sourcemap: "hidden",
       lib: {
         entry: path.join(
@@ -91,7 +91,7 @@ for (const name of ["polyfills", "main", "gallery", "ai-renderer"]) {
     .map((asset) => asset.fileName)
     .filter((file) => !file.endsWith(".map"));
 }
-// Maps stay private: dist/source-maps/<build>/ is not part of the app manifest or the package.
+// Maps stay private: dist/source-maps/<build>/ is not part of the app manifest or the served assets.
 const mapDir = path.join(dist, "source-maps", id);
 await mkdir(mapDir, { recursive: true });
 for (const file of await readdir(outDir))

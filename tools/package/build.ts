@@ -128,6 +128,16 @@ for (const platform of packageTargets) {
     "server.js",
     await readFile(join(root, "packages/server/dist/server.js")),
   );
+  // Private maps: the server restores incident stacks with them when it records a report.
+  payload.set(
+    "source-maps/server.js.map",
+    await readFile(join(root, "packages/server/dist/server.js.map")),
+  );
+  await addTree(
+    payload,
+    join(root, "packages/client/dist/source-maps"),
+    "source-maps",
+  );
   // Legacy data importer (docs/impl/ops-migrate.md), run with the bundled runtime.
   payload.set(
     "migrate.js",

@@ -42,6 +42,7 @@ import type { SyncRequest, SyncSnapshot } from "../kernel/sync/sync-hub.ts";
 import { Jobs } from "../kernel/jobs/jobs.ts";
 import { LinkHost } from "../kernel/transport/link-host.ts";
 import { Incidents } from "../kernel/diagnostics/incidents.ts";
+import type { SourceMaps } from "../kernel/diagnostics/source-maps.ts";
 import { Audit } from "../kernel/diagnostics/audit.ts";
 import { ObjectLedger } from "../kernel/objects/objects.ts";
 import { UploadService } from "../kernel/objects/uploads.ts";
@@ -54,6 +55,8 @@ export interface KernelOptions {
   ops?: OpsOptions;
   aiProvider?: ModelProvider;
   build: string;
+  /** Private source maps used to restore incident stacks. */
+  sourceMaps?: SourceMaps;
   /** Server temp files that must live on disk; default the OS temp directory. */
   tmpDir?: string;
   serverLogs?: () => string;
@@ -112,7 +115,13 @@ export function createKernel(options: KernelOptions): Kernel {
   const { db, store } = options;
   const clock = options.clock ?? systemClock;
   const now = () => clock.now();
-  const incidents = new Incidents(db, now, 1000, options.build);
+  const incidents = new Incidents(
+    db,
+    now,
+    1000,
+    options.build,
+    options.sourceMaps,
+  );
   const report = (error: unknown) => {
     incidents.report(error);
   };

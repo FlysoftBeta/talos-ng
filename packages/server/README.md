@@ -17,11 +17,3 @@ Deterministic servers for tests: fork `packages/server/bin/testing/server.ts` wi
 (`sendStart` from `@talos/launcher`) with that `configDir`, `dev: true` and `testSeed: true` (see `tools/e2e/harness/real-server.mjs`); restart with
 the same directory and port to keep sessions and queued-operation replay. Seed accounts are in
 `src/app/dev-seed.ts`. Configuration: `docs/impl/server.md`.
-
-## Restoring incident stacks
-
-Release builds write private source maps (client: `packages/client/dist/source-maps/<build>/`,
-server: `packages/server/dist/server.js.map`); they are never packaged. CI publishes them as the
-`talos-sourcemaps.zip` release asset. Unzip it and run
-`node tools/sourcemap/restore.mjs <diagnostics.json> <unzipped>/source-maps` to map an admin
-diagnostics export back to source lines.

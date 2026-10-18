@@ -58,21 +58,6 @@ jobs:
           path: ~/.cache/talos-ng
           key: talos-runtime-${{ matrix.target }}-${{ hashFiles('tools/package/build.ts', 'tools/package/media-manifest.json') }}
       - run: pnpm package -- --target ${{ matrix.target }}
-      # Same sources for every target: one zip, published with the release for tools/sourcemap.
-      - name: Collect source maps
-        if: matrix.target == 'linux-debian-x64'
-        run: |
-          mkdir -p sm/source-maps
-          cp -r packages/client/dist/source-maps/. sm/source-maps/
-          for d in sm/source-maps/*/; do cp packages/server/dist/server.js.map "$d"; done
-          (cd sm && zip -qr talos-sourcemaps.zip source-maps)
-      - uses: actions/upload-artifact@v7.0.2
-        if: matrix.target == 'linux-debian-x64'
-        with:
-          name: talos-sourcemaps
-          path: sm/talos-sourcemaps.zip
-          if-no-files-found: error
-          compression-level: 0
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: talos-update-${{ matrix.target }}

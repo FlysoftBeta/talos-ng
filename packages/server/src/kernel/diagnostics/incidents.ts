@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { createUlid, diagnosticError, diagnosticText } from "@talos/base";
 import { migrate } from "../persistence/db.ts";
 import type { Db } from "../persistence/db.ts";
+import type { SourceMaps } from "./source-maps.ts";
 export interface Incident {
   id: string;
   fingerprint: string;
@@ -26,6 +27,7 @@ export class Incidents {
     private readonly now: () => number = Date.now,
     private readonly capacity = 1000,
     readonly build = "unknown",
+    private readonly maps?: SourceMaps,
   ) {
     this.id = createUlid({ clock: now });
     migrate(
@@ -69,7 +71,7 @@ export class Incidents {
     },
   ): string {
     // Do not persist arbitrary exception messages, arguments, or credentials.
-    const { name, stack } = diagnosticError(error);
+    const { name, stack: raw } = diagnosticError(error);
     const source = context?.source ?? "server";
     const build = (
       source === "server" ? this.build : (context?.build ?? "unknown")
@@ -80,9 +82,16 @@ export class Incidents {
         : (context?.environment ?? "unknown"),
       512,
     );
+    // The fingerprint keeps the raw frames; the stored stack is the restored one.
+    const stack =
+      this.maps?.restore(
+        raw,
+        source,
+        source === "server" ? this.build : build,
+      ) ?? raw;
     const fingerprint = createHash("sha256")
       .update(
-        `${source}\n${build}\n${environment}\n${name}\n${context?.method ?? ""}\n${stack}`,
+        `${source}\n${build}\n${environment}\n${name}\n${context?.method ?? ""}\n${raw}`,
       )
       .digest("hex");
     return this.db.tx(() => {
