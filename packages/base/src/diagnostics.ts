@@ -2,16 +2,19 @@ import { AppError } from "./errors.ts";
 
 /** Diagnostics never carry exception messages, arguments, URL queries or credentials. */
 export function diagnosticText(value: string, limit = 2048): string {
-  return value
-    .slice(0, limit)
-    .replace(/(https?:\/\/[^\s?#]+)[?#][^\s)]*/gi, "$1?[redacted]")
-    .replace(
-      /\b(pin|token|password|secret|authorization|cookie)\b\s*[:=]?\s*["']?[^\s,;"')]+/gi,
-      "$1=[redacted]",
-    )
-    .replace(/\b\d{6}\b/g, "[redacted]")
-    .replace(/\b[a-zA-Z0-9_-]{32,}\b/g, "[redacted]")
-    .slice(0, limit);
+  return (
+    value
+      .slice(0, limit)
+      .replace(/(https?:\/\/[^\s?#]+)[?#][^\s)]*/gi, "$1?[redacted]")
+      .replace(
+        /\b(pin|token|password|secret|authorization|cookie)\b\s*[:=]?\s*["']?[^\s,;"')]+/gi,
+        "$1=[redacted]",
+      )
+      // Keeps the :line:col of stack frames, which a minified bundle makes six digits long.
+      .replace(/(?<!:)\b\d{6}\b/g, "[redacted]")
+      .replace(/\b[a-zA-Z0-9_-]{32,}\b/g, "[redacted]")
+      .slice(0, limit)
+  );
 }
 export function diagnosticError(error: unknown): {
   name: string;

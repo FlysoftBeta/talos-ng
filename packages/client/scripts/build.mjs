@@ -3,7 +3,14 @@ import { verifyRelease } from "./release.mjs";
 import { zodTreeShake } from "./zod-treeshake.mjs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -54,6 +61,8 @@ for (const name of ["polyfills", "main", "gallery", "ai-renderer"]) {
       emptyOutDir: false,
       assetsInlineLimit: 0,
       minify: true,
+      // Hidden: no sourceMappingURL, and the maps are moved out of the served tree below.
+      sourcemap: "hidden",
       lib: {
         entry: path.join(
           root,
@@ -78,10 +87,16 @@ for (const name of ["polyfills", "main", "gallery", "ai-renderer"]) {
       },
     },
   });
-  outputs[name] = (Array.isArray(result) ? result[0] : result).output.map(
-    (asset) => asset.fileName,
-  );
+  outputs[name] = (Array.isArray(result) ? result[0] : result).output
+    .map((asset) => asset.fileName)
+    .filter((file) => !file.endsWith(".map"));
 }
+// Maps stay private: dist/source-maps/<build>/ is not part of the app manifest or the package.
+const mapDir = path.join(dist, "source-maps", id);
+await mkdir(mapDir, { recursive: true });
+for (const file of await readdir(outDir))
+  if (file.endsWith(".map"))
+    await rename(path.join(outDir, file), path.join(mapDir, file));
 function html(name) {
   const styles = outputs[name]
     .filter((file) => file.endsWith(".css"))
