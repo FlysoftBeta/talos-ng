@@ -15,6 +15,7 @@
     "dev:server": "node --import tsx bin/talos-server.ts --dev"
   },
   "dependencies": {
+    "@jridgewell/trace-mapping": "0.3.31",
     "@talos/base": "workspace:*",
     "@talos/contract": "workspace:*",
     "@talos/docpack": "workspace:*",
