@@ -1,3 +1,5 @@
+import { AppError } from "./errors.ts";
+
 /** Diagnostics never carry exception messages, arguments, URL queries or credentials. */
 export function diagnosticText(value: string, limit = 2048): string {
   return value
@@ -15,12 +17,14 @@ export function diagnosticError(error: unknown): {
   name: string;
   stack: string;
 } {
+  // The closed error-code enum is safe to keep; the message is not.
+  const code = error instanceof AppError ? `[${error.code}]` : "";
   const name =
     error instanceof Error &&
     /^(Error|TypeError|RangeError|ReferenceError|SyntaxError|URIError|EvalError|AppError)$/.test(
       error.name,
     )
-      ? error.name
+      ? `${error.name}${code}`
       : "Error";
   const stack =
     error instanceof Error
