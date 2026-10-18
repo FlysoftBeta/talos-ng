@@ -7,8 +7,8 @@ administrators. Root-only actions have confirmation dialogs that name the action
 ## Installing and running
 
 A release is a folder with a bundled Node.js runtime, the server bundle, client assets, the
-PDF renderer and music helper for the platform, a start script (`start.cmd` or `start.sh`),
-autostart helpers (a Windows scheduled-start script, a systemd unit) and licences. Three release targets
+PDF renderer and music helper for the platform, licences and a single start script for its
+platform (`start.cmd` on Windows, `start.sh` on Linux); autostart is left to the operator. Three release targets
 exist: Windows x64, Debian-family Linux x64 and Red Hat-family Linux x64; an installation
 keeps its target through updates and rollbacks, and an update for another target is refused.
 The server can listen on several ports and an HTTPS listener.

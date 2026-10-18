@@ -26,9 +26,10 @@ export function hostTarget(): PackageTarget {
     ? "linux-redhat-x64"
     : "linux-debian-x64";
 }
+/** The install's immutable target, `runtime/target` under the install root. */
 export function installedTarget(root?: string): PackageTarget {
   return root
-    ? parseTarget(readFileSync(join(root, "target"), "utf8").trim())
+    ? parseTarget(readFileSync(join(root, "runtime", "target"), "utf8").trim())
     : hostTarget();
 }
 export function assertTarget(actual: string, expected: PackageTarget): void {

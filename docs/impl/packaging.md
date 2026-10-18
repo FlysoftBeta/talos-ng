@@ -13,7 +13,7 @@ A release is a folder with no host prerequisites. The official Node runtime is b
 against that version's `SHASUMS256.txt`, cached and re-verified on every assembly;
 `TALOS_RUNTIME_CACHE` moves the cache).
 
-**Legacy importer.** `tools/migrate/build.mjs` bundles the importer (`@talos/migrate`) with esbuild into `migrate.js`, the same way as `server.js` (same external native addons, resolved from the release's `node_modules`). It ships inside every release, so it is part of the `-update.zip` too. `migrate.cmd`/`migrate.sh` at the install root read `current` and run it with `runtime/node`; usage in `docs/impl/ops-migrate.md`.
+**Legacy importer.** `tools/migrate/build.mjs` bundles the importer (`@talos/migrate`) with esbuild into `migrate.js`, the same way as `server.js` (same external native addons, resolved from the release's `node_modules`). It ships inside every release, so it is part of the `-update.zip` too. Operators run `versions/<current>/migrate.js` with `runtime/node` (no wrapper script); usage in `docs/impl/ops-migrate.md`.
 
 **Native addons.** `better-sqlite3` and `sharp` are N-API (independent of the Node ABI) and
 cannot be bundled, so `server.js` imports them externally from the release's own
@@ -72,7 +72,8 @@ holds one kind of thing, so an operator can tell at a glance what may be moved, 
 must be kept:
 
 ```
-runtime/node[.exe], launcher.js, target     bundled runtime, supervisor, package target
+start.cmd | start.sh   the only root file besides README.md: this platform's start script
+runtime/      node[.exe], launcher.js (supervisor), target (package target), package.json
 config/       operator configuration only: config.json (settings), model.json (AI provider)
 data/         business data only: talos.db, objects/ (with upload stages/trash), backups/
 logs/         operator logs: launcher.log (rotated), server.jsonl
@@ -81,7 +82,6 @@ tmp/          operator scratch: downloaded/staged updates and the rollback backu
 versions/     <build>/ immutable server.js, migrate.js, client/, shell/, vendor/, release.json;
               current (UTF-8 pointer FILE, never a symlink), state.json (atomic durable
               commit record: pending deadline, rollback path), launcher.lock (PID lock)
-migrate.cmd, migrate.sh   run versions/<current>/migrate.js with the bundled runtime
 ```
 
 Rules (`packages/launcher/src/install/layout.ts`, shared by launcher and server):
@@ -89,7 +89,7 @@ Rules (`packages/launcher/src/install/layout.ts`, shared by launcher and server)
 - **Everything non-operational is in `data/`**; nothing operational is. Backups are business
   data. The server's own lock is `data/server.lock` (it guards the database, also against an
   offline restore).
-- **`config/` is passed as the first argument** (`launcher.js [config-dir]`,
+- **`config/` is passed as the first argument** (`runtime/launcher.js [config-dir]`,
   `server.js restore <backup> [config-dir]`), default `config` under the working directory.
   A missing `config.json` means defaults; a missing `model.json` means no AI.
 - **`dataDir`, `logsDir`, `tmpDir` may be moved in `config.json`**; `versions/` and the
@@ -140,7 +140,7 @@ newer update gets a server that rejects its start message, and rolls back.
   locks inside `data/` reclaim dead PIDs. Logs keep the current and previous 2 MiB files and
   tolerate broken stdout.
 - **Targets**: ids `win32-x64`, `linux-debian-x64`, `linux-redhat-x64`. The installation's
-  `target` file is immutable across updates and rollback; the server and the launcher both
+  `runtime/target` file is immutable across updates and rollback; the server and the launcher both
   reject an update for a different target, naming expected and received ids, before backup
   or extraction. Each release carries only its own renderer under `vendor/pdfrender/<flavour>`
   with a `target` selection file and no fallback. Linux builds link system libraries
@@ -170,8 +170,9 @@ update; the server uses it when no manifest URL is configured (cloud updates sta
 builds one. Only Node scripts do downloads and archive work (no tar/unzip/curl). yt-dlp is a
 pinned version with per-platform SHA-256 verified at package time (`tools/package/media-binary.ts`, whose
 cache `pnpm dev` shares). Installs include default
-config, `start.cmd`/`start.sh`, `migrate.cmd`/`migrate.sh`, opt-in Task Scheduler / systemd user-service helpers, licences
-and the operator README. `TALOS_BUILD_ID` selects the build id (safe ASCII).
+config, the platform's one start script (`start.cmd` on Windows, `start.sh` on Linux), licences
+and the operator README; no service or autostart helpers ship (operators register the start
+script themselves). `TALOS_BUILD_ID` selects the build id (safe ASCII).
 
 Verification: `tools/package/e2e.mjs` (part of `pnpm e2e`) packages A and B for the host
 target and B for the other Linux target, checks renderer isolation, manifests, start scripts

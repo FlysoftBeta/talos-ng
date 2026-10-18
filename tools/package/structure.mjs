@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { readFile, mkdtemp, writeFile, rm, readdir } from "node:fs/promises";
+import {
+  readFile,
+  mkdtemp,
+  mkdir,
+  writeFile,
+  rm,
+  readdir,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { gunzipSync } from "node:zlib";
@@ -64,18 +71,26 @@ export async function checkLinuxStructure(root, build, target, other) {
       );
     p += 512 + Math.ceil(size / 512) * 512;
   }
-  assert.equal(entries.get("target").toString().trim(), target);
+  assert.equal(entries.get("runtime/target").toString().trim(), target);
+  assert.ok(entries.has("runtime/launcher.js"));
   assert.match(
     entries.get("start.sh").toString(),
-    /exec \.\/runtime\/node \.\/launcher.js "\$@"/,
+    /exec \.\/runtime\/node \.\/runtime\/launcher.js "\$@"/,
   );
+  // The install root holds only the start script and the operator README.
+  for (const name of entries.keys())
+    assert.ok(
+      name.includes("/") || name === "start.sh" || name === "README.md",
+      `Unexpected install-root file ${name}`,
+    );
   for (const [name, data] of files)
     assert.deepEqual(entries.get(`versions/${build}/${name}`), data, name);
   assert.equal(entries.get("versions/current").toString().trim(), build);
   assert.ok(entries.has("config/config.json"));
   const scratch = await mkdtemp(join(tmpdir(), "target-guard-"));
   try {
-    await writeFile(join(scratch, "target"), other);
+    await mkdir(join(scratch, "runtime"));
+    await writeFile(join(scratch, "runtime", "target"), other);
     await assert.rejects(
       new ReleaseFiles(
         join(scratch, "versions"),
@@ -86,7 +101,7 @@ export async function checkLinuxStructure(root, build, target, other) {
     );
     assert.deepEqual(
       await readdir(scratch),
-      ["target"],
+      ["runtime"],
       "reject before writing a release",
     );
   } finally {

@@ -1,5 +1,5 @@
 # @talos/launcher
 
 Bundled, dependency-free process supervisor with atomic release switching and rollback
-(`pnpm --filter @talos/launcher build`, then `node launcher.js [config-dir]` from the install root). Design and installed
+(`pnpm --filter @talos/launcher build`, then `runtime/node runtime/launcher.js [config-dir]` from the install root). Design and installed
 layout: `docs/impl/packaging.md`.

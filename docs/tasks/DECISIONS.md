@@ -781,3 +781,12 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   made the tag run's `gh release create` fail, leaving a release without assets). Release runs
   need a green `check`; push runs still publish artifacts regardless. Build ids stay commit
   hashes because installed launchers reject dotted ids.
+- **D-140 — Install root holds only the platform's start script (owner instruction).** A full
+  install's root carries one start script for its own platform (`start.cmd` on Windows,
+  `start.sh` on Linux) next to `README.md` and the per-kind directories. Everything the launcher
+  runs from moved to `runtime/` (`node[.exe]`, `launcher.js`, `target`, `package.json`). The
+  Task Scheduler script, the systemd unit and the `migrate.cmd`/`migrate.sh` wrappers are gone:
+  operators register autostart themselves and run `versions/<current>/migrate.js` with
+  `runtime/node`. In-app updates are unaffected (update ZIPs never carried these files, and the
+  server does not read the target file); an existing install keeps its old root files until it
+  is re-extracted from a full package.

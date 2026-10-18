@@ -56,8 +56,18 @@ try {
     await readFile(join(root, "dist/release/full", archive)),
   );
   const names = [...entries.keys()];
-  for (const required of ["runtime/node.exe", "start.cmd"])
+  for (const required of [
+    "runtime/node.exe",
+    "runtime/launcher.js",
+    "runtime/target",
+    "start.cmd",
+  ])
     assert.ok(entries.has(required), `Missing ${required}`);
+  for (const name of names)
+    assert.ok(
+      name.includes("/") || name === "start.cmd" || name === "README.md",
+      `Unexpected install-root file ${name}`,
+    );
   assert.ok(names.some((name) => name.endsWith("/pdfrender.exe")));
   assert.ok(names.some((name) => /pdfrender\/windows\/.*\.dll$/i.test(name)));
   assert.ok(names.some((name) => name.endsWith("/yt-dlp.exe")));
@@ -136,7 +146,7 @@ await import(pathToFileURL(launcher).href);
     [
       join(directory, "runtime/node.exe"),
       win(wrapper),
-      win(join(directory, "launcher.js")),
+      win(join(directory, "runtime/launcher.js")),
     ],
     { cwd: directory, env, stdio: ["ignore", logHandle.fd, logHandle.fd] },
   );

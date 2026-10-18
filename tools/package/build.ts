@@ -128,7 +128,7 @@ for (const platform of packageTargets) {
     "server.js",
     await readFile(join(root, "packages/server/dist/server.js")),
   );
-  // Legacy data importer (docs/impl/ops-migrate.md), run by migrate.cmd / migrate.sh.
+  // Legacy data importer (docs/impl/ops-migrate.md), run with the bundled runtime.
   payload.set(
     "migrate.js",
     await readFile(join(root, "tools/migrate/dist/migrate.js")),
@@ -215,13 +215,15 @@ for (const platform of packageTargets) {
   const install = await runtime(platform);
   for (const [name, data] of payload)
     install.set(`versions/${build}/${name}`, data);
-  install.set("target", Buffer.from(platform + "\n"));
-  install.set("versions/current", Buffer.from(build + "\n"));
-  install.set("package.json", Buffer.from('{"type":"module"}'));
+  // The install root holds only this target's start script and the
+  // per-kind directories; everything the launcher runs from is in runtime/.
+  install.set("runtime/target", Buffer.from(platform + "\n"));
+  install.set("runtime/package.json", Buffer.from('{"type":"module"}'));
   install.set(
-    "launcher.js",
+    "runtime/launcher.js",
     await readFile(join(root, "packages/launcher/dist/launcher.js")),
   );
+  install.set("versions/current", Buffer.from(build + "\n"));
   // Operator files live in config/ (install/layout.ts); data/, logs/ and tmp/
   // are created on first start and may be moved in config.json.
   install.set(
@@ -241,53 +243,32 @@ for (const platform of packageTargets) {
       ),
     ),
   );
-  install.set(
-    "start.cmd",
-    Buffer.from(
-      '@echo off\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\node.exe" "%~dp0launcher.js" %*\r\n',
-    ),
-  );
-  install.set(
-    "start.sh",
-    Buffer.from(
-      '#!/bin/sh\ncd -- "$(dirname -- "$0")" || exit 1\nexec ./runtime/node ./launcher.js "$@"\n',
-    ),
-  );
-  install.set(
-    "migrate.cmd",
-    Buffer.from(
-      '@echo off\r\nsetlocal\r\nset /p TALOS_CURRENT=<"%~dp0versions\\current"\r\n"%~dp0runtime\\node.exe" --disable-warning=ExperimentalWarning "%~dp0versions\\%TALOS_CURRENT%\\migrate.js" %*\r\nexit /b %ERRORLEVEL%\r\n',
-    ),
-  );
-  install.set(
-    "migrate.sh",
-    Buffer.from(
-      '#!/bin/sh\ndir=$(cd -- "$(dirname -- "$0")" && pwd) || exit 1\nread -r current < "$dir/versions/current" || exit 1\nexec "$dir/runtime/node" --disable-warning=ExperimentalWarning "$dir/versions/$current/migrate.js" "$@"\n',
-    ),
-  );
-  install.set(
-    "install-task.ps1",
-    Buffer.from(String.raw`$ErrorActionPreference = "Stop"
-$action = New-ScheduledTaskAction -Execute "$PSScriptRoot\runtime\node.exe" -Argument ('"{0}"' -f "$PSScriptRoot\launcher.js") -WorkingDirectory $PSScriptRoot
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-Register-ScheduledTask -TaskName "TalosII" -Action $action -Trigger $trigger -Description "Talos II 当前用户登录时启动（Office 捕获需要交互桌面）"
-`),
-  );
-  install.set(
-    "talos.service",
-    Buffer.from(
-      "[Unit]\nDescription=Talos II\nAfter=network.target\n[Service]\nWorkingDirectory=%h/talos\nExecStart=%h/talos/runtime/node %h/talos/launcher.js\nRestart=on-failure\nKillMode=mixed\nTimeoutStopSec=20\n[Install]\nWantedBy=default.target\n",
-    ),
-  );
+  if (platform === "win32-x64")
+    install.set(
+      "start.cmd",
+      Buffer.from(
+        '@echo off\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\node.exe" "%~dp0runtime\\launcher.js" %*\r\n',
+      ),
+    );
+  else
+    install.set(
+      "start.sh",
+      Buffer.from(
+        '#!/bin/sh\ncd -- "$(dirname -- "$0")" || exit 1\nexec ./runtime/node ./runtime/launcher.js "$@"\n',
+      ),
+    );
+  const start = platform === "win32-x64" ? "start.cmd" : "sh start.sh",
+    node = platform === "win32-x64" ? "runtime\\node.exe" : "runtime/node";
   install.set(
     "README.md",
     Buffer.from(
       `# Talos II ${build} (${platform})
 
-解压到独立目录。Windows 双击 start.cmd；Linux 执行 sh start.sh。启动器以安装目录为工作目录，唯一参数是配置目录（默认 config）。可选自启动：Windows 在当前用户 PowerShell 中运行 install-task.ps1 注册登录任务；Linux 将 talos.service 中路径改为实际安装目录，作为用户 systemd 单元安装并启用。Office 捕获要求服务器运行在打开 Office 的同一交互用户会话。浏览器访问 http://localhost:8080，根管理员 PIN 首次启动时输出，请妥善保存。
+解压到独立目录，运行 ${start}${platform === "win32-x64" ? "（双击即可）" : ""}。启动器以安装目录为工作目录，唯一参数是配置目录（默认 config）。Office 捕获要求服务器运行在打开 Office 的同一交互用户会话。浏览器访问 http://localhost:8080，根管理员 PIN 首次启动时输出，请妥善保存。
 
 ## 目录
 
+- runtime/：内置 Node 运行时、启动器 launcher.js 与安装目标 target，勿修改。
 - config/：运维配置。config.json 配置端口、bindHost、HTTPS（cert/key/ca/domain/redirect）及 dataDir/logsDir/tmpDir；model.json 是 AI 服务商与模型（不存在则不启用 AI）。
 - data/：业务数据（数据库、对象存储、备份），切勿删除。
 - logs/：启动器日志 launcher.log（自动轮转）与服务器日志。
@@ -302,11 +283,11 @@ Register-ScheduledTask -TaskName "TalosII" -Action $action -Trigger $trigger -De
 
 ## 迁移旧版数据
 
-停止旧版应用，复制其 data.db 和 storage/objects；在安装目录依次运行 migrate inspect → run → verify（Windows 用 migrate.cmd，Linux 用 sh migrate.sh），例如 \`sh migrate.sh run --source 旧/data.db --blobs 旧/storage/objects --target 空目录\`，inspect 和 verify 参数相同（run 之外可加 --resume）。--target 必须是空目录；verify 无误后停止启动器，用该目录替换数据目录 data/（先移走旧的），再启动。详见 docs/impl/ops-migrate.md。
+停止旧版应用，复制其 data.db 和 storage/objects；在安装目录用内置运行时依次运行 migrate.js 的 inspect → run → verify（<current> 为 versions/current 中的版本号），例如 \`${node} --disable-warning=ExperimentalWarning versions/<current>/migrate.js run --source 旧/data.db --blobs 旧/storage/objects --target 空目录\`，inspect 和 verify 参数相同（run 之外可加 --resume）。--target 必须是空目录；verify 无误后停止启动器，用该目录替换数据目录 data/（先移走旧的），再启动。详见 docs/impl/ops-migrate.md。
 
 ## 恢复
 
-停止启动器，在安装目录使用 runtime/node（Windows runtime\\node.exe）运行 versions/<current>/server.js restore <备份.talos-backup 或 .backup 目录> [配置目录]。备份以流式保存 SQLite 与所有账本对象，无配置大小上限；下载为 .talos-backup 流式归档，恢复也可直接使用 data/backups/<编号>.backup 目录；data/backups/ 默认保留五份，可调整。
+停止启动器，在安装目录使用 ${node} 运行 versions/<current>/server.js restore <备份.talos-backup 或 .backup 目录> [配置目录]。备份以流式保存 SQLite 与所有账本对象，无配置大小上限；下载为 .talos-backup 流式归档，恢复也可直接使用 data/backups/<编号>.backup 目录；data/backups/ 默认保留五份，可调整。
 
 Linux 系统库及 pdfrender GPL 许可见 versions/${build}/vendor/pdfrender/README.md 和各平台目录。两个 Linux 构建需要匹配发行版 ABI、字体、glibc、libstdc++、Cairo、fontconfig、FreeType、JPEG、OpenJPEG、WebP、zstd、zlib、PNG 等。Windows 已包含非系统 DLL，无需安装 Node。
 

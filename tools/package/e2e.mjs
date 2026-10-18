@@ -214,7 +214,7 @@ try {
   );
   launcher = spawn(
     join(installation, "runtime/node"),
-    [join(installation, "launcher.js")],
+    [join(installation, "runtime/launcher.js")],
     { cwd: installation, stdio: ["ignore", "pipe", "pipe"] },
   );
   launcher.stdout.on("data", (b) => {

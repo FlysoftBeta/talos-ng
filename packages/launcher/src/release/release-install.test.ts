@@ -143,7 +143,8 @@ describe("release files and lock on disk", () => {
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), "talos-release-"));
     versions = join(root, "versions");
-    await writeFile(join(root, "target"), "linux-debian-x64\n");
+    await mkdir(join(root, "runtime"));
+    await writeFile(join(root, "runtime", "target"), "linux-debian-x64\n");
   });
   afterEach(() => rm(root, { recursive: true, force: true }));
 
