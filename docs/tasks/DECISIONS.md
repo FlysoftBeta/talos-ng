@@ -771,7 +771,9 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   backoff instead of leaving the launcher idle. Configuration errors pass the zod error through
   as is, and `AppError.wrap` keeps the original message of wrapped failures. Clean break: older
   installs are re-extracted (moving `data/` across); an older launcher applying a newer update
-  rolls back because the new server rejects its start message.
+  rolls back because the new server rejects its start message. Checkout runs use the committed
+  `dev-config/`, which places everything they write under the git-ignored `dev-data/`; a checkout
+  has no `versions/`.
 - **D-139 — Releases are published by manual workflow dispatch (owner preference).** The `build`
   workflow's `workflow_dispatch` takes a `version`; on `main` it runs `check` and the package
   matrix, then creates tag `v<version>` on that commit and the GitHub release with all assets.

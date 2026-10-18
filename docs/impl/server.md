@@ -146,14 +146,15 @@ Placement is never wiring: where data, logs and tmp live is the operator's `conf
 
 Parents: the launcher forks each version's `server.js`; `pnpm dev` and the real-server e2e
 harness fork `packages/server/bin/*.ts` with the tsx loader (the harness writes a config
-directory with absolute paths). A checkout is laid out like an install rooted at the repository
-(`config/`, `data/`, `logs/`, `tmp/`, all git-ignored); running `bin/talos-server.ts [config-dir]
-[--dev]` directly builds the same wiring in-process. The offline
+directory with absolute paths). A checkout runs from the repository root with the committed `dev-config/` (its `config.json`
+places data, logs and tmp under the git-ignored `dev-data/`; a local `model.json` there is
+ignored too); a checkout has no `versions/`. Running `bin/talos-server.ts [config-dir] [--dev]`
+directly builds the same wiring in-process. The offline
 `server.js restore <backup> [config-dir]` restores into the configured data directory.
 
 `pnpm dev` ensures the pinned yt-dlp is in the packaging cache (`~/.cache/talos-ng/media`, SHA-256 checked, downloaded on first run), runs the real dev server plus Vite behind a same-origin proxy for `/link`, `/dl`,
 `/app`, `/sw.js` and `/ca.crt`; no service worker is registered in development. Dev mode always
-provisions the first root user with PIN `123456`, so deleting `data/` gives a known fresh start. `pnpm build`
+provisions the first root user with PIN `123456`, so deleting `dev-data/` gives a known fresh start. `pnpm build`
 then `pnpm start` serves the production client from the real server.
 
 ## Test seed

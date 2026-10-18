@@ -20,9 +20,9 @@ const requireClient = createRequire(
 const { createServer } = await import(
   pathToFileURL(requireClient.resolve("vite")).href
 );
-// A checkout is laid out like an install rooted at the repository:
-// config/ (git-ignored, optional), data/, logs/, tmp/.
-const configDir = configDirectory(process.argv[2], root);
+// A checkout runs from the committed dev-config/, which places data, logs
+// and tmp under the git-ignored dev-data/.
+const configDir = configDirectory(process.argv[2] ?? "dev-config", root);
 const settings = await loadSettings(
   await readInstallLayout(configDir, root),
   root,

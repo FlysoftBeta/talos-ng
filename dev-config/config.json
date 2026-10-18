@@ -1,0 +1,7 @@
+{
+  "ports": [8080],
+  "bindHost": "0.0.0.0",
+  "dataDir": "dev-data/data",
+  "logsDir": "dev-data/logs",
+  "tmpDir": "dev-data/tmp"
+}

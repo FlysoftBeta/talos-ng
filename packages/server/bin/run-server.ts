@@ -54,13 +54,13 @@ function configArgument(): string | undefined {
 
 /**
  * The same wiring, built in-process for `node bin/talos-server.ts
- * [config-dir] [--dev]` in a checkout; like an install, the working
- * directory is the root.
+ * [config-dir] [--dev]` in a checkout: the committed `dev-config/` by
+ * default, which places everything written under `dev-data/`.
  */
 function checkoutWiring(): ServerWiring {
   const root = checkoutRoot();
   return serverWiringSchema.parse({
-    configDir: configDirectory(configArgument()),
+    configDir: configDirectory(configArgument() ?? join(root, "dev-config")),
     assetsDir: join(root, "packages", "client", "dist"),
     workerFile: join(root, "packages", "shell", "dist", "sw.js"),
     dev: process.argv.includes("--dev"),

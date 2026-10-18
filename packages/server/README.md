@@ -5,7 +5,7 @@ The Talos II application server (kernel and domain modules). Design: `docs/impl/
 `docs/impl/structure.md`.
 
 ```text
-pnpm dev:server    # server only, from TypeScript (checkout laid out like an install: config/, data/, logs/, tmp/)
+pnpm dev:server    # server only, from TypeScript (config dev-config/, writes to dev-data/)
 pnpm dev           # real dev server plus Vite
 pnpm build && pnpm start   # production client served by the real server
 pnpm --filter @talos/server build   # dist/server.js for the pinned Node runtime
