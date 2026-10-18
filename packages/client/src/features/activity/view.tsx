@@ -153,6 +153,9 @@ export function ActivityView({
       <ActivityRow key={item.id} item={item} busy={busy} onInvoke={onInvoke} />
     ));
   const syncing = scopes.some((scope) => scope.state !== "ready");
+  // A refused build always offers the update here, also after a failed download.
+  const updateNeeded =
+    !!status.versionRejected && status.update.state !== "applying";
   return (
     <>
       <Sheet open={open} title="同步与任务" onClose={onClose}>
@@ -275,12 +278,28 @@ export function ActivityView({
             <span className="selectable">{status.build}</span>
           </GroupRow>
           <GroupRow
-            label={updateLabels[status.update.state]}
-            hint={status.update.message}
+            label={
+              updateNeeded ? "需要更新" : updateLabels[status.update.state]
+            }
+            hint={
+              updateNeeded
+                ? status.update.state === "failed" && status.update.message
+                  ? `服务器已更新，此版本无法再连接服务器。${status.update.message}`
+                  : "服务器已更新，此版本无法再连接服务器。"
+                : status.update.message
+            }
             stacked={status.update.state === "installing"}
           >
             {status.update.state === "installing" ? (
               <Progress label="更新进度" value={status.update.progress || 0} />
+            ) : updateNeeded ? (
+              <Button
+                variant="primary"
+                size="small"
+                onClick={status.versionRejected!.updateNow}
+              >
+                现在更新
+              </Button>
             ) : status.update.apply ? (
               <Button
                 variant="primary"

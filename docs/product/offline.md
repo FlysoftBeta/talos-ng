@@ -67,4 +67,5 @@ retention still in its window are never evicted. The activity centre shows stora
 
 The server refuses a client whose version differs from its own. The client then downloads
 the server's version in the background and asks: 现在更新 or 保持离线. Staying offline keeps
-saved content usable until the user updates (新版本已就绪 in the activity centre); see ops.md.
+saved content usable until the user updates: the activity centre keeps offering 现在更新
+(also after a failed download, which it retries) and the status entry shows a dot; see ops.md.

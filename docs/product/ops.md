@@ -25,7 +25,8 @@ The server can listen on several ports and an HTTPS listener.
 - Client update: a released server accepts only clients of its own build. A client of any
   other build is refused when it connects, downloads the server's build in the background and
   asks 需要更新: 现在更新 applies it at once (downloading first if needed); 保持离线 keeps the
-  app working offline on saved content, with 新版本已就绪 still offered in the activity centre.
+  app working offline on saved content, with 需要更新 · 现在更新 still offered in the activity centre
+  (retrying a failed download) and a dot on the status entry.
   An update is never applied without that choice, nor by reload alone. The previous client version is kept until the new one has booted; two
   unconfirmed starts roll back. Navigating never applies an unconfirmed update.
 - A first install needs HTTPS or localhost.

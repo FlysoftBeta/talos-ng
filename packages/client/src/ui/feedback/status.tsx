@@ -9,6 +9,8 @@ export interface StatusPillModel {
   pending: number;
   failed: number;
   update: { state: "none" | "installing" | "ready" | "applying" | "failed" };
+  /** Present when the server refused this build, so the entry asks for an update. */
+  versionRejected?: unknown;
 }
 const labels = {
   connected: "已连接",
@@ -45,7 +47,7 @@ export function StatusPill({
     model.connection === "syncing"
       ? `同步中 ${model.syncingCount || 0}`
       : labels[model.connection];
-  const updateReady = model.update.state === "ready";
+  const updateReady = model.update.state === "ready" || !!model.versionRejected;
   return (
     <button
       type="button"

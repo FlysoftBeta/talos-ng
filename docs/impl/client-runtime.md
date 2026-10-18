@@ -120,7 +120,8 @@ updates in the background; explicit offline skips network work. When the server 
 build at the handshake (`E_VERSION`; the link stays in `versionMismatch`, offline), the shell
 installer stages the server's manifest in the background and the 需要更新 dialog offers
 现在更新 (finish staging, record the activation request, reload) or 保持离线 (dismiss; the
-activity centre keeps offering the update and locking applies a ready one). Boot confirmation happens only after React commits a stable gate. Installer
+activity centre keeps a 现在更新 row bound to `versionRejected.updateNow`, which also retries a failed
+staging, the status entry shows a dot, and locking applies a ready one). Boot confirmation happens only after React commits a stable gate. Installer
 failures leave the existing app usable. Shell internals: `packaging.md`.
 
 ## Design system (`ui/`)
