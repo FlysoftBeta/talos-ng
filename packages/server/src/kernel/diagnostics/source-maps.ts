@@ -10,7 +10,7 @@ const SAFE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
  * Restores minified frames while an incident is recorded, so stored stacks are already readable.
  * Layout: `<dir>/<build>/<bundle>.js.map` for client bundles, `<dir>/server.js.map` for this server.
  */
-export class TraceMaps {
+export class SourceMaps {
   private readonly cache = new Map<string, TraceMap | null>();
   constructor(
     private readonly directory: string,
