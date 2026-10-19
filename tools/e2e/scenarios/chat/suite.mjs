@@ -445,6 +445,66 @@ export async function chatSuite(browser, server) {
       .first()
       .waitFor();
     await capture(a, root, "stickers");
+    // Every cell state (skeleton, image, missing) fits its fixed row, nothing makes the panel
+    // overflow, and a pack switch opens the next pack at its top.
+    const stickerPanel = a.getByRole("dialog", { name: "发送贴纸" });
+    const stickerList = stickerPanel.getByRole("list", { name: "贴纸" });
+    await stickerList.evaluate((list) => {
+      list.scrollTop = list.scrollHeight;
+    });
+    const stickerLayout = () =>
+      stickerPanel.evaluate((panel) => {
+        const fits = (node) =>
+          node.scrollWidth <= node.clientWidth + 1 &&
+          node.scrollHeight <= node.clientHeight + 1;
+        const list = panel.querySelector('[role="list"]');
+        return {
+          panel: fits(panel),
+          list: list.scrollWidth <= list.clientWidth + 1,
+          rows: Array.from(
+            list.querySelectorAll("[data-virtual-id]"),
+            (row) => row.getBoundingClientRect().height,
+          ).every((height) => height === 96),
+          cells: Array.from(
+            panel.querySelectorAll('[data-testid="chat.sticker"]'),
+          ).every(fits),
+        };
+      });
+    assert.deepEqual(await stickerLayout(), {
+      panel: true,
+      list: true,
+      rows: true,
+      cells: true,
+    });
+    await a
+      .getByRole("tablist", { name: "贴纸包" })
+      .getByRole("tab")
+      .nth(2)
+      .click();
+    await a
+      .locator(`${T("chat.sticker")} img`)
+      .first()
+      .waitFor();
+    assert.equal(
+      await stickerList.evaluate((list) => list.scrollTop),
+      0,
+      "a new pack opens at its top",
+    );
+    assert.deepEqual(await stickerLayout(), {
+      panel: true,
+      list: true,
+      rows: true,
+      cells: true,
+    });
+    await a
+      .getByRole("tablist", { name: "贴纸包" })
+      .getByRole("tab")
+      .nth(1)
+      .click();
+    await a
+      .locator(`${T("chat.sticker")} img`)
+      .first()
+      .waitFor();
     await a
       .getByRole("button", { name: /发送贴纸：/ })
       .first()

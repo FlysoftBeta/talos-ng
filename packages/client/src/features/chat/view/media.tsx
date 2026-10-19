@@ -24,6 +24,8 @@ export interface CachedImageProps {
   conversation?: string;
   label: string;
   onOpen?: () => void;
+  /** A fixed small cell (a sticker): failures show an icon only, with no nested retry button. */
+  compact?: boolean;
 }
 export interface StickerPickerProps {
   open: boolean;
@@ -46,8 +48,19 @@ export function CachedImageView({
   retry,
   label,
   onOpen,
+  compact,
 }: ReturnType<CachedImageController["presentation"]> &
   CachedImageProps): ReactElement {
+  if (error && compact)
+    return (
+      <span
+        className={`chat-image-missing is-compact${can.ok ? "" : " is-offline"}`}
+        role="img"
+        aria-label={can.ok ? "图片暂时无法读取" : "图片离线未缓存"}
+      >
+        <Icon name={can.ok ? "image" : "offline"} size={20} />
+      </span>
+    );
   if (error)
     return (
       <span className={`chat-image-missing${can.ok ? "" : " is-offline"}`}>
@@ -118,12 +131,6 @@ export function StickerPickerView({
   ReturnType<StickerController["presentation"]> & {
     CachedImage: ImageSlot;
   }): ReactElement {
-  const scroller = useArrayScroller(rows, {
-    key: stickerRowKey,
-    equals: (a, b) => stickerRowKey(a) === stickerRowKey(b),
-    size: () => 96,
-    estimate: 96,
-  });
   const surface = useRef<HTMLDivElement>(null);
   useFloating({
     open,
@@ -165,33 +172,61 @@ export function StickerPickerView({
             hint="从贴纸包中选择一张贴纸"
           />
         ) : (
-          <VirtualScroller
-            scroller={scroller}
-            label="贴纸"
-            style={{ height: 240 }}
-            renderItem={(row) => (
-              <div className="chat-sticker-row">
-                {row.map((sticker) => (
-                  <button
-                    className="chat-sticker"
-                    data-testid="chat.sticker"
-                    key={sticker.id}
-                    aria-label={`发送贴纸：${sticker.name}`}
-                    onClick={() => {
-                      void onPick(sticker);
-                    }}
-                  >
-                    <CachedImage file={sticker.file} label={sticker.name} />
-                  </button>
-                ))}
-              </div>
-            )}
+          // One scroller per pack: a pack opens at its top and never inherits another pack's
+          // anchor or offset.
+          <StickerGrid
+            key={pack}
+            rows={rows}
+            onPick={onPick}
+            CachedImage={CachedImage}
           />
         )}
       </div>
     </Portal>
   );
 }
+function StickerGrid({
+  rows,
+  onPick,
+  CachedImage,
+}: {
+  rows: readonly ChatSticker[][];
+  onPick(sticker: ChatSticker): Promise<void>;
+  CachedImage: ImageSlot;
+}): ReactElement {
+  const scroller = useArrayScroller(rows, {
+    key: stickerRowKey,
+    equals: (a, b) => stickerRowKey(a) === stickerRowKey(b),
+    size: () => STICKER_ROW,
+    estimate: STICKER_ROW,
+  });
+  return (
+    <VirtualScroller
+      scroller={scroller}
+      label="贴纸"
+      className="chat-sticker-grid"
+      renderItem={(row) => (
+        <div className="chat-sticker-row">
+          {row.map((sticker) => (
+            <button
+              className="chat-sticker"
+              data-testid="chat.sticker"
+              key={sticker.id}
+              aria-label={`发送贴纸：${sticker.name}`}
+              onClick={() => {
+                void onPick(sticker);
+              }}
+            >
+              <CachedImage file={sticker.file} label={sticker.name} compact />
+            </button>
+          ))}
+        </div>
+      )}
+    />
+  );
+}
+/** Row height in px; chat.css gives every cell state (skeleton, image, missing) this box. */
+const STICKER_ROW = 96;
 const stickerRowKey = (row: readonly ChatSticker[]): string =>
   row.map((sticker) => sticker.id).join(" ");
 export function ImageField({
