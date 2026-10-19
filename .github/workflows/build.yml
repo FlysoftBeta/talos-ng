@@ -71,9 +71,6 @@ jobs:
       matrix:
         engine: [current, legacy, chrome80]
     env:
-      TMPDIR: ${{ runner.temp }}
-      TALOS_LARGE_TEST_TMPDIR: ${{ runner.temp }}
-      TALOS_PACKAGE_E2E_TMPDIR: ${{ runner.temp }}
       # The packaged-host check packages releases itself: only before a release.
       TALOS_E2E_PACKAGED: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
     steps:
@@ -103,6 +100,10 @@ jobs:
           key: talos-runtime-e2e-${{ hashFiles('tools/package/build.ts', 'tools/package/media-manifest.json') }}
       - run: pnpm --filter @talos/shell build && pnpm --filter @talos/client build
       - run: node --import tsx tools/e2e/run.mjs ${{ matrix.engine == 'legacy' && '--legacy' || matrix.engine == 'chrome80' && '--chrome80' || '' }}
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TALOS_LARGE_TEST_TMPDIR: ${{ runner.temp }}
+          TALOS_PACKAGE_E2E_TMPDIR: ${{ runner.temp }}
       - if: failure()
         uses: actions/upload-artifact@v7.0.2
         with:
