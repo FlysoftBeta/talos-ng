@@ -120,9 +120,10 @@ export async function pdfSuite({ adapter, legacy }, server) {
     );
 
     // Storage: retention downloads the whole small pack into IndexedDB.
+    // The document reopens where it was left: its second page.
     await click(cdp, "阅读");
     await click(cdp, "中文 PDF");
-    await cdp.wait(pageReady(0));
+    await cdp.wait(pageReady(1));
     await click(cdp, "离线保留");
     await click(cdp, "7 天");
     await click(cdp, "保存策略");
@@ -148,9 +149,9 @@ export async function pdfSuite({ adapter, legacy }, server) {
       await unlock(cdp);
       await click(cdp, "阅读");
       await click(cdp, "中文 PDF");
-      await cdp.wait(pageReady(0));
+      await cdp.wait(pageReady(1));
       assert.ok(
-        (await cdp.evaluate(pageText(0))).includes("你好世界1"),
+        (await cdp.evaluate(pageText(1))).includes("你好世界2"),
         "stored PDF page rendered after an offline restart",
       );
     }
