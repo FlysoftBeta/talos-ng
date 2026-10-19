@@ -266,7 +266,7 @@ ops_office, ops_downloads`.
   script: `Shell.Application` window list `Quit()` for windows whose host is
   `explorer.exe` (folder windows; the shell process with desktop and taskbar stays), then
   `Stop-Process -Force` over a fixed name list (Office, WPS, Seewo `EasiNote`,
-  `swenlauncher`, `EasiCamera`); a missing process is not an error. Shutdown runs
+  `swenlauncher`, visualiser `EasiCamera`, `sweclauncher`); a missing process is not an error. Shutdown runs
   `shutdown /a` (its failure when nothing is pending is ignored, since Windows refuses a
   second schedule) and then `shutdown /s /t <seconds>`, minimum 10 s; the adapter keeps the
   deadline it set in memory for the status. `host.run` answers the new status.

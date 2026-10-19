@@ -35,7 +35,7 @@ export const runCommand: RunCommand = (file, args) =>
 export const CLASSROOM_PROCESSES = [
   ...["WINWORD", "POWERPNT", "EXCEL"],
   ...["wps", "wpp", "et", "wpspdf", "pdf", "wpsoffice"],
-  ...["EasiNote", "swenlauncher", "EasiCamera"],
+  ...["EasiNote", "swenlauncher", "EasiCamera", "sweclauncher"],
 ] as const;
 /**
  * Windows PowerShell 2.0+. Closes folder windows through the shell's window
