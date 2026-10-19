@@ -1,31 +1,20 @@
-import { useEffect, useState } from "react";
 import type { ReactElement } from "react";
-import {
-  useClientSnapshot,
-  useRuntime,
-} from "../../../platform/react/context.tsx";
-import { watchDeviceCache } from "../model/actions.ts";
 import {
   artistLine,
   cacheLabel,
   formatTime,
   volumePercent,
 } from "../model/format.ts";
+import { useDeviceCache } from "./device-cache.ts";
 import { NowPlayingView } from "../view/now-playing.tsx";
 import { useMediaPlayer } from "./player.tsx";
 import { useMedia } from "./use-media.ts";
 
 export function NowPlaying(): ReactElement | null {
   const player = useMediaPlayer(),
-    runtime = useRuntime(),
-    data = useMedia(),
-    downloads = useClientSnapshot().status.transfers;
-  const [cached, setCached] = useState(false);
+    data = useMedia();
   const track = player.current;
-  useEffect(
-    () => watchDeviceCache(runtime, track?.audio?.id, setCached),
-    [runtime, track?.audio?.id, downloads],
-  );
+  const cached = useDeviceCache(track?.audio?.id);
   if (!track) return null;
   const total = player.duration || track.durationMs / 1000;
   return (

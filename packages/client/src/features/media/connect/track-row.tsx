@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ReactElement } from "react";
 import { contract } from "@talos/contract";
 import type { MediaPlaylist, MediaTrack } from "@talos/contract";
@@ -15,12 +15,12 @@ import {
   saveRetention,
   removeFromPlaylist,
   setFavorite,
-  watchDeviceCache,
   writablePlaylists,
 } from "../model/actions.ts";
 import { artistLine, formatTime } from "../model/format.ts";
 import { TrackRetentionView } from "../view/track-retention.tsx";
 import { TrackRowView } from "../view/track-row.tsx";
+import { useDeviceCache } from "./device-cache.ts";
 import { useMediaPlayer } from "./player.tsx";
 import { useMedia } from "./use-media.ts";
 
@@ -49,13 +49,8 @@ export function TrackRow({
     [retentionOpen, setRetentionOpen] = useState(false),
     [days, setDays] = useState("auto"),
     [addingTo, setAddingTo] = useState(false),
-    [target, setTarget] = useState(""),
-    [deviceCached, setDeviceCached] = useState(false);
-  const downloads = snapshot.status.transfers;
-  useEffect(
-    () => watchDeviceCache(runtime, track.audio?.id, setDeviceCached),
-    [runtime, track.audio?.id, downloads],
-  );
+    [target, setTarget] = useState("");
+  const deviceCached = useDeviceCache(track.audio?.id);
   const execute = (promise: Promise<unknown>) =>
     void promise.catch((e) => setError(errorMessage(e)));
   const writable = writablePlaylists(data, track.id, snapshot.user?.id);

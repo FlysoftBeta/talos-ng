@@ -267,15 +267,19 @@ export function playlistSharing(
   };
 }
 
-/** Whether the audio bytes are held on this device; reports to `listener` until cancelled. */
+/**
+ * Whether the audio bytes are held on this device; reports to `listener` until cancelled.
+ * A re-check reports only its answer, so callers keep the previous one meanwhile instead
+ * of flashing "not cached" on every transfer update.
+ */
 export function watchDeviceCache(
   port: Pick<RuntimeFilePort, "hasFile">,
   audio: string | undefined,
   listener: (cached: boolean) => void,
 ): () => void {
   let live = true;
-  listener(false);
-  if (audio)
+  if (!audio) listener(false);
+  else
     void port.hasFile(audio).then((value) => {
       if (live) listener(value);
     });

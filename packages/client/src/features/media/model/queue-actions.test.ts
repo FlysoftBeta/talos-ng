@@ -196,16 +196,21 @@ describe("media actions", () => {
       listBody({ tab: "favorite", busy: false, error: "", tracks: 1 }),
     ).toBe("tracks");
   });
-  it("device cache watcher reports false first and drops a late answer after cancel", async () => {
+  it("device cache watcher reports only the answer and drops a late one after cancel", async () => {
     let resolve!: (v: boolean) => void;
     const hasFile = vi.fn(() => new Promise<boolean>((r) => (resolve = r)));
     const seen: boolean[] = [];
-    const stop = watchDeviceCache({ hasFile }, "rid", (c) => seen.push(c));
-    expect(seen).toEqual([false]);
-    stop();
+    watchDeviceCache({ hasFile }, "rid", (c) => seen.push(c));
+    expect(seen).toEqual([]);
     resolve(true);
     await Promise.resolve();
-    expect(seen).toEqual([false]);
+    expect(seen).toEqual([true]);
+    const stop = watchDeviceCache({ hasFile }, "rid", (c) => seen.push(c));
+    expect(seen).toEqual([true]);
+    stop();
+    resolve(false);
+    await Promise.resolve();
+    expect(seen).toEqual([true]);
     const none: boolean[] = [];
     watchDeviceCache({ hasFile }, undefined, (c) => none.push(c));
     expect(none).toEqual([false]);
