@@ -204,9 +204,10 @@ export async function identityScenarios(cdp, server, name) {
   await cdp.wait(app);
   cases++;
   await click(cdp, "设置");
-  server.fixtureDevice({ banned: true });
   await click(cdp, "编辑资料");
   await fill(cdp, "显示名称", "封禁设备不能保存");
+  // Ban only once the form is open: the live connection may lock the app at once.
+  server.fixtureDevice({ banned: true });
   await click(cdp, "保存个人资料");
   await cdp.wait(
     "!!document.querySelector('[data-testid=\"auth.device-locked\"]')",

@@ -83,7 +83,7 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
       r.onerror=function(){reject(r.error)};
       r.onsuccess=function(){
         var db=r.result,tx=db.transaction(['scopes'],'readwrite');
-        tx.objectStore('scopes').put({scope:${JSON.stringify(personal)},cursor:${finalPage.cursor}});
+        tx.objectStore('scopes').put({scope:${JSON.stringify(personal)},coverage:{revs:[[0,${finalPage.cursor}]],types:{}}});
         tx.oncomplete=function(){db.close();resolve(true)};
         tx.onabort=function(){db.close();reject(tx.error)};
       }
@@ -94,7 +94,8 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
     await cdp.wait(app);
     await cdp.wait("document.body.textContent.indexOf('已连接')>=0");
     assert.ok(
-      (await readDb(cdp, "scopes", personal)).cursor >= finalPage.cursor,
+      (await readDb(cdp, "scopes", personal)).coverage.revs[0][1] >=
+        finalPage.cursor,
     );
     const admitted = await readDb(cdp, "kv", `scopes:${wire.user.id}`);
     assert.ok(

@@ -251,6 +251,12 @@ export async function chatSuite(browser, server) {
       .textContent();
     await send(b, "私信已经建立");
     await capture(b, demo, "direct");
+    // The peer's live session receives the new conversation without a reload.
+    await open(a, dmName);
+    await a.locator(T("chat.post.text"), { hasText: "私信已经建立" }).waitFor();
+    await send(a, "私信回复");
+    await b.locator(T("chat.post.text"), { hasText: "私信回复" }).waitFor();
+    await open(a, "社区验收群");
     cases++;
     console.log(`Chat E2E completed ${cases}`);
     await send(a, "横幅预览".repeat(20));
@@ -325,6 +331,8 @@ export async function chatSuite(browser, server) {
       .getByRole("textbox", { name: "消息", exact: true })
       .fill("重新打开后仍在的草稿");
     await b.getByRole("textbox", { name: "消息", exact: true }).blur();
+    // The list preview projects the durable outbox: the draft is stored before the reload.
+    await b.getByText("草稿：重新打开后仍在的草稿", { exact: true }).waitFor();
     await b.reload();
     await unlock(b, "654321");
     await open(b, "社区验收群");
