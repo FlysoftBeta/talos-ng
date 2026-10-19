@@ -184,7 +184,13 @@ describe("real socket gateway", () => {
           "/%zz",
         ])
           expect((await get(port, path)).status).toBe(400);
-        expect((await get(port, "/other")).status).toBe(404);
+        for (const path of ["/business", "/a/b?x=1"]) {
+          const stray = await get(port, path);
+          expect(stray.status).toBe(301);
+          expect(stray.headers.location).toBe("/");
+        }
+        for (const path of ["/app/test/missing.js", "/app/other", "/dl/"])
+          expect((await get(port, path)).status).toBe(404);
         expect((await get(port, "/", {}, "POST")).status).toBe(405);
         expect((await get(port, "/link")).status).toBe(426);
       }

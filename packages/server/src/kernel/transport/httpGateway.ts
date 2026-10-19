@@ -209,7 +209,18 @@ export async function startHttpGateway(
       );
       return;
     }
-    res.writeHead(404);
+    // Endpoint namespaces keep a real 404; any other path is a stray link into the app.
+    if (
+      path.startsWith("/app/") ||
+      path.startsWith("/dl/") ||
+      path === "/ca.crt" ||
+      path === "/sw.js"
+    ) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    res.writeHead(301, { Location: "/" });
     res.end();
   };
   const gateway: HttpGateway = {

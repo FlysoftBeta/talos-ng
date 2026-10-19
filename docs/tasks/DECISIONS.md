@@ -797,3 +797,8 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   reloads; 保持离线 keeps working offline on saved content, with the update still in the activity
   centre. Dev servers (`pnpm dev`, the e2e harness) accept every build. Tools that connect over
   the link must announce the running server's build.
+- **D-142 — Non-endpoint paths redirect permanently to `/` (owner instruction).** The HTTP
+  gateway answers any GET/HEAD path outside its endpoints with 301 `Location: /` instead of
+  404, so stray or old links (e.g. `/business`) land on the app. Misses inside the endpoint
+  namespaces (`/app/…`, `/dl/…`, `/ca.crt`, `/sw.js`) stay 404 so scripts, the service worker
+  and downloads never receive the shell document in place of their bytes.

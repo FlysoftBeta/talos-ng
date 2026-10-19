@@ -142,7 +142,9 @@ once.
 `node:http`/`node:https` with a hand-written dispatcher, no framework. Routes: `GET /` (shell
 document), `GET /sw.js`, `GET /app/manifest.json`, `GET /app/<build>/<asset>`, `GET /link`
 (WebSocket upgrade), `GET /dl/<ticket>`, `GET /ca.crt`, and an optional HTTP-to-HTTPS
-redirect (308, `no-store`, so browsers never cache the redirect). Nothing else.
+redirect (308, `no-store`, so browsers never cache the redirect). Unknown paths under `/app/`
+or `/dl/` and an unconfigured `/ca.crt` answer 404; every other path (a stray link such as
+`/business`) is a 301 to `/`, since the client has no path routes.
 
 - `/`, `/sw.js` and `/app/manifest.json` are `no-store`; versioned assets are immutable.
   `/sw.js` is served with a JavaScript MIME type and `Service-Worker-Allowed: /`.
