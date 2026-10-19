@@ -52,11 +52,15 @@ export class Drafts {
           this.membershipChanged(user, conv.id, true, ctx),
         );
   }
-  touch(conversation: string, ctx: WriteContext): void {
+  /** Refreshes every member's last post; the author has read their own post. */
+  touch(conversation: string, ctx: WriteContext, author?: string): void {
     for (const member of this.context.options.community.members(conversation)) {
+      const state = this.state(member.user, conversation);
       this.context.repo.putState(
         member.user,
-        this.state(member.user, conversation),
+        member.user === author
+          ? { ...state, readSeq: maxMerge(state.readSeq, state.lastSeq) }
+          : state,
         ctx.rev,
       );
       ctx.changed(`me:${member.user}`, "chatState", conversation);

@@ -246,6 +246,8 @@ export const chatModule = defineClientModule({
         (current) => ({
           ...current,
           lastSeq: post.seq,
+          // The author has read their own post, even if it is still pending.
+          readSeq: Math.max(current.readSeq, post.seq),
           lastPost: post,
           updated: post.created,
         }),
@@ -335,10 +337,19 @@ export function sortedConversations(
       a.name.localeCompare(b.name, "zh-CN"),
   );
 }
-export function unreadCount(values: readonly ChatState[]): number {
-  return values.reduce(
-    (sum, state) =>
-      sum + (state.mute.v ? 0 : Math.max(0, state.lastSeq - state.readSeq)),
-    0,
-  );
+/** Unread posts of conversations the user can see and has not muted. */
+export function unreadStates(
+  rows: readonly StoredRow[],
+): { state: ChatState; count: number }[] {
+  const visible = new Set(conversations(rows).map((group) => group.id));
+  return states(rows)
+    .filter((state) => visible.has(state.conversation) && !state.mute.v)
+    .map((state) => ({
+      state,
+      count: Math.max(0, state.lastSeq - state.readSeq),
+    }))
+    .filter((item) => item.count > 0);
+}
+export function unreadCount(rows: readonly StoredRow[]): number {
+  return unreadStates(rows).reduce((sum, item) => sum + item.count, 0);
 }

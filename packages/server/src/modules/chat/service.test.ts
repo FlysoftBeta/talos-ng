@@ -327,6 +327,18 @@ describe("chat state convergence", () => {
       s.chat.read(u, { conversation: s.conversation, seq: 11 }),
     ).toThrow();
   });
+  it("counts a post as read for its author only", () => {
+    const s = setup(),
+      [alice, bob] = s.users;
+    for (const u of s.users) s.chat.ensureStates(u.id);
+    send(s);
+    const post = send(s);
+    expect(s.chat.state(alice!.id, s.conversation).readSeq).toBe(post.seq);
+    expect(s.chat.state(bob!.id, s.conversation)).toMatchObject({
+      readSeq: 0,
+      lastSeq: post.seq,
+    });
+  });
   it("converges LWW regardless of reordered pin/mute/draft writes", () => {
     const s = setup(),
       u = s.users[0]!.id;

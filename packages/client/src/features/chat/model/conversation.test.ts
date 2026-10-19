@@ -59,6 +59,7 @@ function fixture() {
       status: { connection: "syncing" },
     }),
     command: vi.fn(async () => ({})),
+    holes: () => [],
   };
   const input = {
     group: { id: "group", name: "Group" } as CommunityConversation,
@@ -139,5 +140,32 @@ it("replaces a pending projection when its failed outbox notification arrives be
     id,
     failed: id,
     preview: "retry",
+  });
+});
+
+it("marks a post taller than the viewport read once its end is on screen", () => {
+  const { model, runtime } = fixture(),
+    row = (seq: number, top: number, bottom: number) =>
+      ({ item: { post: post(seq) }, top, bottom }) as never;
+  vi.spyOn(model.history, "getSnapshot").mockReturnValue({
+    status: "ready",
+    atEnd: true,
+  } as never);
+  vi.spyOn(model.history, "geometry").mockReturnValue({
+    viewport: 100,
+  } as never);
+  const visible = vi
+    .spyOn(model.history, "visible")
+    .mockReturnValue([row(3, -50, 20), row(4, 20, 300)]);
+  model.visibleRead();
+  expect(runtime.command).toHaveBeenLastCalledWith(expect.anything(), {
+    conversation: "group",
+    seq: 3,
+  });
+  visible.mockReturnValue([row(4, -200, 80)]);
+  model.visibleRead();
+  expect(runtime.command).toHaveBeenLastCalledWith(expect.anything(), {
+    conversation: "group",
+    seq: 4,
   });
 });

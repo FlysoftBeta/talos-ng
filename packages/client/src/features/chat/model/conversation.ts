@@ -304,7 +304,10 @@ export class ConversationController extends StateStore<ConversationState> {
       if (generation === this.generation) this.patch({ loading: false });
     }
   };
-  /** Marks fully visible posts read and tracks whether the reader left the end. */
+  /**
+   * Marks posts whose end is on screen read (a post taller than the viewport is never
+   * fully visible) and tracks whether the reader left the end.
+   */
   visibleRead = (): void => {
     const view = this.history.getSnapshot();
     if (view.status !== "ready") return;
@@ -320,7 +323,7 @@ export class ConversationController extends StateStore<ConversationState> {
         (row) =>
           !row.item.post.failed &&
           !row.item.post.pending &&
-          row.top >= -1 &&
+          row.bottom >= -1 &&
           row.bottom <= height + 1,
       )
       .map((row) => row.item.post.seq);

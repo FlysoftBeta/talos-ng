@@ -4,7 +4,12 @@ import {
   useClientSnapshot,
   useRepository,
 } from "../../../platform/react/context.tsx";
-import { states, conversations, unreadCount } from "../model/module.ts";
+import {
+  states,
+  conversations,
+  unreadCount,
+  unreadStates,
+} from "../model/module.ts";
 import { ChatListController, chatContent } from "../model/chat-list.ts";
 import { BackgroundController } from "../model/background.ts";
 import {
@@ -30,15 +35,13 @@ export function useUnreadSignals(): Record<
   { count: number; newestAt: number }
 > {
   const out: Record<string, { count: number; newestAt: number }> = {};
-  for (const state of states(useChatRows())) {
-    const count = state.lastSeq - state.readSeq;
-    if (count > 0 && state.lastPost && !state.mute.v)
+  for (const { state, count } of unreadStates(useChatRows()))
+    if (state.lastPost)
       out[state.conversation] = { count, newestAt: state.lastPost.created };
-  }
   return out;
 }
 export function useChatUnread(): number {
-  return unreadCount(states(useChatRows()));
+  return unreadCount(useChatRows());
 }
 export function ChatList() {
   const runtime = useRuntime();

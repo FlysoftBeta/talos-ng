@@ -17,7 +17,7 @@ export interface PostsContext {
     "uow" | "identity" | "objects" | "store" | "uploads"
   >;
   now: () => number;
-  touch(conversation: string, ctx: WriteContext): void;
+  touch(conversation: string, ctx: WriteContext, author?: string): void;
   assets: Pick<ChatAttachments, "prepareImage">;
   requirePost(user: string, conversation: string): void;
 }
@@ -83,7 +83,7 @@ export class Posts {
       };
       this.context.repo.putPost(post, body);
       ctx.changed(`conv:${post.conversation}`, "post", post.id);
-      this.context.touch(post.conversation, ctx);
+      this.context.touch(post.conversation, ctx, user);
       return { post };
     });
   }

@@ -127,6 +127,8 @@ describe("chat durable reducers", () => {
     ]);
     expect(posts(projected, conversation)[1]?.replyTo).toBe(op);
     expect(posts(projected, conversation)[0]?.pending).toBe(op);
+    // The sender's own pending posts never count as unread.
+    expect(states(projected)[0]?.readSeq).toBe(2);
     expect(
       posts(registry.project(projected, [first], user), conversation),
     ).toHaveLength(2);
@@ -245,15 +247,38 @@ describe("conversation view models", () => {
     ]);
     expect(groups[0]).toBe(c);
   });
-  it("excludes muted unread and never shows negative unread", () => {
-    const a = { ...initialState(conversation), lastSeq: 10, readSeq: 3 };
-    expect(
-      unreadCount([
-        a,
-        { ...a, mute: { ...a.mute, v: true } },
-        { ...a, readSeq: 20 },
-      ]),
-    ).toBe(7);
+  it("counts unread only in visible, unmuted conversations and never negative", () => {
+    const ids = ["00000000000000000000000011", "00000000000000000000000012"],
+      left = "00000000000000000000000013",
+      row = (type: string, id: string, data: unknown): StoredRow => ({
+        scope: type === "chatState" ? `me:${user}` : `conv:${id}`,
+        type,
+        id,
+        rev: 1,
+        deleted: false,
+        data,
+      }),
+      state = (id: string, readSeq: number, mute = false) => {
+        const base = initialState(id);
+        return row("chatState", id, {
+          ...base,
+          lastSeq: 10,
+          readSeq,
+          mute: { ...base.mute, v: mute },
+        });
+      },
+      muted = "00000000000000000000000014";
+    const rows = [
+      ...[...ids, muted].map((id) =>
+        row("communityConversation", id, group(id, id, 1)),
+      ),
+      state(ids[0]!, 3),
+      state(ids[1]!, 20),
+      state(muted, 0, true),
+      // A state whose conversation the user no longer sees.
+      state(left, 0),
+    ];
+    expect(unreadCount(rows)).toBe(7);
   });
   it("computes rolling retention cutoffs from current time", () => {
     expect(retentionCutoff("auto", 100)).toBeUndefined();
