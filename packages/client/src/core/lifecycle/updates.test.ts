@@ -8,6 +8,7 @@ function setup(
     production?: boolean;
     gate?: string;
     start?: () => Promise<void>;
+    offline?: boolean;
   } = {},
 ) {
   let onState: (state: unknown) => void = () => {};
@@ -17,6 +18,7 @@ function setup(
   };
   const handle = {
     installer,
+    offline: overrides.offline ?? true,
     start: vi.fn(overrides.start ?? (async () => {})),
     close: vi.fn(async () => {}),
   };
@@ -158,6 +160,19 @@ describe("update activation", () => {
     await expect(t.controller.checkUpdate()).rejects.toThrow("offline");
     await t.controller.checkUpdate();
     expect(t.installer.install).toHaveBeenCalledTimes(2);
+  });
+
+  it("updates now by reloading when no ServiceWorker can stage the release", async () => {
+    const t = setup({
+      offline: false,
+      start: async () => {
+        throw new AppError("E_INVALID", "此浏览器无法保存离线应用");
+      },
+    });
+    t.controller.stableGate();
+    await t.controller.updateNow();
+    expect(t.environment.reload).toHaveBeenCalledOnce();
+    expect(t.installer.apply).not.toHaveBeenCalled();
   });
 
   it("is inert before the stable gate", async () => {

@@ -9,6 +9,8 @@ import type { ErrorCode } from "@talos/base";
 
 export interface BootHandle {
   readonly installer: Installer;
+  /** False without a ServiceWorker (plain HTTP): the page always loads from the server. */
+  readonly offline: boolean;
   /** Call after the application's first successful render, never before mounting it. */
   start(): Promise<void>;
   /** Aborts background work and closes the owned connection; safe to call repeatedly. */
@@ -160,6 +162,7 @@ export function createBoot({
   }
   return {
     installer,
+    offline: !!browser.serviceWorker,
     start(): Promise<void> {
       if (closed) return Promise.reject(cancelled());
       if (!started)

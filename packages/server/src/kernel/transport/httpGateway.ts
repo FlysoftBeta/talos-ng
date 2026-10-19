@@ -42,6 +42,15 @@ export interface HttpGateway {
   stopAccepting(): void;
   close(): Promise<void>;
 }
+/**
+ * Only Chromium 80+ is sent to HTTPS; older managed tablets may not trust the certificate
+ * and keep working over HTTP (without a ServiceWorker).
+ */
+function redirectsToHttps(userAgent: string | undefined): boolean {
+  const major = /(?:Chrome|Chromium)\/(\d+)/.exec(userAgent ?? "")?.[1];
+  return major !== undefined && Number(major) >= 80;
+}
+
 export async function startHttpGateway(
   options: HttpGatewayOptions,
 ): Promise<HttpGateway> {
@@ -105,9 +114,14 @@ export async function startHttpGateway(
       res.end();
       return;
     }
-    if (!secure && options.redirect && path !== "/ca.crt") {
+    if (
+      !secure &&
+      options.redirect &&
+      path !== "/ca.crt" &&
+      redirectsToHttps(req.headers["user-agent"])
+    ) {
       const port = options.redirect.port ?? options.securePorts?.[0] ?? 443;
-      res.writeHead(308, {
+      res.writeHead(301, {
         Location: `https://${options.redirect.domain}${port === 443 ? "" : `:${port}`}${req.url}`,
       });
       res.end();
@@ -276,7 +290,7 @@ export async function startHttpGateway(
           ? createSecureServer(options.tls ?? {}, handler)
           : createServer(handler);
         servers.push(server);
-        if (options.onConnection && (secure || !options.redirect))
+        if (options.onConnection)
           sockets.push(
             attachWebSocketServer({
               server,
@@ -285,11 +299,7 @@ export async function startHttpGateway(
             }),
           );
         server.on("upgrade", (request, socket) => {
-          if (
-            !options.onConnection ||
-            (!secure && options.redirect) ||
-            request.url?.split("?")[0] !== "/link"
-          )
+          if (!options.onConnection || request.url?.split("?")[0] !== "/link")
             socket.destroy();
         });
         await new Promise<void>((resolve, reject) => {

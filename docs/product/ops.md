@@ -49,7 +49,8 @@ previous database as a copy, and never deletes unrelated files. It works offline
 The panel reports the configured domain, listeners, certificate expiry, DNS and trust
 guidance, and offers the root certificate download (also available over HTTP). TLS itself
 is configured in the server configuration file, not in the panel. An operator-configured
-HTTP-to-HTTPS redirect is not cached by browsers.
+HTTP-to-HTTPS redirect is not cached by browsers and only moves Chromium 80+ browsers; older
+browsers keep using HTTP, where 现在更新 simply reloads the page from the server.
 
 ## Host tools (主机工具)
 

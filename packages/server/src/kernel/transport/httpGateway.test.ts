@@ -283,7 +283,7 @@ describe("real socket gateway", () => {
       await gateway.close();
     }
   });
-  it("redirects only to configured HTTPS authority", async () => {
+  it("redirects Chromium 80+ only, to the configured HTTPS authority", async () => {
     const gateway = await startHttpGateway({
       ports: [0],
       build: "test",
@@ -292,13 +292,25 @@ describe("real socket gateway", () => {
       redirect: { domain: "talos.example", port: 8443 },
     });
     try {
+      const chrome = (major: number) =>
+        `Mozilla/5.0 (Linux; Android 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.3987.0 Safari/537.36`;
       const res = await get(gateway.addresses[0]!.port, "/?next=test", {
         Host: "attacker.example",
+        "User-Agent": chrome(80),
       });
-      expect(res.status).toBe(308);
+      expect(res.status).toBe(301);
       expect(res.headers.location).toBe(
         "https://talos.example:8443/?next=test",
       );
+      // Older or unknown browsers stay on HTTP, including its link endpoint.
+      for (const ua of [chrome(79), "curl/8.0"])
+        expect(
+          (
+            await get(gateway.addresses[0]!.port, "/link", {
+              "User-Agent": ua,
+            })
+          ).status,
+        ).toBe(426);
     } finally {
       await gateway.close();
     }

@@ -77,6 +77,11 @@ export class UpdateController {
   }
   /** Finishes (or joins) staging the server's release, then activates it. */
   async updateNow(): Promise<void> {
+    // Nothing is staged without a ServiceWorker; a reload fetches the server's build.
+    if (this.ports.boot?.offline === false) {
+      this.ports.environment.reload();
+      return;
+    }
     await this.checkUpdate();
     await this.applyUpdate();
   }

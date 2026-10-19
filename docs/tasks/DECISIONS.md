@@ -802,3 +802,8 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   404, so stray or old links (e.g. `/business`) land on the app. Misses inside the endpoint
   namespaces (`/app/…`, `/dl/…`, `/ca.crt`, `/sw.js`) stay 404 so scripts, the service worker
   and downloads never receive the shell document in place of their bytes.
+- **D-143 — The HTTP-to-HTTPS redirect is a 301 sent only to Chromium 80+ (owner instruction).**
+  Older or unrecognised browsers keep the full HTTP service, `/link` included, so tablets that
+  cannot use the HTTPS site stay connected. Over HTTP there is no ServiceWorker, so 现在更新
+  reloads the page (the server serves its own build) instead of waiting on a staging that can
+  never start.
