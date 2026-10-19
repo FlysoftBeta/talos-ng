@@ -48,12 +48,13 @@ export async function pdfSuite({ adapter, legacy }, server) {
       .data.pack.id;
 
     // Tablets are given the HTTP address; only Chromium 80+ is moved to HTTPS (D-143).
-    await cdp.send("Page.navigate", { url: server.lanUrl + "/" });
+    // Read the engine first: Chromium 80+ is redirected, which replaces the page.
     const version = Number(
       /Chrom(?:e|ium)\/(\d+)/.exec(
         await cdp.evaluate("navigator.userAgent"),
       )[1],
     );
+    await cdp.send("Page.navigate", { url: server.lanUrl + "/" });
     const origin = version >= 80 ? server.secureUrl : server.lanUrl;
     await cdp.wait(
       `location.origin===${JSON.stringify(origin)}&&document.readyState==='complete'`,
