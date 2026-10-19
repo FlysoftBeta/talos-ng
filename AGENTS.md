@@ -83,4 +83,5 @@ Layout and rationale: `docs/impl/structure.md`.
 Keep only gates, thorough tests of complex logic, and per-feature end-to-end tests
 (front-end e2e for complex features, API availability tests for simple ones). No trivial,
 tautological, mock-echo, markup-snapshot or duplicate tests; prefer semantic e2e selectors
-(`docs/impl/e2e-hooks.md`).
+(`docs/impl/e2e-hooks.md`). Every bug fix commits its regression test (owner, 2026-10-19);
+never keep one only locally.

@@ -11,11 +11,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import {
-  dynamicTableGateways,
-  scanRoot,
-  sqlOwners,
-} from "./sql-owners.mjs";
+import { dynamicTableGateways, scanRoot, sqlOwners } from "./sql-owners.mjs";
 import { exceptionKey, loadExceptions } from "./exceptions.mjs";
 
 const HOLE = "";
