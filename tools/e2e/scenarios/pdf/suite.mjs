@@ -76,6 +76,10 @@ export async function pdfSuite({ adapter, legacy }, server) {
       (await cdp.evaluate(pageText(0))).includes("你好世界1"),
       "first PDF page rendered with its text",
     );
+    // Pages render as they scroll into view; a short viewport holds only the first.
+    await cdp.evaluate(
+      "document.querySelector('[data-testid=\"reader.scroll\"]').scrollTop=1e9",
+    );
     await cdp.wait(pageReady(1));
 
     // Transfer: a page image above 500 KiB is read by verified HTTP ranges and decodes.
