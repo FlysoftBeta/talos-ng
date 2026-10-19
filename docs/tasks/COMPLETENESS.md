@@ -77,17 +77,17 @@ an obsolete path.
 | F-067 | PDF keyboard/touch | done | packages/client/src/features/reader/frame.ts; packages/server/src/modules/library/api.ts; packages/contract/src/modules/library.ts | tools/e2e/scenarios/library/suite.mjs — Input.dispatchTouchEvent |
 | F-068 | Download/task manager | done | packages/client/src/features/tasks/index.tsx; packages/server/src/modules/tasks/api.ts; packages/contract/src/modules/tasks.ts | packages/client/src/features/tasks/sheet.test.tsx — retries supported failed jobs |
 | F-069 | Clear task history | done | packages/client/src/features/tasks/index.tsx; packages/server/src/modules/tasks/api.ts; packages/contract/src/modules/tasks.ts | packages/server/src/modules/tasks/tasks.test.ts — clears only older terminal history |
-| F-070 | Learning dashboard | removed (D-144) — learning feature and data removed by owner instruction | - | packages/server/src/modules/learning/retire.test.ts — removes learning tables, gates and the discipline setting |
-| F-071 | Multiple-choice practice | removed (D-144) — learning feature and data removed by owner instruction | - | packages/server/src/modules/learning/retire.test.ts — removes learning tables, gates and the discipline setting |
-| F-072 | Speed practice | removed (D-144) — learning feature and data removed by owner instruction | - | packages/server/src/modules/learning/retire.test.ts — removes learning tables, gates and the discipline setting |
-| F-073 | Explicit mastery | removed (D-144) — learning feature and data removed by owner instruction | - | packages/server/src/modules/learning/retire.test.ts — removes learning tables, gates and the discipline setting |
-| F-074 | Wrong-word list | removed (D-144) — learning feature and data removed by owner instruction | - | packages/server/src/modules/learning/retire.test.ts — removes learning tables, gates and the discipline setting |
-| F-075 | Clear wrong words | removed (D-144) — learning feature and data removed by owner instruction | - | packages/server/src/modules/learning/retire.test.ts — removes learning tables, gates and the discipline setting |
-| F-076 | Mastered-word list | removed (D-144) — learning feature and data removed by owner instruction | - | packages/server/src/modules/learning/retire.test.ts — removes learning tables, gates and the discipline setting |
-| F-077 | Learning exit protection | removed (D-144) — learning feature and data removed by owner instruction | - | packages/server/src/modules/learning/retire.test.ts — removes learning tables, gates and the discipline setting |
-| F-078 | Discipline mode | removed (D-144) — learning feature and data removed by owner instruction | - | packages/server/src/modules/learning/retire.test.ts — removes learning tables, gates and the discipline setting |
-| F-079 | Discipline answer overlay | removed (D-144) — learning feature and data removed by owner instruction | - | packages/server/src/modules/learning/retire.test.ts — removes learning tables, gates and the discipline setting |
-| F-080 | Word import API | removed (D-144) — learning feature and data removed by owner instruction | - | packages/server/src/modules/learning/retire.test.ts — removes learning tables, gates and the discipline setting |
+| F-070 | Learning dashboard | removed (D-144) — learning feature and data removed by owner instruction | - | - |
+| F-071 | Multiple-choice practice | removed (D-144) — learning feature and data removed by owner instruction | - | - |
+| F-072 | Speed practice | removed (D-144) — learning feature and data removed by owner instruction | - | - |
+| F-073 | Explicit mastery | removed (D-144) — learning feature and data removed by owner instruction | - | - |
+| F-074 | Wrong-word list | removed (D-144) — learning feature and data removed by owner instruction | - | - |
+| F-075 | Clear wrong words | removed (D-144) — learning feature and data removed by owner instruction | - | - |
+| F-076 | Mastered-word list | removed (D-144) — learning feature and data removed by owner instruction | - | - |
+| F-077 | Learning exit protection | removed (D-144) — learning feature and data removed by owner instruction | - | - |
+| F-078 | Discipline mode | removed (D-144) — learning feature and data removed by owner instruction | - | - |
+| F-079 | Discipline answer overlay | removed (D-144) — learning feature and data removed by owner instruction | - | - |
+| F-080 | Word import API | removed (D-144) — learning feature and data removed by owner instruction | - | - |
 | F-081 | Music search | changed (D-089) — native yt-dlp search; album/cover may be absent | packages/client/src/features/media/screens.tsx; packages/server/src/modules/media/api.ts; packages/contract/src/modules/media.ts | packages/server/src/modules/media/media.test.ts — searches, materialises |
 | F-082 | Music library | done | packages/client/src/features/media/screens.tsx; packages/server/src/modules/media/api.ts; packages/contract/src/modules/media.ts | tools/e2e/scenarios/media/suite.mjs — home |
 | F-083 | Favorite tracks | done | packages/client/src/features/media/screens.tsx; packages/server/src/modules/media/api.ts; packages/contract/src/modules/media.ts | packages/client/src/features/media/media.test.ts — keeps the newest favorite |

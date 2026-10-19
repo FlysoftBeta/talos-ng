@@ -101,9 +101,7 @@ describe.each(["memory", "ws"] as const)(
         if (!("user" in session)) throw new Error("expected user session");
         const pulled = await first.api.sync.pull({ cursors: {} });
         const scope = `me:${session.user.id}`;
-        expect(pulled.added).toEqual(
-          expect.arrayContaining([scope, "sys"]),
-        );
+        expect(pulled.added).toEqual(expect.arrayContaining([scope, "sys"]));
         expect(
           pulled.added.filter((id) => id.startsWith("conv:")),
         ).toHaveLength(2);

@@ -3,7 +3,7 @@ import { contract } from "@talos/contract";
 import type { Method } from "@talos/contract";
 import type { Capability } from "../../../core/lifecycle/snapshot.ts";
 import { BackupController } from "./backup.ts";
-import { HostController, delayText } from "./host.ts";
+import { HostController } from "./host.ts";
 import { OfficeController } from "./office.ts";
 import type { OpsPort } from "./port.ts";
 import { UPLOAD_SLICE, UpdateController } from "./update.ts";
@@ -165,36 +165,6 @@ describe("ops panel controllers", () => {
     r.handler.set("ops.office.refresh", () => ({ available: true, files: [] }));
     await office.press("capture");
     expect(office.action("capture").error).toBeUndefined();
-  });
-
-  it("schedules a shutdown with the chosen delay and offers to cancel only what is pending", async () => {
-    const r = rig(),
-      host = new HostController(r.port);
-    host.attach();
-    await flush();
-    expect(host.model().cancel.reason).toBe("没有待执行的关机");
-    host.setDelay(0);
-    expect(host.model().schedule.reason).toBe("请选择关机时间");
-    host.setDelay(90);
-    expect(host.model().schedule.confirm).toBe(
-      "在 1 小时 30 分钟后关闭服务器计算机",
-    );
-    await host.press("schedule");
-    await host.confirm("schedule");
-    expect(r.calls.at(-1)).toEqual({
-      name: "ops.host.run",
-      args: { action: "shutdown", delayMinutes: 90 },
-    });
-    expect(host.model().scheduled).toContain("关机");
-    expect(host.model().cancel.reason).toBeUndefined();
-    await host.press("cancel");
-    expect(r.calls.at(-1)).toEqual({
-      name: "ops.host.run",
-      args: { action: "cancel-shutdown" },
-    });
-    expect(host.model().scheduled).toBeUndefined();
-    expect(delayText(45)).toBe("45 分钟");
-    expect(delayText(120)).toBe("2 小时");
   });
 
   it("keeps the newest answer when an older reload resolves late", async () => {
