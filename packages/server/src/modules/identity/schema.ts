@@ -68,4 +68,13 @@ CREATE TABLE identity_ip_throttle(ip TEXT PRIMARY KEY,failures INTEGER NOT NULL,
       );
     },
   },
+  {
+    // The learning feature was removed.
+    n: 7,
+    up(db) {
+      db.exec(
+        "UPDATE users SET features=(SELECT json_group_array(value) FROM json_each(users.features) WHERE value<>'learning') WHERE EXISTS(SELECT 1 FROM json_each(users.features) WHERE value='learning')",
+      );
+    },
+  },
 ];

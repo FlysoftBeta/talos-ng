@@ -170,7 +170,6 @@ export interface UsersState {
   handle: string;
   name: string;
   pin: string;
-  discipline: Tri;
   roles: readonly AdminRole[];
   features: readonly Feature[];
   /** Pending confirmation; the confirmed command is kept inside the controller. */
@@ -206,7 +205,6 @@ export class UsersController extends StateStore<UsersState> {
       handle: "",
       name: "",
       pin: "",
-      discipline: "unchanged",
       roles: [],
       features: [],
       confirm: undefined,
@@ -266,7 +264,6 @@ export class UsersController extends StateStore<UsersState> {
       handle: user === "new" ? "" : user.handle,
       name: user === "new" ? "" : user.name,
       pin: "",
-      discipline: "unchanged",
       roles: user === "new" ? [] : user.roles,
       features: user === "new" ? [] : user.features,
     });
@@ -274,7 +271,6 @@ export class UsersController extends StateStore<UsersState> {
   setHandle = (handle: string): void => this.patch({ handle });
   setName = (name: string): void => this.patch({ name });
   setPin = (pin: string): void => this.patch({ pin });
-  setDiscipline = (discipline: Tri): void => this.patch({ discipline });
   setRole = (role: AdminRole, checked: boolean): void =>
     this.patch({ roles: toggledRoles(this.state.roles, role, checked) });
   setFeature = (feature: Feature, checked: boolean): void =>
@@ -287,8 +283,7 @@ export class UsersController extends StateStore<UsersState> {
     return canSaveUser(this.state.editing, this.state, this.state.busy);
   }
   save = async (): Promise<void> => {
-    const { editing, access, handle, name, pin, features, discipline } =
-      this.state;
+    const { editing, access, handle, name, pin, features } = this.state;
     if (!editing) return;
     this.patch({ busy: true, error: "" });
     try {
@@ -304,11 +299,6 @@ export class UsersController extends StateStore<UsersState> {
         if (Object.keys(changes).length > 1)
           await this.port.command(contract.admin.user.update, changes);
       }
-      if (editing !== "new" && access.features && discipline !== "unchanged")
-        await this.port.command(contract.learning.discipline.assign, {
-          user: editing.id,
-          enabled: discipline === "enable",
-        });
       this.patch({ editing: null });
       this.reset();
     } catch (failure) {

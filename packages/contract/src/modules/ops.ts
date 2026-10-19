@@ -82,6 +82,27 @@ export const httpsStatus = z
     ca: z.boolean(),
   })
   .strict();
+/** Longest scheduled shutdown delay: one day. */
+export const SHUTDOWN_MAX_MINUTES = 1440;
+export const hostStatus = z
+  .object({
+    available: z.boolean(),
+    /** When the pending shutdown this server scheduled happens. */
+    shutdownAt: z.number().nullable(),
+  })
+  .strict();
+const hostCommand = z.discriminatedUnion("action", [
+  /** Close folder windows, Office, WPS, Seewo EasiNote and the visualiser. */
+  z.object({ action: z.literal("reset-classroom") }).strict(),
+  /** Zero minutes shuts down after a short grace; a later schedule replaces an earlier one. */
+  z
+    .object({
+      action: z.literal("shutdown"),
+      delayMinutes: z.number().int().min(0).max(SHUTDOWN_MAX_MINUTES),
+    })
+    .strict(),
+  z.object({ action: z.literal("cancel-shutdown") }).strict(),
+]);
 function method<
   N extends string,
   A extends z.ZodTypeAny,
@@ -114,16 +135,8 @@ export const ops = Object.freeze({
   },
   https: { status: method("ops.https.status", empty, httpsStatus) },
   host: {
-    status: method(
-      "ops.host.status",
-      empty,
-      z.object({ available: z.boolean() }),
-    ),
-    run: method(
-      "ops.host.run",
-      z.object({ action: z.enum(["kill-wps", "shutdown"]) }).strict(),
-      okSchema,
-    ),
+    status: method("ops.host.status", empty, hostStatus),
+    run: method("ops.host.run", hostCommand, hostStatus),
   },
   office: {
     list: method(

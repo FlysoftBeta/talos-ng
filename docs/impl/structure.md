@@ -36,7 +36,8 @@ kernel/    mechanisms with no domain knowledge: config, diagnostics (audit/incid
            jobs, objects (ledger, uploads, tickets), persistence (Db, Uow, op results),
            sync (SyncHub), transport (link host, HTTP gateway).
 modules/   one directory per domain: identity, authority, community, chat, library, media,
-           netbooks, learning, ai, tasks, me, admin, ops.
+           netbooks, ai, tasks, me, admin, ops; `learning` keeps only the
+           migration that drops the retired feature's tables.
 migration.ts  the offline importer's entry (section 6); not product API.
 ```
 

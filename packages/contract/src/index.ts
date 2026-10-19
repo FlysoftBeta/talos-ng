@@ -26,13 +26,16 @@ export {
   MAX_SETTING_BYTES,
 } from "./modules/me/setting-value.ts";
 export { UPLOAD_LIMITS } from "./modules/upload.ts";
-export { OPS_ACTION_ROLES, opsActionRole } from "./modules/ops.ts";
+export {
+  OPS_ACTION_ROLES,
+  SHUTDOWN_MAX_MINUTES,
+  opsActionRole,
+} from "./modules/ops.ts";
 export type { OpsAction } from "./modules/ops.ts";
 
 export * from "./modules/identity.ts";
 export * from "./modules/authority.ts";
 
-export * from "./modules/learning.ts";
 export * from "./modules/community.ts";
 
 export * from "./modules/chat.ts";

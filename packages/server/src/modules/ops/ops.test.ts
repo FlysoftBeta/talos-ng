@@ -10,8 +10,8 @@ import { describe, expect, it, vi } from "vitest";
 import { createKernel } from "../../app/create-application.ts";
 import { Db } from "../../kernel/persistence/db.ts";
 import { restoreBackup } from "./backup/service.ts";
-import { createHostTools } from "./host/adapter.ts";
-import { createOfficeCapture } from "./office/adapter.ts";
+import { CLASSROOM_PROCESSES, createHostTools } from "./host/adapter.ts";
+import { createOfficeCapture, parseOpenDocuments } from "./office/adapter.ts";
 import type { OpsOptions } from "./service.ts";
 import { Updates } from "./updates/service.ts";
 async function fixture(options: OpsOptions = {}) {
@@ -184,9 +184,9 @@ describe("ops over the memory link", () => {
     const f = await fixture({ hostTools: createHostTools("linux") });
     try {
       await expect(
-        f.api.ops.host.run({ action: "shutdown" }),
+        f.api.ops.host.run({ action: "shutdown", delayMinutes: 0 }),
       ).rejects.toMatchObject({ code: "E_UNAVAILABLE" });
-      expect(f.kernel.audit.list().some((a) => a.target === "shutdown")).toBe(
+      expect(f.kernel.audit.list().some((a) => a.target === "shutdown:0")).toBe(
         true,
       );
       f.db.run(
@@ -194,7 +194,7 @@ describe("ops over the memory link", () => {
         f.session.user.id,
       );
       await expect(
-        f.api.ops.host.run({ action: "kill-wps" }),
+        f.api.ops.host.run({ action: "reset-classroom" }),
       ).rejects.toMatchObject({ code: "E_DENIED" });
       expect(await f.api.ops.backup.list({})).toEqual([]);
       f.db.run("UPDATE users SET roles='[]' WHERE id=?", f.session.user.id);
@@ -235,7 +235,7 @@ describe("ops over the memory link", () => {
       f.kernel.authority.setAccess(actor, { roles: ["administrator"] });
       expect(await f.api.ops.backup.list({})).toHaveLength(1);
       await expect(
-        f.api.ops.host.run({ action: "shutdown" }),
+        f.api.ops.host.run({ action: "shutdown", delayMinutes: 0 }),
       ).rejects.toMatchObject({ code: "E_DENIED" });
       await expect(
         f.kernel.tickets.resolve(backupTicket.ticket),
@@ -331,43 +331,91 @@ describe("ops over the memory link", () => {
     }
   });
 });
-it("Windows host adapter uses fixed argv with no shell", async () => {
-  const run = vi.fn(async () => "");
-  const tools = createHostTools("win32", run);
-  await tools.run("kill-wps");
-  await tools.run("shutdown");
-  expect(run.mock.calls[0]).toEqual([
-    "taskkill.exe",
-    [
-      "/f",
-      "/im",
-      "et.exe",
-      "/im",
-      "wpp.exe",
-      "/im",
-      "wps.exe",
-      "/im",
-      "pdf.exe",
-    ],
+it("Windows host adapter uses fixed argv with no shell and tracks its own shutdown schedule", async () => {
+  let now = 1_000_000;
+  const run = vi.fn(async (file: string, args: readonly string[]) => {
+    // Aborting with nothing scheduled fails on Windows.
+    if (
+      file === "shutdown.exe" &&
+      args[0] === "/a" &&
+      run.mock.calls.length < 3
+    )
+      throw new Error("no shutdown in progress");
+    return "";
+  });
+  const tools = createHostTools("win32", run, () => now);
+  await tools.run({ action: "reset-classroom" });
+  expect(run.mock.calls[0]![0]).toBe("powershell.exe");
+  const script = Buffer.from(run.mock.calls[0]![1].at(-1)!, "base64").toString(
+    "utf16le",
+  );
+  expect(script).toContain("Shell.Application");
+  for (const name of CLASSROOM_PROCESSES) expect(script).toContain(`'${name}'`);
+  // An immediate shutdown keeps a grace; a failed abort does not block it.
+  await tools.run({ action: "shutdown", delayMinutes: 0 });
+  expect(run.mock.calls.slice(1, 3)).toEqual([
+    ["shutdown.exe", ["/a"]],
+    ["shutdown.exe", ["/s", "/t", "10"]],
   ]);
-  expect(run.mock.calls[1]).toEqual(["shutdown.exe", ["/s", "/t", "10"]]);
+  expect(tools.shutdownAt()).toBe(now + 10_000);
+  await tools.run({ action: "shutdown", delayMinutes: 45 });
+  expect(run.mock.calls.slice(3)).toEqual([
+    ["shutdown.exe", ["/a"]],
+    ["shutdown.exe", ["/s", "/t", "2700"]],
+  ]);
+  expect(tools.shutdownAt()).toBe(now + 2_700_000);
+  now += 2_700_000;
+  expect(tools.shutdownAt()).toBeNull();
+  await tools.run({ action: "shutdown", delayMinutes: 5 });
+  await tools.run({ action: "cancel-shutdown" });
+  expect(run.mock.calls.at(-1)).toEqual(["shutdown.exe", ["/a"]]);
+  expect(tools.shutdownAt()).toBeNull();
 });
-it("Office adapter handles unavailable platforms, malformed snapshots and duplicate paths", async () => {
+it("Office adapter reads automation and command-line documents, skipping what it cannot copy", async () => {
   await expect(createOfficeCapture("linux").capture()).rejects.toMatchObject({
     code: "E_UNAVAILABLE",
   });
-  await expect(
-    createOfficeCapture("win32", async () => "bad").capture(),
-  ).rejects.toMatchObject({ code: "E_UNAVAILABLE" });
   const root = await mkdtemp(join(tmpdir(), "office-"));
+  const line = (source: string, path: string) =>
+    `${source}\t${Buffer.from(path, "utf8").toString("base64")}`;
   try {
-    const path = join(root, "文档.docx");
-    await writeFile(path, "example");
-    const row = { path, name: "文档.docx", application: "Word", kind: "word" };
-    const result = await createOfficeCapture("win32", async () =>
-      JSON.stringify([row, row]),
+    const saved = join(root, "课件.docx"),
+      sheet = join(root, "成绩.xlsx"),
+      wps = join(root, "讲义.dps");
+    await writeFile(saved, "example");
+    await writeFile(sheet, "sheet");
+    await writeFile(wps, "slides");
+    const output = [
+      "garbage",
+      line("ms-word", saved),
+      // The same document found again on Word's command line.
+      line("cmd:ms-word", saved.toUpperCase()),
+      line("cmd:ms-excel", sheet),
+      line("cmd:wps", wps),
+      // A command-line argument without a document extension.
+      line("cmd:wps", join(root, "wps.exe")),
+      // Gone or unreadable files never hide the others.
+      line("ms-powerpoint", join(root, "已删除.pptx")),
+      line("unknown", saved),
+      "",
+    ].join("\r\n");
+    expect(parseOpenDocuments(output).map((d) => d.path)).toEqual([
+      saved,
+      sheet,
+      wps,
+      join(root, "已删除.pptx"),
+    ]);
+    const result = await createOfficeCapture(
+      "win32",
+      async () => output,
     ).capture();
-    expect(result).toHaveLength(1);
+    expect(
+      result.map(({ name, application, kind }) => [name, application, kind]),
+    ).toEqual([
+      ["课件.docx", "Microsoft Word", "word"],
+      ["成绩.xlsx", "Microsoft Excel", "excel"],
+      ["讲义.dps", "WPS Office", "powerpoint"],
+    ]);
     expect(Buffer.from(result[0]!.bytes).toString()).toBe("example");
   } finally {
     await rm(root, { recursive: true, force: true });

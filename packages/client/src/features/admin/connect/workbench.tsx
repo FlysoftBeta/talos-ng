@@ -41,8 +41,14 @@ const builtIn: Record<string, () => ReactElement> = {
   debug: DebugPanel,
 };
 
-/** The workbench is online only; no admin response enters the sync cache. */
-export function useAdminWorkbench(extensions: readonly AdminExtension[]): {
+/**
+ * The workbench is online only; no admin response enters the sync cache.
+ * `onOpen` reports a section the administrator opened from the list.
+ */
+export function useAdminWorkbench(
+  extensions: readonly AdminExtension[],
+  onOpen?: (id: string) => void,
+): {
   list: ReactNode;
   content: ReactNode;
 } {
@@ -69,7 +75,10 @@ export function useAdminWorkbench(extensions: readonly AdminExtension[]): {
       <WorkbenchList
         sections={allowed}
         currentId={current?.id}
-        onSelect={controller.select}
+        onSelect={(id) => {
+          controller.select(id);
+          onOpen?.(id);
+        }}
       />
     ),
     content:

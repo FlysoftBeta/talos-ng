@@ -11,7 +11,7 @@ const PANELS = {
     shows: ["talos.school.example", "HTTPS · 8443", "HTTP · 8080"],
     action: "刷新",
   },
-  host: { shows: ["关闭 WPS", "关闭计算机"], action: "关闭计算机" },
+  host: { shows: ["重置教学环境", "立即关机", "定时关机"], action: "定时关机" },
   office: { shows: ["高三语文复习资料", "WPS 文字"], action: "捕获当前文档" },
 };
 const controlState = (label) =>

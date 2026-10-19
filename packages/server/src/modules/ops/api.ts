@@ -84,15 +84,25 @@ export function registerOpsApi(
     auth(ctx, "ops.https.status");
     return service.https();
   });
+  const hostStatus = () => ({
+    available: service.host.available,
+    shutdownAt: service.host.shutdownAt(),
+  });
   host.register(contract.ops.host.status, (ctx) => {
     auth(ctx, "ops.host.status");
-    return { available: service.host.available };
+    return hostStatus();
   });
   host.register(contract.ops.host.run, async (ctx, args) => {
     const actor = auth(ctx, "ops.host.run");
-    audit.append(actor, "ops.host.run", args.action);
-    await service.host.run(args.action);
-    return ok;
+    audit.append(
+      actor,
+      "ops.host.run",
+      args.action === "shutdown"
+        ? `shutdown:${args.delayMinutes}`
+        : args.action,
+    );
+    await service.host.run(args);
+    return hostStatus();
   });
   host.register(contract.ops.office.list, (ctx) => {
     auth(ctx, "ops.office.list");

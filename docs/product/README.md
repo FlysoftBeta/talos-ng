@@ -2,7 +2,7 @@
 
 Talos II is a school-community app for shared, managed tablets on a closed school network.
 Members sign in with a six-digit PIN and use chat (groups and direct messages), a reader for
-imported PDF/text books and downloaded network novels, vocabulary practice, music, an AI
+imported PDF/text books and downloaded network novels, music, an AI
 assistant and, for administrators, an online workbench. One self-hosted server holds all
 data. The app is local-first: the interface renders from data kept on the device and the
 network only synchronises it, so it starts and stays useful when the server is unreachable.
@@ -20,7 +20,6 @@ decisions is process material kept apart from these documents.
 | [identity.md](identity.md) | concealment, PIN sign-in, onboarding, devices and admission |
 | [chat.md](chat.md) | groups, direct messages, posts, announcements, notifications |
 | [library.md](library.md) | booklists, import, reader, sharing, network novels |
-| [learning.md](learning.md) | vocabulary practice, word lists, discipline mode |
 | [media.md](media.md) | music search, queue, playlists, playback |
 | [ai.md](ai.md) | AI conversations, credits, writing workspace |
 | [activity.md](activity.md) | the activity centre: sync, queued changes, transfers and background tasks |

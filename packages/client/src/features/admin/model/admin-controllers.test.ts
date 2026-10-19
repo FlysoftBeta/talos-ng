@@ -223,7 +223,7 @@ describe("users", () => {
     expect(users.getState().error).toBe("仍有未完成任务");
   });
 
-  it("sends only the changed fields the account may manage and assigns discipline separately", async () => {
+  it("sends only the changed fields the account may manage", async () => {
     const target = user(1, {
       roles: ["administrator"],
       features: ["ai"],
@@ -261,13 +261,8 @@ describe("users", () => {
     const port = fakePort(answer);
     const users = new UsersController(port as never);
     users.begin(target);
-    users.setDiscipline("enable");
     await users.save();
     expect(port.count("admin.user.update")).toBe(0);
-    expect(port.last("learning.discipline.assign")!.args).toEqual({
-      user: ulid(1),
-      enabled: true,
-    });
     expect(users.getState().editing).toBeNull();
   });
 

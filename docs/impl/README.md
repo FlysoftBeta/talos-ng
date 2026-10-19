@@ -17,7 +17,7 @@ How Talos II is built. Product behaviour is in `docs/product/README.md`, process
 | [user-purge.md](user-purge.md) | atomic user deletion across modules |
 | [server.md](server.md) | process model, kernel services, data conventions, configuration |
 | [identity.md](identity.md) | credentials, devices and admission, authority |
-| [modules.md](modules.md) | per-module mechanisms (community, chat, netbooks, learning, media, AI, admin, ops) |
+| [modules.md](modules.md) | per-module mechanisms (community, chat, netbooks, media, AI, admin, ops) |
 | [client-runtime.md](client-runtime.md) | runtime ports, features, repositories, navigation, design system |
 | [client-features.md](client-features.md) | per-feature client mechanisms |
 | [design-system.md](design-system.md) | tokens, UI primitives, frame and pane anatomy, feature stylesheets |

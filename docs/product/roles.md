@@ -12,7 +12,7 @@ teacher/student type.
 | access manager | create users and invitations, manage devices and the device policy |
 | community manager | edit and mute/ban users, reset PINs, edit groups, set media policy, delete any chat post (audited) |
 | advanced community manager | edit profiles, deactivate and purge users, manage group membership, publish announcements; implies community manager |
-| feature manager | edit users' feature gates, manage AI credits and billing policy, import words, impose discipline mode |
+| feature manager | edit users' feature gates, manage AI credits and billing policy |
 | operations assistant | system lock and idle lock |
 | operations | incident workbench |
 
@@ -23,7 +23,7 @@ active root cannot be removed.
 ## Feature gates
 
 Per-user switches set by administrators: offline use, articles (library), reader for text
-articles, reader for e-books/PDF, learning, article download (network novels), AI, media,
+articles, reader for e-books/PDF, article download (network novels), AI, media,
 image posting. The reader, e-book and article-download gates also need the articles gate.
 A gate that is off hides the area and is rejected by the server. A user without the offline
 gate sees no cached content while disconnected.

@@ -8,7 +8,7 @@ node tools/e2e/run.mjs <feature ...> [--legacy]   # one or more features (build 
 ```
 
 Features run in this order: `identity`, `library`, `netbooks`, `media`, `chat`, `admin`,
-`ai`, `hardening`, `virtual`, `ops`, `offline`. Aliases: `learning` -> `identity`, `reader` ->
+`ai`, `hardening`, `virtual`, `ops`, `offline`. Aliases: `reader` ->
 `library`, `update` -> `offline`. Every feature gets its own server (the real server CLI on
 a free localhost port with a temporary database and a copy of the production client, or the
 static gallery server) and a fresh browser, so no storage, ServiceWorker, emulation or

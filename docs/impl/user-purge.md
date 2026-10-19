@@ -34,7 +34,7 @@ module reach into another module's tables. Historical audit rows keep their acto
 ## Participants
 
 Each owner exposes a `UserPurgeParticipant {owner, purgeUser(user, tx)}` that touches only its
-own tables through its own repository: identity, community, chat, learning, ai, netbooks,
+own tables through its own repository: identity, community, chat, ai, netbooks,
 library, media, me, authority, plus kernel `jobs` and `uploads`. Cross-owner effects go through
 explicit ports passed in by the composition root: object references are released through the
 ledger (`removeOwnerRefs`; bytes are reclaimed by the normal sweep), grant revocation goes

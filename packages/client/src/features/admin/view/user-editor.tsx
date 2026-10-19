@@ -6,9 +6,8 @@ import { Checkbox, Field } from "../../../ui/inputs/index.ts";
 import { Group, Stack } from "../../../ui/layout/index.ts";
 import { FEATURE_OPTIONS, ROLE_OPTIONS } from "../model/access.ts";
 import type { UsersController, UsersState } from "../model/users.ts";
-import { TriState } from "./tri-state.tsx";
 
-/** Create / edit dialog: profile, PIN, roles, entitlements and discipline assignment. */
+/** Create / edit dialog: profile, PIN, roles and entitlements. */
 export function UserEditorDialog({
   state,
   canSave,
@@ -88,17 +87,6 @@ export function UserEditorDialog({
                 }
               />
             ))}
-          </Group>
-        )}
-        {editing !== "new" && access.features && (
-          <Group title="自律模式" className="admin-form">
-            <div role="group" aria-label="自律模式">
-              <p>为此用户启用或关闭自律提醒；不变会保留用户当前设置。</p>
-              <TriState
-                value={state.discipline}
-                onChange={actions.setDiscipline}
-              />
-            </div>
           </Group>
         )}
         {state.error && <StatePanel state="error" hint={state.error} />}

@@ -8,4 +8,11 @@ export const meMigrations: readonly Migration[] = [
       );
     },
   },
+  {
+    // The learning feature and its discipline setting were removed.
+    n: 2,
+    up(db) {
+      db.exec("DELETE FROM me_settings WHERE key='learning.discipline'");
+    },
+  },
 ];

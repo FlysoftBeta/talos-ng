@@ -21,4 +21,13 @@ CREATE INDEX authority_grant_projections_grant ON authority_grant_projections(gr
 `);
     },
   },
+  {
+    // The learning feature was removed.
+    n: 3,
+    up(db) {
+      db.exec(
+        "UPDATE authority_access SET features=(SELECT json_group_array(value) FROM json_each(authority_access.features) WHERE value<>'learning') WHERE EXISTS(SELECT 1 FROM json_each(authority_access.features) WHERE value='learning')",
+      );
+    },
+  },
 ];

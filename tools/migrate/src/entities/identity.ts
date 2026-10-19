@@ -1,10 +1,22 @@
 import { Db } from "@talos/server/migration";
-import { FEATURES } from "@talos/contract";
+import type { Feature } from "@talos/contract";
 
 import type { LegacyRow } from "../types.ts";
 import { value, number, time } from "../values.ts";
 import { rev, mapId, issue } from "../journal.ts";
 
+/** Legacy feature bit positions; the retired learning bit is dropped on import. */
+const LEGACY_FEATURE_BITS = [
+  "offline",
+  "articles",
+  "article_reader",
+  "ebook_reader",
+  "learning",
+  "article_download",
+  "ai",
+  "media",
+  "post_images",
+] as const;
 export function importIdentity(
   target: Db,
   table: string,
@@ -36,10 +48,11 @@ export function importIdentity(
       if (roles.length && !roles.includes("administrator"))
         roles.push("administrator");
       const bits = number(row, "feature_bitset");
-      const features = FEATURES.filter(
-        (_, index) => (bits & (1 << index)) !== 0,
+      const features = LEGACY_FEATURE_BITS.filter(
+        (feature, index): feature is Feature =>
+          feature !== "learning" && (bits & (1 << index)) !== 0,
       );
-      if (bits >>> FEATURES.length)
+      if (bits >>> LEGACY_FEATURE_BITS.length)
         issue(target, table, legacyId, "unknown feature bits omitted");
       const banDeadline = time(row.banned_until);
       const banned = banDeadline > Date.now();

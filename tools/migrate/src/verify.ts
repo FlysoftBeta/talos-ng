@@ -30,13 +30,6 @@ export function targetContent(
       );
       return row ? (json(row.body, {}) as { title?: string }).title : undefined;
     }
-    case "words": {
-      const row = target.get<{ english: string; definition: string }>(
-        "SELECT english,definition FROM learning_words WHERE id=?",
-        id,
-      );
-      return row ? `${row.english}\0${row.definition}` : undefined;
-    }
     case "ai_messages": {
       const row = target.get<{ data: string }>(
         "SELECT data FROM ai_messages WHERE id=?",
@@ -62,8 +55,6 @@ export function sourceContent(
       return value(row, "brief");
     case "articles":
       return value(row, "title").slice(0, 200) || "Untitled";
-    case "words":
-      return `${value(row, "english").slice(0, 128)}\0${value(row, "definition").slice(0, 2000)}`;
     case "ai_messages":
       return value(row, "content");
     case "users":
@@ -98,13 +89,11 @@ export async function verifyRows(
           ? "SELECT count(*) n FROM chat_posts"
           : table === "articles"
             ? "SELECT count(*) n FROM library_documents"
-            : table === "words"
-              ? "SELECT count(*) n FROM learning_words"
-              : table === "ai_messages"
-                ? "SELECT count(*) n FROM ai_messages"
-                : table === "ai_conversations"
-                  ? "SELECT count(*) n FROM ai_rows WHERE type='aiConversation'"
-                  : null;
+            : table === "ai_messages"
+              ? "SELECT count(*) n FROM ai_messages"
+              : table === "ai_conversations"
+                ? "SELECT count(*) n FROM ai_rows WHERE type='aiConversation'"
+                : null;
     if (sql) {
       const actual = target.get<{ n: number }>(sql)!.n;
       if (actual !== counts[table])

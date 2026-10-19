@@ -1,73 +1,82 @@
 import type { ReactElement } from "react";
 import "./inputs.css";
+import {
+  durationFieldMax,
+  durationFields,
+  durationWithField,
+} from "./duration.ts";
+import type { DurationPreset, DurationUnit } from "./duration.ts";
+
+const UNIT_LABELS: Record<DurationUnit, string> = {
+  days: "天",
+  hours: "小时",
+  minutes: "分钟",
+};
+
+/**
+ * The one duration control: optional presets plus custom fields for the given
+ * units. The value is whole minutes, clamped to `0..max`.
+ */
 export function DurationInput({
-  days,
-  hours,
+  minutes,
   onChange,
+  units,
+  max,
+  presets,
   disabled = false,
-  preset,
-  onPresetChange,
-  parse,
 }: {
-  days: number;
-  hours: number;
-  onChange: (days: number, hours: number) => void;
+  minutes: number;
+  onChange: (minutes: number) => void;
+  units: readonly DurationUnit[];
+  max: number;
+  presets?: readonly DurationPreset[];
   disabled?: boolean;
-  preset?: number;
-  onPresetChange?: (minutes: number) => void;
-  /** Converts the typed text to a whole number clamped to `0..max`. */
-  parse: (value: string, max: number) => number;
 }): ReactElement {
-  const presets = onPresetChange ? (
-    <div className="segmented is-wrap" role="group" aria-label="持续时间">
-      {[
-        [10, "10 分钟"],
-        [60, "1 小时"],
-        [1440, "1 天"],
-        [10080, "7 天"],
-        [43200, "30 天"],
-        [0, "永久"],
-      ].map(([minutes, label]) => (
-        <button
-          key={minutes}
-          type="button"
-          disabled={disabled}
-          aria-pressed={preset === minutes}
-          onClick={() => onPresetChange(minutes as number)}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  ) : null;
+  const fields = durationFields(minutes, units);
   return (
     <div className="duration">
-      {presets}
+      {presets && (
+        <div className="segmented is-wrap" role="group" aria-label="持续时间">
+          {presets.map((preset) => (
+            <button
+              key={preset.minutes}
+              type="button"
+              disabled={disabled}
+              aria-pressed={minutes === preset.minutes}
+              onClick={() => onChange(preset.minutes)}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="duration-custom" role="group" aria-label="自定义持续时间">
-        <label>
-          <input
-            className="input"
-            type="number"
-            min={0}
-            max={30}
-            value={days}
-            disabled={disabled}
-            onChange={(event) => onChange(parse(event.target.value, 30), hours)}
-          />
-          <span>天</span>
-        </label>
-        <label>
-          <input
-            className="input"
-            type="number"
-            min={0}
-            max={23}
-            value={hours}
-            disabled={disabled}
-            onChange={(event) => onChange(days, parse(event.target.value, 23))}
-          />
-          <span>小时</span>
-        </label>
+        {(["days", "hours", "minutes"] as const)
+          .filter((unit) => units.includes(unit))
+          .map((unit) => (
+            <label key={unit}>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                max={durationFieldMax(unit, units, max)}
+                value={fields[unit]}
+                disabled={disabled}
+                onChange={(event) =>
+                  onChange(
+                    durationWithField(
+                      minutes,
+                      units,
+                      unit,
+                      event.target.value,
+                      max,
+                    ),
+                  )
+                }
+              />
+              <span>{UNIT_LABELS[unit]}</span>
+            </label>
+          ))}
       </div>
     </div>
   );

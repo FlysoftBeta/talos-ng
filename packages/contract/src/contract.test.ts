@@ -9,14 +9,15 @@ import {
   idSchema,
 } from "./index.ts";
 describe("contract registry", () => {
-  it("is frozen, uniquely names methods, and includes legacy gates", () => {
+  it("is frozen, uniquely names methods, and includes the product gates", () => {
     expect(Object.isFrozen(contract)).toBe(true);
     expect(Object.isFrozen(contract.auth)).toBe(true);
     expect(new Set(methods.map((method) => method.name)).size).toBe(
       methods.length,
     );
     expect(Object.keys(methodRegistry)).toHaveLength(methods.length);
-    expect(FEATURES).toHaveLength(9);
+    expect(FEATURES).toHaveLength(8);
+    expect(FEATURES).not.toContain("learning");
   });
   it("enforces PIN, strict args and operation stamps", () => {
     expect(idSchema.safeParse("Z1ARZ3NDEKTSV4RRFFQ69G5FAV").success).toBe(

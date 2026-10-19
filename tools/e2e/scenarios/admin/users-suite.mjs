@@ -86,13 +86,12 @@ export async function adminUsersSuite(
     await target.cdp.wait(
       "!!document.querySelector('[data-testid=\"app.ready\"]')",
     );
-    const hadLearning = await target.cdp.evaluate(
-      "document.body.textContent.indexOf('学习')>=0",
-    );
+    const mediaRail = "!!document.querySelector('button[aria-label=音乐]')";
+    const hadMedia = await target.cdp.evaluate(mediaRail);
     const before = (await user.call("sync.pull", { cursors: {} })).data;
     await root.call("admin.user.update", {
       id: user.user.id,
-      features: ["offline", "learning"],
+      features: ["offline", "media"],
     });
     const after = (await user.call("sync.pull", { cursors: {} })).data;
     assert.notDeepEqual(
@@ -100,8 +99,7 @@ export async function adminUsersSuite(
       before.scopes[`me:${user.user.id}`],
       "gate update reaches the open user session",
     );
-    if (!hadLearning)
-      await target.cdp.wait("document.body.textContent.indexOf('学习')>=0");
+    if (!hadMedia) await target.cdp.wait(mediaRail);
     // Audit regressions: these commands existed on the server but lacked UI entry points.
     await search(cdp, "admintest");
     await cdp.evaluate(
@@ -115,24 +113,9 @@ export async function adminUsersSuite(
       "document.querySelector('[aria-label=编辑用户]').click()",
     );
     await cdp.wait("!!document.querySelector('[role=dialog]')");
-    await cdp.evaluate(
-      "(function(){var field=document.querySelector('[role=dialog] [role=group][aria-label=自律模式]');Array.prototype.slice.call(field.querySelectorAll('button')).find(function(b){return b.textContent==='启用'}).click()})()",
-    );
-    await cdp.evaluate(
-      "(function(){var field=document.querySelector('[role=dialog] [role=group][aria-label=自律模式]');field.scrollIntoView({block:'center'})})()",
-    );
-    await shot(cdp, label, "discipline-editor");
+    await shot(cdp, label, "user-editor");
     await click(cdp, "保存");
     await cdp.wait("!document.querySelector('[role=dialog]')");
-    const assigned = (await user.call("sync.pull", { cursors: {} })).data
-      .scopes[`me:${user.user.id}`].rows;
-    assert.equal(
-      assigned.find(
-        (r) => r.type === "setting" && r.id === "learning.discipline",
-      ).data.value.v,
-      true,
-      "admin discipline control reaches the target's setting",
-    );
     await cdp.evaluate(
       "document.querySelector('[data-testid=\"admin.users\"] [role=row][aria-rowindex] input[type=checkbox]').click()",
     );

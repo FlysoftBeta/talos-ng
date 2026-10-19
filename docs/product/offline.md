@@ -30,7 +30,7 @@ app has enough synchronized state to distinguish an absent item from an unfinish
 - **Queued**: applied on the device at once and sent when connected. Queued: settings (theme,
   text size, idle lock, do not disturb), conversation state (read position, mute, pin, draft,
   retention), text and sticker posts (shown as 待发送 until acknowledged), announcement
-  acknowledgement, reading progress, bookmarks and retention choices, learning answers, AI
+  acknowledgement, reading progress, bookmarks and retention choices, AI
   drafts, music favourites, queue and play preference.
 - **Online-only**: anything that establishes shared facts the device cannot predict:
   joining or creating a group or direct message, editing or deleting posts, uploads and
@@ -47,8 +47,7 @@ for permission and receives either permission or a reason string.
 
 Concurrent changes from several devices merge deterministically: settings and conversation
 settings take the newest write; read position and furthest reading position take the
-maximum; reading time sums per-device totals; learning counters merge per device by
-maximum; deleted posts and removed items stay removed. Progress is never lost to an older
+maximum; reading time sums per-device totals; deleted posts and removed items stay removed. Progress is never lost to an older
 device writing later.
 
 ## Retained content

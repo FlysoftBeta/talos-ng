@@ -4,7 +4,6 @@ import type { DataGridColumn } from "../ui/data-grid/index.ts";
 import { DurationInput } from "../ui/inputs/index.ts";
 import { HelpTip } from "../ui/feedback/index.ts";
 import { TalosProvider } from "../ui/theme/index.ts";
-import { parseDurationPart } from "../features/admin/model.ts";
 
 interface DemoRow {
   id: string;
@@ -60,8 +59,7 @@ export function DataGridGallery({ mode }: { mode: "light" | "dark" }) {
     columnId: string;
     direction: "asc" | "desc";
   }>({ columnId: "id", direction: "asc" });
-  const [days, setDays] = useState(1);
-  const [hours, setHours] = useState(0);
+  const [minutes, setMinutes] = useState(1440);
   const filtered = useMemo(() => {
     const matches = query
       ? rows.filter((row) => row.name.includes(query) || row.id.includes(query))
@@ -104,15 +102,12 @@ export function DataGridGallery({ mode }: { mode: "light" | "dark" }) {
         </div>
         <div style={{ marginTop: 16 }}>
           <DurationInput
-            days={days}
-            parse={parseDurationPart}
-            hours={hours}
-            onChange={(nextDays, nextHours) => {
-              setDays(nextDays);
-              setHours(nextHours);
-            }}
+            minutes={minutes}
+            onChange={setMinutes}
+            units={["days", "hours", "minutes"]}
+            max={31 * 1440 - 1}
           />{" "}
-          <HelpTip text="最长 30 天 23 小时。" />
+          <HelpTip text="最长 30 天 23 小时 59 分钟。" />
         </div>
       </main>
     </TalosProvider>

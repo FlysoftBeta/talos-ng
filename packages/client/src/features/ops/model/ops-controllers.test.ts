@@ -3,7 +3,7 @@ import { contract } from "@talos/contract";
 import type { Method } from "@talos/contract";
 import type { Capability } from "../../../core/lifecycle/snapshot.ts";
 import { BackupController } from "./backup.ts";
-import { HostController } from "./host.ts";
+import { HostController, delayText } from "./host.ts";
 import { OfficeController } from "./office.ts";
 import type { OpsPort } from "./port.ts";
 import { UPLOAD_SLICE, UpdateController } from "./update.ts";
@@ -41,7 +41,7 @@ function rig(): Rig {
     handler = new Map<string, (args: unknown) => unknown>();
   handler.set("ops.settings.get", () => settings);
   handler.set("ops.update.status", () => status);
-  handler.set("ops.host.status", () => ({ available: true }));
+  handler.set("ops.host.status", () => ({ available: true, shutdownAt: null }));
   handler.set("ops.backup.list", () => [{ id, created: 1, size: 1048576 }]);
   handler.set("ops.office.list", () => ({ available: true, files: [] }));
   handler.set("ops.office.refresh", () => ({ available: true, files: [] }));
@@ -57,12 +57,16 @@ function rig(): Rig {
   for (const name of [
     "ops.update.apply",
     "ops.update.confirm",
-    "ops.host.run",
     "ops.office.clear",
     "ops.backup.delete",
     "upload.abort",
   ])
     handler.set(name, () => ({ ok: true }));
+  handler.set("ops.host.run", (args) => ({
+    available: true,
+    shutdownAt:
+      (args as { action: string }).action === "shutdown" ? 5_000_000 : null,
+  }));
   handler.set("upload.commit", () => ({
     id,
     object: { id: "a".repeat(64), size: 1 },
@@ -126,7 +130,7 @@ describe("ops panel controllers", () => {
     await host.confirm("shutdown");
     expect(r.calls.at(-1)).toEqual({
       name: "ops.host.run",
-      args: { action: "shutdown" },
+      args: { action: "shutdown", delayMinutes: 0 },
     });
     expect(host.action("shutdown")).toMatchObject({ busy: false, open: false });
     r.setAccess((m) =>
@@ -143,11 +147,14 @@ describe("ops panel controllers", () => {
 
   it("shows a failure and allows a retry; a platform without support disables host actions", async () => {
     const r = rig();
-    r.handler.set("ops.host.status", () => ({ available: false }));
+    r.handler.set("ops.host.status", () => ({
+      available: false,
+      shutdownAt: null,
+    }));
     const host = new HostController(r.port);
     host.attach();
     await flush();
-    expect(host.action("kill-wps").reason).toBe("仅支持 Windows");
+    expect(host.action("reset-classroom").reason).toBe("仅支持 Windows");
     const office = new OfficeController(r.port, { download: vi.fn() });
     r.handler.set("ops.office.refresh", () => new Error("捕获失败"));
     r.handler.set("ops.office.list", () => ({ available: true, files: [] }));
@@ -158,6 +165,36 @@ describe("ops panel controllers", () => {
     r.handler.set("ops.office.refresh", () => ({ available: true, files: [] }));
     await office.press("capture");
     expect(office.action("capture").error).toBeUndefined();
+  });
+
+  it("schedules a shutdown with the chosen delay and offers to cancel only what is pending", async () => {
+    const r = rig(),
+      host = new HostController(r.port);
+    host.attach();
+    await flush();
+    expect(host.model().cancel.reason).toBe("没有待执行的关机");
+    host.setDelay(0);
+    expect(host.model().schedule.reason).toBe("请选择关机时间");
+    host.setDelay(90);
+    expect(host.model().schedule.confirm).toBe(
+      "在 1 小时 30 分钟后关闭服务器计算机",
+    );
+    await host.press("schedule");
+    await host.confirm("schedule");
+    expect(r.calls.at(-1)).toEqual({
+      name: "ops.host.run",
+      args: { action: "shutdown", delayMinutes: 90 },
+    });
+    expect(host.model().scheduled).toContain("关机");
+    expect(host.model().cancel.reason).toBeUndefined();
+    await host.press("cancel");
+    expect(r.calls.at(-1)).toEqual({
+      name: "ops.host.run",
+      args: { action: "cancel-shutdown" },
+    });
+    expect(host.model().scheduled).toBeUndefined();
+    expect(delayText(45)).toBe("45 分钟");
+    expect(delayText(120)).toBe("2 小时");
   });
 
   it("keeps the newest answer when an older reload resolves late", async () => {

@@ -14,7 +14,6 @@ import {
   closeSheet,
   connected,
 } from "../../harness/ui.mjs";
-import { learningScenarios } from "../learning/learning.mjs";
 import { identityScenarios } from "./identity.mjs";
 
 export async function realSuite(browser, server, { legacy = false } = {}) {
@@ -49,7 +48,6 @@ export async function realSuite(browser, server, { legacy = false } = {}) {
   );
   await cdp.send("Runtime.enable");
   let cases = 0;
-  await server.seedLearning();
   await cdp.navigate(`${server.url}/`);
   await cdp.wait(locked);
   await reveal(cdp);
@@ -65,7 +63,6 @@ export async function realSuite(browser, server, { legacy = false } = {}) {
   await pin(cdp, "654321", "登录");
   await cdp.wait(app);
   await connected(cdp);
-  cases += await learningScenarios(cdp, server, name);
   assert.equal(
     await cdp.evaluate("!!document.querySelector('button[aria-label=管理]')"),
     false,
@@ -90,13 +87,13 @@ export async function realSuite(browser, server, { legacy = false } = {}) {
     );
     await captures(cdp, name, theme, "settings");
     await closeSheet(cdp);
-    for (const area of ["对话", "阅读", "学习", "音乐", "AI"]) {
+    for (const area of ["对话", "阅读", "音乐", "AI"]) {
       await click(cdp, area);
       await captures(
         cdp,
         name,
         theme,
-        `frame-${{ 对话: "chat", 阅读: "library", 学习: "learning", 音乐: "media", AI: "ai" }[area]}`,
+        `frame-${{ 对话: "chat", 阅读: "library", 音乐: "media", AI: "ai" }[area]}`,
       );
     }
     await click(cdp, "状态");

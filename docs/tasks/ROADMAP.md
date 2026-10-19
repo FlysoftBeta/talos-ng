@@ -18,7 +18,7 @@ marked done. F-ids refer to `LEGACY-SURVEY.md` §2. Task prompts live in `docs/t
 | M9 | Identity & admission | F-001…F-011, F-045…F-050, device/whitelist/binding/throttle, roles + gates | M8 | verified (task 030; 27 real-server scenarios on both browsers) |
 | M10 | Community & chat | F-012…F-044 (groups, DMs, posts, images, stickers, banners, announcements, retention) | M9 | verified (task 040 + 045 compaction; 16 chat scenarios current, 5 on Chromium 70; screenshots reviewed) |
 | M11 | Library & reader | F-051…F-069 minus network novels (documents, collections, sharing, reader, progress, retention, tasks UI) | M4 M10 | verified (task 060; real-PDF + 500-page + offline e2e on both browsers; F-063 eviction and F-065 anchoring finish in task 130) |
-| M12 | Learning | F-070…F-080 | M9 | verified (task 050; e2e on both browsers; screenshots reviewed) |
+| M12 | Learning | F-070…F-080 | M9 | removed by owner instruction (D-144) |
 | M13 | Media | F-081…F-092 (yt-dlp provider, playlists, queue, player, audio cache) | M11 | done (task 080, fake-provider e2e on both browsers; live yt-dlp not exercised; UI polish = task 111) |
 | M14 | AI | F-093…F-101, F-124, F-125 | M10 | done (task 085; fake-provider e2e; Mermaid shown as labelled source on Chrome 70 (D-088); live upstream unverified) |
 | M15 | Admin workbench | F-102…F-123, F-136…F-141 | M10 | done (tasks 070 + 071; 25 F-ids done, 3 changed by design) |

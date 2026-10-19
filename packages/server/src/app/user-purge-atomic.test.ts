@@ -65,8 +65,6 @@ async function populate(k: Kernel, uid: string) {
   k.ai.create(uid, "private AI");
   k.ai.workspace.write(uid, "note.txt", "private", null);
   k.db.run("INSERT INTO me_settings VALUES(?,'private','true',0,0)", uid);
-  k.db.run("INSERT INTO learning_words VALUES('word','hello','你好')");
-  k.db.run("INSERT INTO learning_progress VALUES(?,'word','{}',0,0)", uid);
   const collection = k.library.createCollection(uid, "owned");
   const doc = await k.library.importText(uid, {
     title: "private doc",
@@ -138,7 +136,6 @@ async function populate(k: Kernel, uid: string) {
 const owners = [
   "community",
   "chat",
-  "learning",
   "ai",
   "netbooks",
   "library",

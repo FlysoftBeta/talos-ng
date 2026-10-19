@@ -52,17 +52,6 @@ or `model/module.ts`, `connect`, `index.ts`).
   search state is memory-only; countdown uses the server-provided remaining duration to
   tolerate clock skew; button actions are serialised; closing the dialog leaves the job.
 
-## Learning
-
-An application-wide `LearningProvider` owns the practice session, a navigation guard that
-covers all exits (concealment still immediate; the interrupted summary shows after unlock;
-browser unload uses the standard confirmation) and one active-use discipline deadline that
-counts only visible, unlocked time and follows the user across areas. Screens read one
-repository containing the `learn` corpus and the user's progress; decoding of the
-deflate-packed corpus is bounded and memoised. Speed and clear-wrong modes pause when the
-tab is hidden and ask to resume. An empty corpus or unavailable practice offers a return
-action so discipline cannot trap the user.
-
 ## Media
 
 `MediaPlayerProvider` stays mounted across areas; `PlaybackController` takes audio, transfer

@@ -1,13 +1,11 @@
-import { inflateRawSync } from "node:zlib";
 import { afterEach, expect, it } from "vitest";
-import { createUlid, deferred, fromBase64Url } from "@talos/base";
+import { createUlid, deferred } from "@talos/base";
 import {
   createApi,
   MAX_HEADER_BYTES,
   MAX_SYNC_BYTES,
   syncResultSchema,
 } from "@talos/contract";
-import type { LearningCorpus } from "@talos/contract";
 import { createMemoryCarrierPair, LinkClient } from "@talos/link";
 import { createMemoryObjectStore } from "@talos/objectstore";
 import { createKernel } from "./app/create-application.ts";
@@ -140,36 +138,4 @@ it("syncs a legal 1000-document library transaction over bounded real link repli
   expect(received.get(`libraryCollection:${collection}`)).toMatchObject({
     data: { docs },
   });
-});
-
-it("syncs an allowed corpus above the link header limit without blocking other scopes", async () => {
-  const { kernel, api } = await setup();
-  let random = 123456;
-  const definition = () =>
-    Array.from({ length: 1000 }, () => {
-      random ^= random << 13;
-      random ^= random >>> 17;
-      random ^= random << 5;
-      return String.fromCharCode(97 + ((random >>> 0) % 26));
-    }).join("");
-  for (let batch = 0; batch < 4; batch++) {
-    const text = Array.from(
-      { length: 100 },
-      (_, i) => `word-${batch}-${i}#${definition()}`,
-    ).join("￥");
-    expect(kernel.learning.import(text).imported).toBe(100);
-  }
-  const corpus = kernel.learning.repo.corpus()!.data as LearningCorpus;
-  expect(corpus.data.length).toBeGreaterThan(MAX_HEADER_BYTES);
-  const pulled = await pullAll(api);
-  expect(pulled.fragments).toBeGreaterThan(1);
-  const received = pulled.rows
-    .get("learn")!
-    .get(`learningCorpus:${corpus.id}`) as { data: LearningCorpus };
-  expect(received.data).toEqual(corpus);
-  const words = JSON.parse(
-    inflateRawSync(fromBase64Url(received.data.data)).toString(),
-  ) as unknown[];
-  expect(words).toHaveLength(400);
-  expect(pulled.rows.size).toBeGreaterThan(1);
 });

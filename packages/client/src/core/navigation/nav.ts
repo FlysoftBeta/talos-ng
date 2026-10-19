@@ -4,9 +4,9 @@ export const AREA_IDS = [
   "recent",
   "chat",
   "library",
-  "learning",
   "media",
   "ai",
+  "admin",
 ] as const;
 export type AreaId = (typeof AREA_IDS)[number];
 export type Page =
@@ -18,7 +18,7 @@ export interface AreaState {
   stack: readonly Page[];
 }
 export type Overlay =
-  { kind: "status" | "settings" | "admin" } | { kind: "detail"; id: string };
+  { kind: "status" | "settings" } | { kind: "detail"; id: string };
 export interface Nav {
   area: AreaId;
   areas: Record<AreaId, AreaState>;
@@ -41,9 +41,9 @@ export function createNav(): Nav {
       chat: { stack: [{ kind: "home" }] },
       recent: { stack: [{ kind: "home" }] },
       library: { stack: [{ kind: "home" }] },
-      learning: { stack: [{ kind: "home" }] },
       media: { stack: [{ kind: "home" }] },
       ai: { stack: [{ kind: "home" }] },
+      admin: { stack: [{ kind: "home" }] },
     },
     overlays: [],
   };
@@ -147,7 +147,7 @@ export function isNav(value: unknown): value is Nav {
   return value.overlays.every(
     (item) =>
       record(item) &&
-      ((["status", "settings", "admin"].includes(item.kind as string) &&
+      ((["status", "settings"].includes(item.kind as string) &&
         Object.keys(item).length === 1) ||
         (item.kind === "detail" &&
           typeof item.id === "string" &&

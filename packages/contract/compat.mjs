@@ -191,8 +191,8 @@ try {
         'ops.update.check': [{},update],
         'ops.update.install': [{},update],
         'ops.https.status': [{},{domain:null,listeners:[],expiry:null,redirect:false,ca:false}],
-        'ops.host.status': [{},{available:false}],
-        'ops.host.run': [{action:'kill-wps'},{ok:true}],
+        'ops.host.status': [{},{available:false,shutdownAt:null}],
+        'ops.host.run': [{action:'shutdown',delayMinutes:30},{available:true,shutdownAt:1000}],
         'ops.office.list': [{},{available:false,files:[]}],
         'ops.office.refresh': [{},{available:false,files:[]}],
         'ops.office.clear': [{},{ok:true}],
@@ -237,10 +237,7 @@ try {
         'tasks.retry': [{id:id},{ok:true}],
         'tasks.cancel': [{id:id},{ok:true}],
         'tasks.clear': [{},{ok:true}],
-        'me.setting.set': [{key:'theme',value:register},{setting:setting}],
-        'learning.corpus.import': [{text:'apple#苹果'},{imported:1,skipped:0,total:1,version:1}],
-        'learning.answer.record': [{word:id,device:id,counter:{learned:1,wrong:0,answered:1,lastAt:1000}},{ok:true}],
-        'learning.discipline.assign': [{user:id,enabled:true},{ok:true}]
+        'me.setting.set': [{key:'theme',value:register},{setting:setting}]
       };
       c.methods.forEach(function (method) {
         if (!values[method.name]) throw new Error('Missing compatibility fixture: '+method.name);

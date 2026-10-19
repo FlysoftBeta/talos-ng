@@ -5,12 +5,6 @@ import {
   useActivityCounts,
   VersionRejectedPrompt,
 } from "../features/activity/index.ts";
-import {
-  LearningProvider,
-  LearningScreen,
-  LearningSidebar,
-  LearningOverlays,
-} from "../features/learning/index.ts";
 import { LibraryBackground } from "../features/library/index.ts";
 import {
   LibraryAreaContent,
@@ -78,17 +72,15 @@ const areas: Record<
     hint: "选择一份文档",
     list: "collection",
   },
-  learning: { title: "学习", icon: "learning", hint: "", list: "nav" },
   media: { title: "音乐", icon: "media", hint: "", list: "nav" },
   ai: { title: "AI", icon: "ai", hint: "开始一段新对话", list: "collection" },
+  admin: { title: "管理", icon: "admin", hint: "", list: "nav" },
 };
-const PRACTICE = /^learning\.(normal|speed|clear|discipline)$/;
-/** Immersive pages hide the list pane: an open document, a practice round. */
+/** The administration area sits with the tools at the foot of the rail. */
+const TOP_AREAS = AREA_IDS.filter((area) => area !== "admin");
+/** Immersive pages hide the list pane: an open document. */
 function isFocus(area: AreaId, top: Page | undefined): boolean {
-  if (!top) return false;
-  if (area === "library") return top.kind === "document";
-  if (area === "learning") return top.kind === "page" && PRACTICE.test(top.id);
-  return false;
+  return area === "library" && top?.kind === "document";
 }
 function useSystemMode(): ColorMode {
   const [mode, setMode] = useState<ColorMode>(() =>
@@ -122,11 +114,9 @@ export function App(): ReactElement {
           : ""
       }
     >
-      <LearningProvider>
-        <MediaPlayerProvider>
-          <AppContent />
-        </MediaPlayerProvider>
-      </LearningProvider>
+      <MediaPlayerProvider>
+        <AppContent />
+      </MediaPlayerProvider>
     </TalosProvider>
   );
 }
@@ -140,9 +130,9 @@ function AppContent(): ReactElement {
     chat: { ok: true as const },
     recent: { ok: true as const },
     library: useGate("articles"),
-    learning: useGate("learning"),
     media: useGate("media"),
     ai: useGate("ai"),
+    admin,
   };
   const areaGate = areaGates[state.nav.area];
   const chatUnread = useChatUnread();
@@ -152,11 +142,20 @@ function AppContent(): ReactElement {
   const stack = state.nav.areas[state.nav.area].stack;
   const top = stack[stack.length - 1];
   const overlay = state.nav.overlays[state.nav.overlays.length - 1];
-  const adminOpen = overlay?.kind === "admin" && admin.ok;
-  const workbench = useAdminWorkbench(adminExtensions);
+  // Opening a section shows it on a narrow, stacked window; back returns to the list.
+  const workbench = useAdminWorkbench(adminExtensions, (id) => {
+    if (state.nav.areas.admin.stack.length === 1)
+      runtime.dispatch({
+        type: "pushPage",
+        area: "admin",
+        page: { kind: "page", id: `section:${id}` },
+      });
+  });
   const close = () => runtime.dispatch({ type: "closeOverlay" });
-  const open = (kind: "settings" | "status" | "admin") =>
+  const open = (kind: "settings" | "status") =>
     runtime.dispatch({ type: "openOverlay", overlay: { kind } });
+  const switchArea = (area: AreaId) =>
+    runtime.dispatch({ type: "switchArea", area });
   const isApp = state.gate === "app";
   return (
     <>
@@ -209,25 +208,20 @@ function AppContent(): ReactElement {
       ) : (
         <div className="app-root" data-testid="app.ready">
           <AppFrame
-            listKind={adminOpen ? "nav" : areas[state.nav.area].list}
-            focus={!adminOpen && isFocus(state.nav.area, top)}
-            detail={adminOpen || stack.length > 1}
-            onBack={() =>
-              adminOpen ? close() : runtime.dispatch({ type: "back" })
-            }
+            listKind={areas[state.nav.area].list}
+            focus={isFocus(state.nav.area, top)}
+            detail={stack.length > 1}
+            onBack={() => runtime.dispatch({ type: "back" })}
             rail={
               <Rail>
-                {AREA_IDS.filter((area) => areaGates[area].ok).map((area) => (
+                {TOP_AREAS.filter((area) => areaGates[area].ok).map((area) => (
                   <RailItem
                     key={area}
                     label={areas[area].title}
                     icon={<Icon name={areas[area].icon} size={22} />}
-                    selected={!adminOpen && state.nav.area === area}
+                    selected={state.nav.area === area}
                     badge={area === "chat" ? chatUnread : undefined}
-                    onClick={() => {
-                      if (adminOpen) close();
-                      runtime.dispatch({ type: "switchArea", area });
-                    }}
+                    onClick={() => switchArea(area)}
                   />
                 ))}
                 <RailSpacer />
@@ -249,10 +243,10 @@ function AppContent(): ReactElement {
                 />
                 {admin.ok && (
                   <RailItem
-                    label="管理"
-                    icon={<Icon name="admin" size={22} />}
-                    selected={adminOpen}
-                    onClick={() => (adminOpen ? close() : open("admin"))}
+                    label={areas.admin.title}
+                    icon={<Icon name={areas.admin.icon} size={22} />}
+                    selected={state.nav.area === "admin"}
+                    onClick={() => switchArea("admin")}
                   />
                 )}
                 <RailItem
@@ -263,7 +257,7 @@ function AppContent(): ReactElement {
               </Rail>
             }
             list={
-              adminOpen ? (
+              state.nav.area === "admin" && areaGate.ok ? (
                 workbench.list
               ) : state.nav.area === "ai" ? (
                 <AiList />
@@ -275,8 +269,6 @@ function AppContent(): ReactElement {
                 <LibraryAreaList />
               ) : state.nav.area === "media" && areaGate.ok ? (
                 <MediaList />
-              ) : state.nav.area === "learning" && areaGate.ok ? (
-                <LearningSidebar />
               ) : (
                 <Pane>
                   <PaneHeader title={current.title} />
@@ -288,18 +280,16 @@ function AppContent(): ReactElement {
               )
             }
           >
-            {adminOpen ? (
-              workbench.content
-            ) : !areaGate.ok ? (
+            {!areaGate.ok ? (
               <EmptyPane icon="lock" />
+            ) : state.nav.area === "admin" ? (
+              workbench.content
             ) : state.nav.area === "ai" ? (
               <AiContent />
             ) : state.nav.area === "chat" ? (
               <ChatContent />
             ) : state.nav.area === "recent" ? (
               <EmptyPane icon="history" hint={areas.recent.hint} />
-            ) : state.nav.area === "learning" ? (
-              <LearningScreen />
             ) : state.nav.area === "library" ? (
               <LibraryAreaContent />
             ) : (
@@ -314,7 +304,6 @@ function AppContent(): ReactElement {
           <ActivityCenter open={overlay?.kind === "status"} onClose={close} />
         </div>
       )}
-      <LearningOverlays />
       {!isApp && !state.concealed && (
         <ActivityCenter
           open={gateStatus}

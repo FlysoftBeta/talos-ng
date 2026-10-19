@@ -10,7 +10,6 @@ import { registerCommunityApi } from "../modules/community/index.ts";
 import { registerChatApi } from "../modules/chat/index.ts";
 import { registerMeApi } from "../modules/me/index.ts";
 import { registerTasksApi } from "../modules/tasks/index.ts";
-import { registerLearningApi } from "../modules/learning/index.ts";
 import { contract, CONTRACT_VERSION } from "@talos/contract";
 import type { ResultOf } from "@talos/contract";
 import type { Kernel } from "./create-application.ts";
@@ -23,7 +22,6 @@ export function registerApi(
     | "identity"
     | "authority"
     | "me"
-    | "learning"
     | "community"
     | "chat"
     | "ai"
@@ -49,7 +47,6 @@ export function registerApi(
     identity,
     authority,
     me,
-    learning,
     community,
     chat: chatService,
     ai,
@@ -68,7 +65,6 @@ export function registerApi(
   registerIdentityApi(host, identity, authority);
   registerAuthorityApi(host, authority);
   registerMeApi(host, me);
-  registerLearningApi(host, learning, authority, me, syncHub, now);
   registerCommunityApi(host, community);
   registerChatApi(host, chatService, authority, audit);
   registerAiApi(host, ai, authority, audit);

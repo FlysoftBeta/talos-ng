@@ -8,7 +8,6 @@ import { importIdentity } from "./identity.ts";
 import { importCommunity } from "./community.ts";
 import { importChat } from "./chat.ts";
 import { importLibrary } from "./library.ts";
-import { importLearning } from "./learning.ts";
 import { importAi } from "./ai.ts";
 import { importMedia } from "./media.ts";
 
@@ -67,8 +66,6 @@ export function importRow(
     table === "resource_possession"
   )
     return importLibrary(target, table, row, legacyId, source);
-  if (table === "words" || table === "user_word_progress")
-    return importLearning(target, table, row, legacyId);
   if (
     table === "ai_conversations" ||
     table === "ai_messages" ||

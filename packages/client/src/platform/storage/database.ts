@@ -78,6 +78,43 @@ export const appMigrations: readonly Migration[] = [
       };
     },
   },
+  {
+    version: 5,
+    upgrade(tx) {
+      // The learning feature was removed: drop its cached rows, its scope's
+      // coverage, the discipline setting and queued answers nobody can send.
+      const rows = tx.objectStore("rows").openCursor();
+      rows.onsuccess = () => {
+        const row = rows.result;
+        if (!row) return;
+        const value = row.value as { scope: string; type: string; id: string };
+        if (
+          value.scope === "learn" ||
+          value.type === "learningCorpus" ||
+          value.type === "learningProgress" ||
+          (value.type === "setting" && value.id === "learning.discipline")
+        )
+          row.delete();
+        row.continue();
+      };
+      tx.objectStore("scopes").delete("learn");
+      const outbox = tx.objectStore("outbox").openCursor();
+      outbox.onsuccess = () => {
+        const entry = outbox.result;
+        if (!entry) return;
+        const items = entry.value as unknown;
+        if (Array.isArray(items)) {
+          const kept = items.filter(
+            (item: { method?: unknown }) =>
+              typeof item?.method !== "string" ||
+              !item.method.startsWith("learning."),
+          );
+          if (kept.length !== items.length) entry.update(kept);
+        }
+        entry.continue();
+      };
+    },
+  },
 ];
 export function openAppDb(
   options: Partial<Omit<DbOptions, "schema">> = {},

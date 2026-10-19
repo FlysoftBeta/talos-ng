@@ -54,14 +54,30 @@ browsers keep using HTTP, where 现在更新 simply reloads the page from the se
 
 ## Host tools (主机工具)
 
-Root only, audited, fixed commands: close WPS (the host's Office suite, not a browser tab)
-and shut down the computer (Windows, with a ten-second grace; unavailable on Linux).
+Root only, audited, fixed commands on the Windows computer running the server (unavailable
+on Linux):
+
+- **重置教学环境** (reset the teaching environment) prepares the classroom computer for the
+  next lesson: it closes open folder windows (the desktop and taskbar stay), Microsoft
+  Office (Word, PowerPoint, Excel), WPS, Seewo EasiNote (希沃白板) and the Seewo visualiser
+  (视频展台). Unsaved work in those programs is lost; the confirmation says so.
+- **立即关机** shuts the computer down after a ten-second grace.
+- **定时关机** shuts it down after a chosen delay (presets or hours and minutes, up to 24
+  hours) using the app's one duration control. The panel shows when the pending shutdown
+  happens; a new schedule replaces the old one and **取消定时关机** cancels it. The server
+  remembers only the schedule it set since it last started.
 
 ## Opened documents (已打开的文档)
 
 On Windows only, the server captures saved copies of Word, PowerPoint, Excel (and WPS
-equivalents) documents currently open on the host, for download. Only what is saved to disk
-is captured; unsaved changes are not. The list refreshes every four seconds and can be
-refreshed manually. Clearing removes the captures and they are not re-added automatically
-while still open; capturing again re-adds them. Elsewhere the panel states it is
-unavailable.
+equivalents) documents currently open on the host, for download. A document is found when
+the program reports it through automation or when it was opened from a file (its path is on
+the program's command line), so a document presented full screen straight after opening is
+found too. Only what is saved to disk is captured; unsaved changes are not. A document that
+cannot be read at the moment (locked, over 100 MiB, or changing while copied) is skipped and
+tried again on the next refresh; it never hides the others. The list refreshes every four
+seconds and can be refreshed manually. Clearing removes the captures and they are not
+re-added automatically while still open; capturing again re-adds them. Elsewhere the panel
+states it is unavailable. Capture works when the server runs in the signed-in teacher's
+Windows session (the start script started from that session); a server started as a
+background service cannot see that session's programs.

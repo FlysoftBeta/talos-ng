@@ -119,16 +119,14 @@ covered only by an opt-in test (`TALOS_NETBOOKS_LIVE=1`, skipped by default).
   object-ledger transaction (`importGeneratedText`, up to 200 MiB), then the library
   conversion job renders the reader pack.
 
-## Learning
+## Learning (retired)
 
-`learning_words` keeps unique English spellings with stable ids; `learning_corpus` stores one
-versioned deflate-packed snapshot in scope `learn`, so one pull makes complete offline practice
-possible; imports skip malformed or duplicate entries and publish a new version only when
-words were added. `learning_progress` is one product-of-counters row per user and word in
-`me:<user>` and the server applies queued answers with the same contract reducer as the client
-(merge rules in `sync.md`). Word import and discipline assignment need feature-management
-authority; a seed command (`packages/server/bin/learning-seed.ts`) imports a words file into an
-existing database with the same rules.
+The vocabulary-practice feature was removed. The `learning` module keeps only its migration
+history: its second migration drops `learning_words`, `learning_corpus` and
+`learning_progress`. Authority and identity migrations remove the `learning` gate from stored
+feature lists and the `me` migration deletes the `learning.discipline` setting. The client's
+IndexedDB version 5 deletes the cached `learn` scope, learning rows, the discipline setting
+and queued answers.
 
 ## Media
 
@@ -263,11 +261,25 @@ ops_office, ops_downloads`.
   Cloud `install` uses the same prepare operation under one guard; automatic checks run at
   most every 15 minutes when enabled; install is explicit. A staged-but-unapplied release
   is not applied after a process restart. Confirmation window and rollback: `packaging.md`.
-- **Host tools** use fixed `execFile` argv, never a shell; Windows shutdown has a 10 s grace;
-  other platforms answer `E_UNAVAILABLE`.
-- **Office capture** (Windows) enumerates COM active objects for Word, PowerPoint, Excel and
-  the WPS equivalents behind an injectable adapter, copies saved disk contents only (size
-  and mtime checked before and after), refs go through the ledger, bytes and names dedupe.
-  Polling every four seconds; clearing keeps the in-memory open-document set so the next
-  poll does not undo it, explicit capture can re-add; limits 1,000 entries, 100 MiB per file,
-  256 MiB per poll. The COM path has not run on native Windows.
+- **Host tools** use fixed `execFile` argv, never a shell; other platforms answer
+  `E_UNAVAILABLE`. The classroom reset is one encoded Windows PowerShell 2.0-compatible
+  script: `Shell.Application` window list `Quit()` for windows whose host is
+  `explorer.exe` (folder windows; the shell process with desktop and taskbar stays), then
+  `Stop-Process -Force` over a fixed name list (Office, WPS, Seewo `EasiNote`,
+  `swenlauncher`, `EasiCamera`); a missing process is not an error. Shutdown runs
+  `shutdown /a` (its failure when nothing is pending is ignored, since Windows refuses a
+  second schedule) and then `shutdown /s /t <seconds>`, minimum 10 s; the adapter keeps the
+  deadline it set in memory for the status. `host.run` answers the new status.
+- **Office capture** (Windows) runs one encoded PowerShell 2.0-compatible script (no
+  `::new`, no `ConvertTo-Json`) that prints `source<TAB>base64(UTF-8 path)` lines, so console
+  code pages cannot garble names. Sources: the document collections of the Word, PowerPoint,
+  Excel and WPS automation objects (`GetActiveObject`), and absolute document paths on the
+  command lines of those processes (`Win32_Process`), which covers an Office application
+  that has not yet registered for automation (it registers only after its window first
+  loses focus). Command-line paths count only with a document extension. The adapter copies
+  saved disk contents only (size and mtime checked before and after); a file that cannot be
+  copied this round is skipped, never failing the others. Refs go through the ledger, bytes
+  and names dedupe. Polling every four seconds; clearing keeps the in-memory open-document
+  set so the next poll does not undo it, explicit capture can re-add; limits 1,000 lines,
+  100 MiB per file, 256 MiB per poll. Automation and folder windows are per Windows session:
+  the server must run in the teacher's session. The scripts have not run on native Windows.

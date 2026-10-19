@@ -61,19 +61,6 @@ export class CommandController {
       !this.ports.gate("offline").ok
     )
       return this.ports.gate("offline");
-    if (
-      method.name === "learning.answer.record" &&
-      !this.ports.gate("learning").ok
-    )
-      return this.ports.gate("learning");
-    if (
-      (method.name === "learning.corpus.import" ||
-        method.name === "learning.discipline.assign") &&
-      !this.ports.snapshot.user?.roles.some(
-        (role) => role === "root" || role === "feature_manager",
-      )
-    )
-      return { ok: false, reason: "只有功能管理员可以执行此操作" };
     if (method.name.startsWith("ops.")) {
       const role = opsActionRole(method.name);
       const permission = role

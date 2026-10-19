@@ -479,11 +479,14 @@ it("imports a real-schema fixture, verifies hashes, and serves migrated data ove
     const opened = await api.library.doc.open({ doc: novelId });
     expect(opened.manifest.kind).toBe("flow");
     expect(opened.document.title).toBe("Downloaded novel");
-    const pulled = await api.sync.pull({ cursors: {} });
-    const progress = pulled.scopes[`me:${login.user.id}`]!.rows.find(
-      (row) => row.type === "learningProgress",
-    )?.data as { devices: Record<string, { learned: number }> };
-    expect(progress.devices[legacyUlid("device", "legacy")]!.learned).toBe(2);
+    // Legacy learning data and the learning gate are retired, not imported.
+    expect(login.user.features).not.toContain("learning");
+    expect(login.user.features).toContain("post_images");
+    expect(
+      db.get<{ n: number }>(
+        "SELECT count(*) n FROM sqlite_master WHERE name LIKE 'learning_%'",
+      )!.n,
+    ).toBe(0);
   } finally {
     client.stop();
     await kernel.close();
@@ -1166,10 +1169,8 @@ it("rejects unsupported versions and v25 binary storage before creating a target
   await expect(stat(f.target)).rejects.toMatchObject({ code: "ENOENT" });
 });
 
-it("publishes decodable learning, reading and chat projections and detects corruption", async () => {
-  const { inflateRawSync } = await import("node:zlib");
-  const { learningProgressSchema, libraryStateSchema } =
-    await import("@talos/contract");
+it("publishes decodable reading and chat projections and detects corruption", async () => {
+  const { libraryStateSchema } = await import("@talos/contract");
   const { verifyProjections } = await import("./target/projections.ts");
   const f = await completionFixture();
   const source = new DatabaseSync(f.source);
@@ -1187,21 +1188,6 @@ it("publishes decodable learning, reading and chat projections and detects corru
   const db = new Db(join(f.target, "talos.db"));
   try {
     expect(verifyProjections(db)).toEqual([]);
-    const corpus = JSON.parse(
-      db.get<{ body: string }>("SELECT body FROM learning_corpus")!.body,
-    ) as { count: number; data: string };
-    expect(corpus.count).toBe(1);
-    expect(
-      JSON.parse(
-        inflateRawSync(Buffer.from(corpus.data, "base64url")).toString(),
-      ),
-    ).toEqual([[legacyUlid("words", word), "apple", "fruit"]]);
-    const progress = learningProgressSchema.parse(
-      JSON.parse(
-        db.get<{ body: string }>("SELECT body FROM learning_progress")!.body,
-      ),
-    );
-    expect(Object.values(progress.devices)[0]!.learned).toBe(2);
     for (const row of db.all<{ body: string }>(
       "SELECT body FROM library_states",
     ))
@@ -1216,15 +1202,11 @@ it("publishes decodable learning, reading and chat projections and detects corru
     ) as { lastPost: { authorName: string; preview: string } };
     expect(state.lastPost.authorName).toBe("Alice");
     expect(state.lastPost.preview).toBe("hello");
-    db.run("UPDATE learning_corpus SET body=json_set(body,'$.count',0)");
     db.run("UPDATE chat_posts SET data=json_set(data,'$.authorName','')");
     db.run(
       "UPDATE library_states SET body=json_set(body,'$.seconds',json('{\"legacy\":1}'))",
     );
     const failures = verifyProjections(db);
-    expect(failures).toContain(
-      "learning_corpus: packed words differ from imported words",
-    );
     expect(failures.some((m) => m.startsWith("chat_posts:"))).toBe(true);
     expect(failures.some((m) => m.startsWith("library_states:"))).toBe(true);
   } finally {

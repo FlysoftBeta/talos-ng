@@ -4,7 +4,6 @@ export const FEATURES = [
   "articles",
   "article_reader",
   "ebook_reader",
-  "learning",
   "article_download",
   "ai",
   "media",

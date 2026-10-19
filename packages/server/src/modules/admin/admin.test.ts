@@ -91,16 +91,6 @@ describe("admin workbench over memory link", () => {
         });
       kernel.ai.create(uid, "private AI");
       kernel.ai.workspace.write(uid, "note.txt", "private", null);
-      db.run("INSERT INTO learning_words VALUES(?,?,?)", id(), "hello", "你好");
-      const word = db.get<{ id: string }>(
-        "SELECT id FROM learning_words LIMIT 1",
-      )!.id;
-      db.run(
-        "INSERT INTO learning_progress VALUES(?,?,?,0,0)",
-        uid,
-        word,
-        "{}",
-      );
       const active = kernel.jobs.enqueue(uid, "debug.sleep", { ms: 30000 });
       for (
         let i = 0;
@@ -125,9 +115,6 @@ describe("admin workbench over memory link", () => {
       ).toEqual([]);
       for (const table of ["ai_rows", "ai_files"])
         expect(db.all(`SELECT * FROM ${table} WHERE user=?`, uid)).toEqual([]);
-      expect(
-        db.all("SELECT * FROM learning_progress WHERE user_id=?", uid),
-      ).toEqual([]);
       const after = await admin.api.sync.pull({
         cursors,
         windowed: [`conv:${conv}`],
@@ -251,14 +238,14 @@ describe("admin workbench over memory link", () => {
         });
         const tri = await admin.api.admin.user.bulk({
           ids: [created.user.id, "01AAAAAAAAAAAAAAAAAAAAAAAA"],
-          gateChanges: { offline: "disable", learning: "enable" },
+          gateChanges: { offline: "disable", media: "enable" },
           roleChanges: { community_manager: "enable" },
           changes: { mutedUntil: Number.MAX_SAFE_INTEGER },
         });
         expect(tri.results.map((r) => r.ok)).toEqual([true, false]);
         const changed = (await admin.api.admin.user.list({ query: "example" }))
           .items[0]!;
-        expect(changed.features).toContain("learning");
+        expect(changed.features).toContain("media");
         expect(changed.features).not.toContain("offline");
         expect(changed.roles).toContain("community_manager");
         expect(changed.mutedUntil).toBe(roleUpdate.user.mutedUntil);

@@ -85,7 +85,7 @@ const args: Record<string, unknown> = {
   "ops.update.install": {},
   "ops.https.status": {},
   "ops.host.status": {},
-  "ops.host.run": { action: "kill-wps" },
+  "ops.host.run": { action: "reset-classroom" },
   "ops.office.list": {},
   "ops.office.refresh": {},
   "ops.office.clear": {},

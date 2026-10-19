@@ -35,11 +35,6 @@ import { me, profile, setting } from "./modules/me/index.ts";
 import { authority, grant } from "./modules/authority.ts";
 import { identity } from "./modules/identity.ts";
 import {
-  learning,
-  learningCorpus,
-  learningProgress,
-} from "./modules/learning.ts";
-import {
   community,
   communityConversation,
   communityMember,
@@ -59,7 +54,6 @@ export const contract = Object.freeze({
   me,
   identity,
   authority,
-  learning,
   community,
   chat,
   ops,
@@ -97,9 +91,6 @@ export const methods = Object.freeze([
   tasks.cancel,
   tasks.clear,
   me.setting.set,
-  learning.corpus.import,
-  learning.answer.record,
-  learning.discipline.assign,
   ...Object.values(community.group),
   community.dm.open,
   chat.post.send,
@@ -144,8 +135,6 @@ export const entities = Object.freeze({
   setting,
   grant,
   job: tasks.job,
-  learningCorpus,
-  learningProgress,
   communityConversation,
   communityMember,
   communitySelf,

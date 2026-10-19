@@ -48,9 +48,9 @@ const areaNames: Record<AreaId, string> = {
   chat: "对话",
   recent: "最近",
   library: "阅读",
-  learning: "学习",
   media: "音乐",
   ai: "AI",
+  admin: "管理",
 };
 const rows = Array.from({ length: 50000 }, (_, index) => ({
   id: index,
@@ -171,11 +171,6 @@ export function Showcase({
         hint="3 本书 · 已保存到本机"
         leading={<Icon name="library" />}
       />
-      <ListRow
-        title="学习记录"
-        hint="今日已完成 24 个单词"
-        leading={<Icon name="learning" />}
-      />
       <div className="gallery-list-footer">
         <Stack>
           <StatusPill model={status} onClick={() => setOverlay("status")} />
@@ -229,11 +224,6 @@ export function Showcase({
                 label="设置"
                 icon={<Icon name="settings" />}
                 onClick={() => setOverlay("sheet")}
-              />
-              <RailItem
-                label="管理"
-                icon={<Icon name="admin" />}
-                disabledReason="当前账号没有管理权限"
               />
               <RailItem
                 label="锁定"

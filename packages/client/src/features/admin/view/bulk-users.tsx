@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 import { Mark } from "../../../ui/feedback/index.ts";
 import { Button } from "../../../ui/actions/index.ts";
 import { Dialog, Sheet } from "../../../ui/overlays/index.ts";
-import { DurationInput } from "../../../ui/inputs/index.ts";
+import { RestrictionDuration } from "./restriction-duration.tsx";
 import { Group, GroupRow, Stack } from "../../../ui/layout/index.ts";
 import { FEATURE_OPTIONS, ROLE_OPTIONS } from "../model/access.ts";
 import type { BulkReportItem } from "../model/bulk-users.ts";
@@ -94,7 +94,7 @@ export function BulkUsersSheet({
               <span>封禁</span>
               <TriState value={bulk.ban} onChange={actions.setBulkBan} />
             </div>
-            {needsDuration && <DurationInput {...duration} />}
+            {needsDuration && <RestrictionDuration {...duration} />}
           </>
         )}
       </Stack>

@@ -1,6 +1,4 @@
 import { fork } from "node:child_process";
-import { promisify } from "node:util";
-import { execFile } from "node:child_process";
 import { createServer } from "node:net";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -10,7 +8,6 @@ import { DatabaseSync } from "node:sqlite";
 import { sendStart } from "../../../packages/launcher/src/process/server-start.ts";
 import { DIST, ROOT } from "./static-server.mjs";
 import { eventually } from "./wait.mjs";
-const execFileAsync = promisify(execFile);
 
 async function freePort() {
   const socket = createServer();
@@ -145,47 +142,6 @@ export async function createRealServer() {
           )
           .get(key);
         return row ? JSON.parse(row.value).v : undefined;
-      } finally {
-        db.close();
-      }
-    },
-    async seedLearning() {
-      const file = path.join(directory, "learning-seed.txt");
-      await writeFile(
-        file,
-        Array.from({ length: 16 }, (_, n) => `word${n}#释义${n}`).join("￥"),
-      );
-      await execFileAsync(
-        process.execPath,
-        [
-          "--import",
-          "tsx",
-          path.join(ROOT, "packages/server/bin/learning-seed.ts"),
-          path.join(data, "talos.db"),
-          file,
-        ],
-        { cwd: ROOT },
-      );
-    },
-    learningAnswers(handle) {
-      const db = new DatabaseSync(path.join(data, "talos.db"), {
-        readOnly: true,
-      });
-      try {
-        const rows = db
-          .prepare(
-            "SELECT body FROM learning_progress WHERE user_id=(SELECT id FROM users WHERE handle=?)",
-          )
-          .all(handle);
-        return rows.reduce(
-          (sum, row) =>
-            sum +
-            Object.values(JSON.parse(row.body).devices).reduce(
-              (n, counter) => n + counter.answered,
-              0,
-            ),
-          0,
-        );
       } finally {
         db.close();
       }

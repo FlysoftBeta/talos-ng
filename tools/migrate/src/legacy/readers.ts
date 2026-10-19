@@ -5,7 +5,6 @@ import { identityTables, readIdentity } from "./identity.ts";
 import { communityTables, readCommunity } from "./community.ts";
 import { chatTables, readChat } from "./chat.ts";
 import { libraryTables, readLibrary } from "./library.ts";
-import { learningTables, readLearning } from "./learning.ts";
 import { mediaTables, readMedia } from "./media.ts";
 import { aiTables, readAi } from "./ai.ts";
 export const tables = [
@@ -34,8 +33,6 @@ export const tables = [
   "user_queues",
   "user_favorites",
   "article_read_progress",
-  "words",
-  "user_word_progress",
   "ai_conversations",
   "ai_messages",
   "ai_credit_accounts",
@@ -60,8 +57,6 @@ export function sourceRows(
     return readChat(db, table, offset);
   if ((libraryTables as readonly string[]).includes(table))
     return readLibrary(db, table, offset);
-  if ((learningTables as readonly string[]).includes(table))
-    return readLearning(db, table, offset);
   if ((mediaTables as readonly string[]).includes(table))
     return readMedia(db, table, offset);
   if ((aiTables as readonly string[]).includes(table))

@@ -10,7 +10,7 @@ server-side tasks. It is a sheet over whatever the user is doing and stays reada
 - Connection, last synchronisation and a one-line summary of queued changes
   ("N 项待同步 · M 项失败", or 所有更改已保存).
 - **同步范围** while a synchronisation is paging: each scope (personal data, each conversation,
-  each collection, learning corpus, AI sessions) shows 等待中, 正在同步 with the rows received
+  each collection, AI sessions) shows 等待中, 正在同步 with the rows received
   so far, or 已可用. A scope marked 已可用 is complete and can be used at once while the others
   continue, so a large account becomes usable piecemeal.
 - **需要处理** first: failed changes, failed transfers and failed tasks.

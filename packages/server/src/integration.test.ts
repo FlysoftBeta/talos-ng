@@ -102,7 +102,7 @@ describe.each(["memory", "ws"] as const)(
         const pulled = await first.api.sync.pull({ cursors: {} });
         const scope = `me:${session.user.id}`;
         expect(pulled.added).toEqual(
-          expect.arrayContaining(["learn", scope, "sys"]),
+          expect.arrayContaining([scope, "sys"]),
         );
         expect(
           pulled.added.filter((id) => id.startsWith("conv:")),
@@ -395,7 +395,7 @@ it("enforces identity and authority policies over memory link and synchronizes p
     await root.api.authority.access.set({
       user: onboard.user.id,
       roles: ["access_manager"],
-      features: ["learning"],
+      features: ["media"],
     });
     const scope = `me:${onboard.user.id}`;
     const snapshot = await invitee.api.sync.pull({ cursors: {} });
@@ -404,7 +404,7 @@ it("enforces identity and authority policies over memory link and synchronizes p
     ).toMatchObject({
       name: "学生二",
       roles: ["administrator", "access_manager"],
-      features: ["learning"],
+      features: ["media"],
     });
     await expect(
       invitee.api.identity.invitation.create({}),

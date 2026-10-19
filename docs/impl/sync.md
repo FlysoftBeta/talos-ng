@@ -130,8 +130,7 @@ side channel.
 - `Max`: monotonic numbers or `{seq,id}` cursors (read cursor, furthest reading position,
   announcement acknowledgement by revision).
 - Counters per device: grow-only per device, merged by maximum per field, summed for display
-  (reading seconds, learning progress). Learning clears an observed wrong answer by recording
-  an observed-prefix per source device, so unseen concurrent errors survive.
+  (reading seconds).
 - Immutable facts and tombstones: a deletion beats any live fact; otherwise the greater
   revision wins (posts, documents). Tombstones never resurrect (SQL triggers on posts).
 - Identities must not be reused for different payloads.

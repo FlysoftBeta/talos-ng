@@ -2,8 +2,8 @@
 
 ## Goals
 
-- A community app for a school: talk in groups and direct messages, read books, practise
-  vocabulary, listen to music, ask an AI assistant, administer all of it from the same app.
+- A community app for a school: talk in groups and direct messages, read books, listen to
+  music, ask an AI assistant, administer all of it from the same app.
 - Safe to put on shared tablets: the interface can be concealed, sign-in is by PIN, devices
   are admitted by policy, and administrators control who may do what.
 - Useful with an unreliable network: everything already on the device keeps working, many

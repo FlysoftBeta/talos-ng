@@ -3,7 +3,6 @@ import { UserPurgeRegistry } from "./user-purge.ts";
 import { identityPurge } from "../modules/identity/purge.ts";
 import { communityPurge } from "../modules/community/purge.ts";
 import { chatPurge } from "../modules/chat/purge.ts";
-import { learningPurge } from "../modules/learning/purge.ts";
 import { aiPurge } from "../modules/ai/purge.ts";
 import { netbooksPurge } from "../modules/netbooks/purge.ts";
 import { libraryPurge } from "../modules/library/purge.ts";
@@ -65,7 +64,6 @@ export function composeUserPurge(
   registry.register(
     chatPurge(db, { deletePost: (id) => chat.delete(id), removeRefs }),
   );
-  registry.register(learningPurge(db));
   registry.register(aiPurge(db));
   registry.register(netbooksPurge(db));
   registry.register(

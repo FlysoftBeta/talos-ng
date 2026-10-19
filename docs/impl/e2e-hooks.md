@@ -81,16 +81,7 @@ rendered page's shadow host (`aria-label` is `文档第 N 页`).
 |---|---|---|
 | `recent.list` | list pane of the recent area | - |
 
-## 5. Learning (`learning`)
-
-| hook | element | used by |
-|---|---|---|
-| `learning.page` | content area of any learning screen | hardening |
-| `learning.stats` | dashboard statistics block | learning |
-| `learning.word` | the word being asked | learning |
-| `learning.choice` | one answer choice (disabled once answered) | learning |
-
-## 6. Media (`media`)
+## 5. Media (`media`)
 
 | hook | element | used by |
 |---|---|---|
@@ -102,7 +93,7 @@ rendered page's shadow host (`aria-label` is `文档第 N 页`).
 | `media.mini.play` | its play/pause button (title names the track) | media |
 | `media.queue` | play-queue sheet content | media |
 
-## 7. AI (`ai`)
+## 6. AI (`ai`)
 
 | hook | element | used by |
 |---|---|---|
@@ -117,7 +108,7 @@ rendered page's shadow host (`aria-label` is `文档第 N 页`).
 | `ai.billing` | quota and statistics screen (scroll container) | ai |
 | `ai.billing.chart` | daily consumption chart | ai |
 
-## 8. Admin (`admin`)
+## 7. Admin (`admin`)
 
 | hook | element | used by |
 |---|---|---|
@@ -136,30 +127,30 @@ rendered page's shadow host (`aria-label` is `文档第 N 页`).
 | `admin.audit` | audit pane | admin |
 | `admin.debug` | debug pane | admin |
 
-## 9. Ops (`ops`)
+## 8. Ops (`ops`)
 
 | hook | element | used by |
 |---|---|---|
 | `ops.panel` | content of an operations panel (update, backup, https, host, office); absent while the panel frame is not mounted | ops |
 
-## 10. Development gallery (`dev`, static feature `offline`)
+## 9. Development gallery (`dev`, static feature `offline`)
 
 | hook | element | used by |
 |---|---|---|
 | `dev.gallery` | root of the design-system gallery page | offline |
 | `dev.nav-demo.open` / `.back` / `.state` | navigation demo: open control, back control, JSON state readout | offline |
 
-## 11. ARIA contract (roles and accessible names)
+## 10. ARIA contract (roles and accessible names)
 
 Scenarios locate these by role and name; the names are product text.
 
 - Dialogs and sheets: `role=dialog`; the close control is a button named `关闭`; the last dialog
   in the DOM is the topmost.
 - Buttons are found by accessible name (or visible text) - e.g. `发送`, `设置`, `创建邀请`,
-  `确认`, `放弃`, `重试`, rail entries named by area (`对话`, `阅读`, `最近`, `学习`, `音乐`, `AI`,
+  `确认`, `放弃`, `重试`, rail entries named by area (`对话`, `阅读`, `最近`, `音乐`, `AI`,
   `管理`, `任务`); the current area has `aria-current`. A signed-in session lands on `最近`, so scenarios
   open the area under test through the rail first (`openArea` in `tools/e2e/harness/ui.mjs`).
-- Choice groups: `role=group` with an `aria-label` (`主题`, `自律模式`, `数字键盘`) containing
+- Choice groups: `role=group` with an `aria-label` (`主题`, `数字键盘`, `持续时间`) containing
   buttons with `aria-pressed`.
 - Pickers: a `button[aria-haspopup=listbox]` named by its label, opening `role=listbox` with
   `role=option` items carrying `data-value`.

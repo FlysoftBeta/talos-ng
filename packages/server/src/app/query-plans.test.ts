@@ -13,7 +13,7 @@ const BOUNDED = new Map([
   ["SCAN ai_runs USING INDEX ai_active_conversation", "active runs only"],
 ]);
 const GROWING =
-  /^(users|user_pins|sessions|devices|community_\w+|chat_(posts|states|texts|ack)|library_\w+|media_\w+|ai_\w+|me_settings|learning_progress|jobs|authority_\w+|objects|object_refs|uploads)$/;
+  /^(users|user_pins|sessions|devices|community_\w+|chat_(posts|states|texts|ack)|library_\w+|media_\w+|ai_\w+|me_settings|jobs|authority_\w+|objects|object_refs|uploads)$/;
 
 it("sync pull, fan-out and posting use indexes on growing tables", async () => {
   const db = new Db();

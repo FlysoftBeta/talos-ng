@@ -33,7 +33,7 @@ This guide covers the `classapp-next` SQLite `data.db` and its `storage/objects`
 
    `verify` exits 1 if there are any mismatches, recorded row issues, or failed conversions—even when all entity and byte checks pass. Separate `mismatches`, `issues`, and `failedConversions` when reviewing its JSON; a deliberate fallback still needs operator review. `report` writes its report to stdout; `run` writes `migration-report.md` in the target.
 
-   `verify` checks client-schema validity for chat and reading/learning state, the packed learning corpus, author names and latest-message previews, plus journal counts, target counts for one-to-one entities, source row hashes, per-entity target counts (including many-to-one and explicitly excluded rows), and deterministic first/middle/last content samples. Document body/source bytes, post text and audio/image blobs are SHA-256 compared against source bytes, the content-addressed store and the ledger. Workspace files are checked in bounded chunks; AI balance totals and individual accounts must match exactly. It cannot prove every item correct. A row with an issue is still journaled. Treat every issue as requiring review.
+   `verify` checks client-schema validity for chat and reading state, author names and latest-message previews, plus journal counts, target counts for one-to-one entities, source row hashes, per-entity target counts (including many-to-one and explicitly excluded rows), and deterministic first/middle/last content samples. Document body/source bytes, post text and audio/image blobs are SHA-256 compared against source bytes, the content-addressed store and the ledger. Workspace files are checked in bounded chunks; AI balance totals and individual accounts must match exactly. It cannot prove every item correct. A row with an issue is still journaled. Treat every issue as requiring review.
 5. Boot the new server on the migrated data directory. It runs queued `library.convert` jobs through `@talos/docpipe`. Check failed jobs, document readability, a sample of images and media object integrity. Log in with a migrated six-digit PIN; first successful login replaces the legacy HMAC record with scrypt.
 6. Roll back by stopping the new server and starting the untouched legacy application with the original **database and object tree**. Never point the legacy application at the new data directory. Keep the backup until reconciliation and cutover checks are complete.
 
@@ -54,7 +54,7 @@ Legacy IDs become deterministic target ULIDs, except wild/announcement groups th
 | `articles`, `text_article_segments` | `library_documents`, source objects, `library.convert` jobs | Text remains text, with segment bytes streamed to a source object. PDF source is retained and re-rendered by `@talos/docpipe` on server boot. Missing blobs and conversion failures are reported, not fatal. |
 | `booklists`, `booklist_items`, `group_booklists`, `access_bindings` | `library_collections`, `library_items`, `authority_grants` and projections | Direct user owner grants select the collection owner; collections with only group/no ownership and ownerless articles use the earliest imported user and record the ownership loss. Grants become `coll:<id>` read/write/own authority grants plus module delegations. Mixed shareable-read/non-shareable-write retains write without delegation to avoid escalation. Collections over 1,000 documents retain extra item rows but expose only the first 1,000 in the collection body. |
 | `user_favorites`, `article_read_progress` | `library_states` | Article favorite and progress import. A legacy flat offset maps to unit 0; per-device detail is unavailable. Track favourites and personal queues use `media_user_states`. Other unsupported kinds are reported. |
-| `words`, `user_word_progress` | `learning_words`, `learning_progress` | Learned and wrong counts become a single deterministic legacy-device ULID counter. The packed corpus is rebuilt for client sync. Legacy status is inferred from counts and is not stored verbatim. |
+| `words`, `user_word_progress` | not migrated | The vocabulary-practice feature was removed; legacy words and progress are left in the source. |
 | `ai_conversations`, `ai_messages` | `ai_rows`, `ai_messages` | Titles, messages, sequences and read cursors carry over. Finished messages remain done. Pending/streaming messages become cancelled/failed with partial text and a migration error. Image attachments resolve against validated workspace files; missing files are reported. Fork topology and derived tags are not reconstructed. |
 | `ai_credit_accounts`, `ai_plan_enrollments`, `ai_credit_ledger` | `ai_accounts`, `ai_ledger` | Top-up balance, plan end and ledger records carry over. Active reservations are closed without a charge, with zero-amount release notes naming the reserved amount; top-up balances are unchanged. Historical usage accounting is not reconstructed. |
 | `ai_workspaces` | `migration_workspace_rows`, `objects`, `object_refs`, `ai_files` | The ZIP is retained and validated entries are streamed through temporary files into `ai_files` without a whole archive or file buffer in JavaScript. Per-file modification times have no target column. Archives exceeding the target's 10 MiB / 256 file limit, missing blobs and invalid entries are reported. SQLite's BLOB concatenation can still allocate a whole value internally. |
@@ -98,7 +98,7 @@ Active AI runs are never replayed: partial text is preserved, pending/running st
   reported issue, never a fabricated asset.
 - Verification compares journal counts, per-entity target footprints, deterministic
   first/middle/last samples, every imported workspace file checksum and exact per-user credit
-  balances, and also decodes client-visible state (packed learning corpus, chat summaries),
+  balances, and also decodes client-visible state (reading state, chat summaries),
   not only SQL and byte counts. Any mismatch, issue or failed conversion yields a nonzero
   exit code. Private rehearsal artefacts stay outside the repository.
 - The tool is a one-shot offline pipeline (read, map, materialise) and is deliberately not
@@ -116,7 +116,7 @@ This inventory covers the current schema, including tables intentionally exclude
 | `users.handle` | users.handle (20-character cap, collision suffix) |
 | `users.username` | users.name (30-character cap) |
 | `users.profile_revision` | not migrated because target global revisions are regenerated |
-| `users.feature_bitset` | users.features (same feature order) |
+| `users.feature_bitset` | users.features (legacy bit order; the retired learning bit is dropped) |
 | `users.is_muted` | chat_mutes |
 | `users.muted_until` | chat_mutes.until (indefinite becomes maximum safe epoch) |
 | `users.banned_until` | users.banned (non-null becomes banned; timed expiry not preserved) |
@@ -247,19 +247,6 @@ This inventory covers the current schema, including tables intentionally exclude
 | `convs_user.read_updated_at_ms` | not migrated because target imported entity has no equivalent historical field; semantic times explicitly listed above are preserved |
 | `convs_user.muted_updated_at_ms` | chat_states.mute.t |
 | `convs_user.updated_at` | chat_states.updated |
-| `words.id` | learning_words.id |
-| `words.english` | learning_words.english (128-character cap) |
-| `words.phonetic` | not migrated because target corpus has no phonetic field |
-| `words.definition` | learning_words.definition (2,000-character cap) |
-| `words.created_at` | not migrated because target imported entity has no equivalent historical field; semantic times explicitly listed above are preserved |
-| `user_word_progress.user_id` | learning_progress.user_id |
-| `user_word_progress.word_id` | learning_progress.word_id |
-| `user_word_progress.learned_count` | devices.legacy.learned |
-| `user_word_progress.wrong_count` | devices.legacy.wrong |
-| `user_word_progress.status` | not migrated because mastery is derived from counters |
-| `user_word_progress.last_practiced_at` | devices.legacy.lastAt |
-| `user_word_progress.created_at` | not migrated because target imported entity has no equivalent historical field; semantic times explicitly listed above are preserved |
-| `user_word_progress.updated_at` | not migrated because target imported entity has no equivalent historical field; semantic times explicitly listed above are preserved |
 | `incident_groups.id` | not migrated because operational incident diagnostics are intentionally excluded |
 | `incident_groups.environment` | not migrated because operational incident diagnostics are intentionally excluded |
 | `incident_groups.build_id` | not migrated because operational incident diagnostics are intentionally excluded |

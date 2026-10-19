@@ -93,7 +93,7 @@ connections, register job kinds before the runner starts, test with memory SQLit
 | chat | posts, images, stickers, conversation state, announcements |
 | library | documents, collections, items, favourites, reading progress |
 | netbooks | network-novel search/download provider (jobs into library) |
-| learning | word corpus, progress, quizzes, discipline mode |
+| learning | retired feature: only the migration that drops its tables |
 | media | tracks, playlists, queue, provider (yt-dlp), audio cache |
 | ai | conversations, runs, billing/credits, workspace files, model config |
 | tasks | user-visible projection of jobs |

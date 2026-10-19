@@ -34,7 +34,7 @@ import { CommunityService } from "../modules/community/index.ts";
 import { ChatService } from "../modules/chat/index.ts";
 import { MeService } from "../modules/me/index.ts";
 import { createTasks } from "../modules/tasks/index.ts";
-import { LearningService } from "../modules/learning/index.ts";
+import { retireLearning } from "../modules/learning/index.ts";
 import type { Db } from "../kernel/persistence/db.ts";
 import { Uow } from "../kernel/persistence/uow.ts";
 import { SyncHub } from "../kernel/sync/sync-hub.ts";
@@ -91,7 +91,6 @@ export interface Kernel {
   identity: IdentityService;
   authority: AuthorityService;
   me: MeService;
-  learning: LearningService;
   library: LibraryService;
   netbooks: NetbooksService;
   media: MediaService;
@@ -194,7 +193,7 @@ export function createKernel(options: KernelOptions): Kernel {
   community = communityService;
   communityService.registerSync(syncHub);
   const me = new MeService({ db, uow, identity: identity.repo, now });
-  const learning = new LearningService({ db, uow, now });
+  retireLearning(db, now);
   me.registerSync(syncHub);
   authority.registerSync(syncHub);
   const assertOwnerWritable = (user: string) =>
@@ -420,7 +419,6 @@ export function createKernel(options: KernelOptions): Kernel {
       identity,
       authority,
       me,
-      learning,
       community: communityService,
       chat: chatService,
       ai,
@@ -477,7 +475,6 @@ export function createKernel(options: KernelOptions): Kernel {
     identity,
     authority,
     me,
-    learning,
     library,
     netbooks,
     media,

@@ -18,7 +18,6 @@ function present(
     users: "users",
     posts: "chat_posts",
     articles: "library_documents",
-    words: "learning_words",
     clients: "devices",
     ghost_users: "invitations",
   };
@@ -123,12 +122,6 @@ function present(
       }
       return undefined;
     }
-    case "user_word_progress":
-      return has(
-        "SELECT 1 FROM learning_progress WHERE user_id=? AND word_id=?",
-        user,
-        mapId(target, "words", value(row, "word_id")),
-      );
     case "ai_conversations":
       return has(
         "SELECT 1 FROM ai_rows WHERE type='aiConversation' AND id=?",
@@ -255,8 +248,6 @@ export function verifyCounts(
       posts: "chat_posts",
       articles: "library_documents",
       booklists: "library_collections",
-      words: "learning_words",
-      user_word_progress: "learning_progress",
       ai_messages: "ai_messages",
       media_tracks: "media_tracks",
       media_lists: "media_playlists",

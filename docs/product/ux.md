@@ -31,10 +31,9 @@ decides its layout, not the other way round.
 | 对话 chat | conversations, each a time-ordered stream | collection list + stream |
 | 最近 recent | what the user opened lately across chat, reading and music | one frecency-ranked list (conversations, books, booklists, songs, playlists; length follows the data; empty state when no history); unread messages lift a conversation the user engages with, never above their own usage pattern; selecting an item opens it in its own area; it is the landing area after login or unlock (a restored session returns to the area it was left in) |
 | 阅读 library | collections of documents; reading is immersive | collection list + document list; reading is focus mode |
-| 学习 learning | a dashboard and practice sessions | section nav + page; practice is focus mode |
 | 音乐 music | browse, then play while doing other things | section nav + track list; player persists everywhere |
 | AI | conversations with an assistant | collection list + stream |
-| 管理 admin | many tables of records, online only | section nav + table |
+| 管理 admin | many tables of records, online only; an area of its own at the foot of the rail, for administrators only | section nav + table |
 
 Settings and the activity centre (sync, queued changes, transfers, background tasks) are **sheets**, not areas: they are visited
 briefly over whatever the user is doing.
@@ -155,7 +154,7 @@ One vocabulary, used everywhere:
 ## Words
 
 Short, concrete Chinese; buttons carry verbs; destructive actions name the object or count;
-no blame and no jokes at the user's expense (learning exit dialogs use neutral wording).
+no blame and no jokes at the user's expense.
 Error messages are Chinese, come from the server and describe a business denial as what it
 is, never as an internal error. Dates and times: zh-CN, Asia/Shanghai.
 

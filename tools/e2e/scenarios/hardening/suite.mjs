@@ -35,9 +35,6 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await wire.call("learning.corpus.import", {
-      text: "hello#你好￥world#世界",
-    });
     const initial = (await wire.call("sync.pull", { cursors: {} })).data;
     const conv = Object.keys(initial.scopes)
       .find((s) => s.startsWith("conv:"))
@@ -188,15 +185,7 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
     );
     await cdp.offline(true);
     // Exercise cold SW reload and persisted navigation for every product area.
-    for (const label of [
-      "对话",
-      "阅读",
-      "学习",
-      "音乐",
-      "AI",
-      "管理",
-      "状态",
-    ]) {
+    for (const label of ["对话", "阅读", "音乐", "AI", "管理", "状态"]) {
       console.log("Offline matrix", label);
       await click(cdp, label);
       await frame(cdp);
@@ -206,7 +195,6 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
       const readyArea = {
         对话: '[data-testid="chat.list"]',
         阅读: '[data-testid="reader.flow"]',
-        学习: '[data-testid="learning.page"]',
         音乐: '[data-testid="media.content"]',
         AI: '[data-testid="ai.list"]',
         管理: "[aria-label=管理栏目]",
@@ -225,13 +213,9 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
           `${legacy ? "chrome70" : "current"}-hardening-offline-${label}.png`,
         ),
       );
-      if (label === "管理" || label === "状态") await close(cdp);
+      if (label === "状态") await close(cdp);
     }
-    const session = await readDb(cdp, "session", "active"),
-      device = await readDb(cdp, "session", "device");
-    const sql = new DatabaseSync(path.join(server.data, "talos.db"));
-    const word = sql.prepare("SELECT id FROM learning_words LIMIT 1").get().id;
-    sql.close();
+    const session = await readDb(cdp, "session", "active");
     const stamp = (n) => ({ op: id(n), t: { ms: Date.now(), counter: n } });
     const operations = [
       {
@@ -248,12 +232,8 @@ export async function hardeningSuite(browser, server, { legacy = false } = {}) {
         args: { doc, value: { v: true, ...stamp(11) } },
       },
       {
-        method: "learning.answer.record",
-        args: {
-          word,
-          device,
-          counter: { learned: 1, wrong: 0, answered: 1, lastAt: Date.now() },
-        },
+        method: "me.setting.set",
+        args: { key: "offline-matrix", value: { v: true, ...stamp(12) } },
       },
       { method: "media.stopAtEnd.set", args: { value: true, ...stamp(13) } },
       {

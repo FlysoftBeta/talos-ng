@@ -5,7 +5,6 @@ import { opsModule } from "../features/ops/module.ts";
 import { ModuleRegistry } from "../core/data/modules.ts";
 import { settingsModule } from "../features/settings/module.ts";
 import { authModule } from "../features/auth/module.ts";
-import { learningModule } from "../features/learning/module.ts";
 import { libraryModule } from "../features/library/module.ts";
 import { mediaModule } from "../features/media/module.ts";
 import { adminModule } from "../features/admin/module.ts";
@@ -13,7 +12,6 @@ import { adminModule } from "../features/admin/module.ts";
 export const clientModules = new ModuleRegistry([
   settingsModule,
   authModule,
-  learningModule,
   libraryModule,
   mediaModule,
   chatModule,

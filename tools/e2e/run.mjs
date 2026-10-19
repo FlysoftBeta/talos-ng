@@ -19,7 +19,7 @@ const ORDER = [
   "offline",
 ];
 /** Scenario groups that run inside another feature's session. */
-const ALIASES = { learning: "identity", reader: "library", update: "offline" };
+const ALIASES = { reader: "library", update: "offline" };
 
 const args = process.argv.slice(2);
 const legacy = args.includes("--legacy");

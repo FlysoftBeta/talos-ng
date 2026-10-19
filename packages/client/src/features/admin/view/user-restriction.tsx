@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 import { Button } from "../../../ui/actions/index.ts";
 import { Sheet } from "../../../ui/overlays/index.ts";
-import { DurationInput } from "../../../ui/inputs/index.ts";
+import { RestrictionDuration } from "./restriction-duration.tsx";
 import { Stack } from "../../../ui/layout/index.ts";
 import type { DurationInputProps } from "../model/duration.ts";
 import type { UsersController, UsersState } from "../model/users.ts";
@@ -33,7 +33,7 @@ export function UserRestrictionSheets({
         }
       >
         <Stack>
-          <DurationInput {...duration} />
+          <RestrictionDuration {...duration} />
         </Stack>
       </Sheet>
       <Sheet
@@ -50,7 +50,7 @@ export function UserRestrictionSheets({
         }
       >
         <Stack>
-          <DurationInput {...duration} />
+          <RestrictionDuration {...duration} />
         </Stack>
       </Sheet>
     </>

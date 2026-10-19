@@ -1,8 +1,9 @@
 # Administration workbench
 
-The 管理 area is for administrators and is online-only: every query pages on the server,
-nothing is cached on the device, and every section shows 离线不可用 when disconnected. The
-section list shows the sections the user's roles allow; the server rechecks each operation.
+The 管理 area is for administrators. It is an area of its own at the foot of the rail, not a
+sheet over another area, and keeps the selected section while the user visits other areas.
+It is online-only: every query pages on the server, nothing is cached on the device, and
+every section shows 离线不可用 when disconnected. The section list shows the sections the user's roles allow; the server rechecks each operation.
 Roles and powers are in roles.md. Lists share a grid with paging, sorting, search, row
 selection with bulk actions, hideable columns and expandable cells. Destructive and bulk
 actions confirm, naming the object or the selected count, and bulk results stay visible
@@ -12,10 +13,10 @@ afterwards.
 
 Search and page users; create a user (handle, display name, PIN; feature gates optional);
 edit profile, reset PINs, roles (root; the editor shows dependencies before saving), feature
-gates (feature managers), discipline mode and AI credits.
+gates (feature managers) and AI credits.
 
-- Restrictions: mute (preset or custom hours/days, or permanent) and ban (preset, custom or
-  permanent). A ban ends the user's sign-ins. Bulk enable does not extend an already active
+- Restrictions: mute (preset or custom days/hours/minutes, or permanent) and ban (preset,
+  custom or permanent); both use the app's one duration control. A ban ends the user's sign-ins. Bulk enable does not extend an already active
   restriction; unban clears it.
 - Deactivate keeps the historical identity; purge removes the account and all its data
   through a background task. Neither can be applied to oneself or the last root.

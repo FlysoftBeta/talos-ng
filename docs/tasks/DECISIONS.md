@@ -807,3 +807,28 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   cannot use the HTTPS site stay connected. Over HTTP there is no ServiceWorker, so 现在更新
   reloads the page (the server serves its own build) instead of waiting on a staging that can
   never start.
+- **D-144 — Learning is removed with its data (owner instruction).** Vocabulary practice,
+  word import, discipline mode and the `learning` gate are gone from contract, server, client,
+  importer and tests. Data is removed by forward migrations, not by a reset: `learning` n=2
+  drops its three tables (n=1 is now a no-op so new databases never create them), `authority`
+  n=3 and `identity` n=7 strip `learning` from stored feature lists, `me` n=2 deletes
+  `learning.discipline`; the client's IndexedDB version 5 drops the `learn` scope, learning
+  rows, the discipline setting and queued `learning.*` intents. The legacy importer skips
+  `words`/`user_word_progress` and maps legacy feature bits by their old positions.
+- **D-145 — 管理 is an area, not an overlay (owner instruction).** `admin` joins `AREA_IDS`
+  (gated by the admin capability, its rail entry stays at the foot of the rail); the `admin`
+  overlay kind is gone. Opening a section pushes one page on the admin stack so a narrow
+  window shows it and back returns to the section list. Saved navigation that no longer
+  validates falls back to the default, as before.
+- **D-146 — Host tools: 重置教学环境 and 定时关机 replace 关闭 WPS (owner instruction).**
+  `ops.host.run` takes `reset-classroom` (folder windows via the shell window list, so the
+  desktop stays; Office, WPS, Seewo EasiNote and the visualiser by process name),
+  `shutdown` with `delayMinutes` 0–1440 (0 keeps the 10 s grace) or `cancel-shutdown`, and
+  answers the host status, which now reports the pending shutdown the server set. One
+  duration control (`ui/inputs` `DurationInput`: minutes, unit fields, maximum, presets)
+  serves restrictions and shutdown.
+- **D-147 — Opened-document capture survives single-file failures and finds full-screen
+  documents.** The script is Windows PowerShell 2.0-compatible with base64 path output, adds
+  process command lines as a second source (Office registers for automation only after its
+  window first loses focus), and a file that cannot be copied is skipped instead of failing
+  the whole capture. Not run on native Windows; verify on a classroom machine.

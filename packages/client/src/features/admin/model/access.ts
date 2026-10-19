@@ -16,7 +16,6 @@ export const featureNames: Record<Feature, string> = {
   articles: "文章",
   article_reader: "文章阅读",
   ebook_reader: "电子书阅读",
-  learning: "学习",
   article_download: "文章下载",
   ai: "AI",
   media: "音乐",

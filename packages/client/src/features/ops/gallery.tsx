@@ -36,7 +36,7 @@ const rows: Record<string, unknown> = {
       { port: 8443, secure: true, host: "0.0.0.0" },
     ],
   },
-  "ops.host.status": { available: true },
+  "ops.host.status": { available: true, shutdownAt: null },
   "ops.office.list": {
     available: true,
     files: [
