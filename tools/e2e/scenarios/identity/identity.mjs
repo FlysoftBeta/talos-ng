@@ -226,6 +226,10 @@ export async function identityScenarios(cdp, server, name) {
   await pin(cdp, "112233");
   await cdp.wait(app);
   await connected(cdp);
+  // The save attempted while banned is still queued: let it sync before going offline.
+  await cdp.wait(
+    "!document.querySelector('[data-testid=\"ui.status\"] .status-count')",
+  );
   cases++;
   const shellBefore = await cdp.evaluate(
     "window.__talosShell.status().then(function(s){return s.active;})",
