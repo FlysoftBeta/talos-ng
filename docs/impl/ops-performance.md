@@ -33,9 +33,7 @@ stickers (50.5 MB) takes 2.97 s in one transaction; real-server first start is a
 restart about 1.1 s (untraced). Bulk ingestion writes objects first, then does one bounded file
 sync pass and a bottom-up directory sync pass, and only then commits catalog or import
 references; migrations within a module share a transaction; catalog restarts hash-verify
-existing files and repair partial or missing ones from the bundled assets. Offline migration
-builds its kernel with background execution disabled, so imported conversion jobs stay queued
-for the real server boot. Windows uses the same sync pass and skips unsupported directory
+existing files and repair partial or missing ones from the bundled assets. Windows uses the same sync pass and skips unsupported directory
 fsync. Historical before/after measurements are process material in the (untracked)
 `archive/`.
 

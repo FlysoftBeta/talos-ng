@@ -179,28 +179,6 @@ describe("identity admission and onboarding", () => {
       s.db.close();
     }
   });
-  it("accepts classapp-next hashes keyed by the printable PIN secret", async () => {
-    const s = setup();
-    try {
-      const user = s.service.createUser({ pin: "123456", name: "旧用户" });
-      const legacy = createHmac("sha256", s.service.credentials.secret()!)
-        .update("123456")
-        .digest("hex");
-      s.db.run(
-        "UPDATE user_pins SET hash=?,salt=NULL,verifier=NULL WHERE user_id=?",
-        legacy,
-        user.id,
-      );
-      const result = await s.service.loginAsync(
-        s.service.registerDevice(),
-        "123456",
-      );
-      expect("user" in result && result.user.id).toBe(user.id);
-      expect(s.service.credentials.pin(legacy)).toBeUndefined();
-    } finally {
-      s.db.close();
-    }
-  });
   it("reports each admission reason and recovers idle admission using a fresh PIN", () => {
     const s = setup();
     try {

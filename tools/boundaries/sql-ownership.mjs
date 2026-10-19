@@ -13,7 +13,6 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import {
   dynamicTableGateways,
-  offlineSqlDirectories,
   scanRoot,
   sqlOwners,
 } from "./sql-owners.mjs";
@@ -425,8 +424,6 @@ export function collectSqlViolations(cwd) {
       checkFile(file, readFileSync(path.join(cwd, file), "utf8")),
     );
 }
-export { offlineSqlDirectories };
-
 if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)

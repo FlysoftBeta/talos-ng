@@ -124,12 +124,4 @@ export const sqlOwners = {
 };
 // Files whose job is to name tables dynamically. Each entry needs a reason.
 export const dynamicTableGateways = [];
-// Offline SQL outside the server: allowed by directory, never ownership-scanned.
-export const offlineSqlDirectories = [
-  {
-    path: "tools/migrate/",
-    reason:
-      "One-shot offline import: reads the legacy database and writes through server schemas.",
-  },
-];
 export const scanRoot = "packages/server/src/";

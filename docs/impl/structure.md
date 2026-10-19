@@ -15,7 +15,7 @@ Directories, not files: each directory exists to express one isolation rule, and
 - Policy lives only in `server` and `client`; they alone may depend on `contract`.
 - Environments are checked too: browser/isomorphic packages may not import Node built-ins.
 - Cross-package imports go through the published entry (`@talos/<pkg>`) or a named subpath
-  (`@talos/virtual/dom`, `@talos/link/ws-node`, `@talos/objectstore/testing`, `@talos/server/migration`).
+  (`@talos/virtual/dom`, `@talos/link/ws-node`, `@talos/objectstore/testing`).
 
 The `virtual` package isolates its DOM-free core and source adapters from the DOM driver;
 the core imports neither source adapters nor DOM code (`virtual-scroller.md`).
@@ -38,7 +38,6 @@ kernel/    mechanisms with no domain knowledge: config, diagnostics (audit/incid
 modules/   one directory per domain: identity, authority, community, chat, library, media,
            netbooks, ai, tasks, me, admin, ops; `learning` keeps only the
            migration that drops the retired feature's tables.
-migration.ts  the offline importer's entry (section 6); not product API.
 ```
 
 Rules (`tools/boundaries/policy/server.mjs`):
@@ -47,7 +46,6 @@ Rules (`tools/boundaries/policy/server.mjs`):
   and testable without any domain.
 - Modules meet only through a peer's `index.ts` or `ports.ts` (type imports included). A module
   that needs another module's data asks its port; it does not reach into its repo.
-- `server-migration-entry-private`: nothing in `src/` imports `migration.ts`.
 - Inside a module: `schema` (ordered migrations), `repo` (all SQL for its tables), `service`
   (rules, transactions, sync changes), `api` (contract binding, authorisation). Larger modules
   group by sub-domain (e.g. chat `posts/`, `drafts/`, `moderation/`), each with its own repo.
@@ -72,8 +70,6 @@ police arbitrary JavaScript.
 Named allowances, all in `sql-owners.mjs` and all justified there:
 
 - `dynamicTableGateways`: files that name tables dynamically. **Empty.**
-- `offlineSqlDirectories`: `tools/migrate/` reads the legacy database and writes through
-  server schemas; it is never ownership-scanned because it is not part of the server.
 - Backup: `ops/backup/snapshot.ts` opens a captured snapshot read-only. Its object inventory
   goes through the objects owner (`kernel/objects/inventory.ts`), so the backup code names no
   foreign table; integrity checks use PRAGMAs, which are not table references.
@@ -139,15 +135,7 @@ workspace dependency map in `policy/<tool>.mjs`; tests may be granted more than 
 reason. Product code never imports tools or test-support (`product-no-tools`,
 `product-no-test-support`).
 
-## 6. Migration entry
-
-`tools/migrate` is a one-shot offline pipeline (read, map, materialise); it is deliberately not
-regrouped by domain. It reaches the server only through `@talos/server/migration`, which
-exports `createKernel`/`Kernel`, `Db`, `Uow`, `ObjectLedger` and `IdentityService`. The graph
-check (`entries` in `policy/migrate.mjs`) rejects any other `@talos/server` specifier from the
-tool, and rejects `@talos/server/migration` from every other owner.
-
-## 7. How enforcement works
+## 6. How enforcement works
 
 - `eslint.config.mjs` runs the `boundaries/imports` rule on `boundaryFiles`: package graph and
   environments (`graph.mjs`), layer rules (`layers.mjs`, globs in `glob.mjs`), peer-entry rules,
@@ -157,7 +145,7 @@ tool, and rejects `@talos/server/migration` from every other owner.
 - `sql-ownership.mjs` is the B4 gate described in section 3, run by the same ratchet.
 - `tools/boundaries/*.test.mjs` pin each rule with allowed and denied snippets.
 
-## 8. Known limits
+## 7. Known limits
 
 - SQL assembled across functions at run time is not checked.
 - `model.ts` entries are reachable by any file of a peer feature, not only by its models.

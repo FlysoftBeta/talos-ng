@@ -6,7 +6,6 @@ import docpipe from "./docpipe.mjs";
 import e2e from "./e2e.mjs";
 import launcher from "./launcher.mjs";
 import legacyChromium from "./legacy-chromium.mjs";
-import migrate from "./migrate.mjs";
 import packageTool from "./package.mjs";
 import objectstore from "./objectstore.mjs";
 import product from "./product.mjs";
@@ -31,7 +30,6 @@ export const policies = {
   e2e,
   launcher,
   "legacy-chromium": legacyChromium,
-  migrate,
   objectstore,
   package: packageTool,
   server,

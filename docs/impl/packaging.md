@@ -13,8 +13,6 @@ A release is a folder with no host prerequisites. The official Node runtime is b
 against that version's `SHASUMS256.txt`, cached and re-verified on every assembly;
 `TALOS_RUNTIME_CACHE` moves the cache).
 
-**Legacy importer.** `tools/migrate/build.mjs` bundles the importer (`@talos/migrate`) with esbuild into `migrate.js`, the same way as `server.js` (same external native addons, resolved from the release's `node_modules`). It ships inside every release, so it is part of the `-update.zip` too. Operators run `versions/<current>/migrate.js` with `runtime/node` (no wrapper script); usage in `docs/impl/ops-migrate.md`.
-
 **Native addons.** `better-sqlite3` and `sharp` are N-API (independent of the Node ABI) and
 cannot be bundled, so `server.js` imports them externally from the release's own
 `node_modules/`. `tools/package/native.ts` assembles that directory per target from the
@@ -80,7 +78,7 @@ data/         business data only: talos.db, objects/ (with upload stages/trash),
 logs/         operator logs: launcher.log (rotated), server.jsonl
 tmp/          operator scratch: downloaded/staged updates and the rollback backup,
               versions being unpacked, server temp files (document conversion spool)
-versions/     <build>/ immutable server.js, migrate.js, client/, shell/, vendor/, release.json;
+versions/     <build>/ immutable server.js, client/, shell/, vendor/, release.json;
               current (UTF-8 pointer FILE, never a symlink), state.json (atomic durable
               commit record: pending deadline, rollback path), launcher.lock (PID lock)
 ```

@@ -8,8 +8,7 @@ self-hosted Node server. Complete rewrite of the legacy `classapp-next` app. Sta
   `objectstore`, `docpack` + `docpipe` (document pipeline, pdfrender), `store` (IndexedDB),
   `sync`, `contract`, `server`, `shell` (ServiceWorker + installer), `client`, `launcher`.
 - `tools/`: boundary lint, Chrome 70 compatibility check, e2e harness (current Chromium and
-  real Chromium 70), packaging (`win32-x64`, `linux-debian-x64`, `linux-redhat-x64`),
-  `migrate` (journaled legacy importer; see [the migration guide](docs/impl/ops-migrate.md)).
+  real Chromium 70), packaging (`win32-x64`, `linux-debian-x64`, `linux-redhat-x64`).
 - `docs/`: [`product/`](docs/product/README.md) (what the product does), `impl/` (how it is built, plus operational
   guides), `tasks/` (process: charter, handoff, decisions, audits, task prompts and results).
 

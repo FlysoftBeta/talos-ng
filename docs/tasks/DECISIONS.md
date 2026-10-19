@@ -845,3 +845,7 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   process command lines as a second source (Office registers for automation only after its
   window first loses focus), and a file that cannot be copied is skipped instead of failing
   the whole capture. Not run on native Windows; verify on a classroom machine.
+- **D-150 — No classapp-next data importer (owner instruction).** `tools/migrate`, the
+  `@talos/server/migration` entry, its boundary rules, the `migrate.js` release payload, the
+  operator guide and the classapp-only PIN hash fallback (`legacyTextIndex`) are removed;
+  Talos starts from a fresh database. Schema migrations between Talos versions are unaffected.

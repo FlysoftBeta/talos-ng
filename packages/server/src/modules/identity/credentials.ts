@@ -30,10 +30,6 @@ export class PinCredentials {
       .update(pin)
       .digest("hex");
   }
-  /** classapp-next used the printable hex secret as HMAC key bytes. */
-  legacyTextIndex(pin: string): string {
-    return createHmac("sha256", this.secret).update(pin).digest("hex");
-  }
   create(pin: string): PinRecord {
     const salt = Buffer.from(this.random(16)).toString("hex");
     return {

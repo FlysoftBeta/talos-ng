@@ -24,5 +24,4 @@ How Talos II is built. Product behaviour is in `docs/product/README.md`, process
 | [chrome70-compat.md](chrome70-compat.md) | Chrome 70 floor, polyfills, compatibility gate |
 | [packaging.md](packaging.md) | shell boot and updates, launcher, release assembly |
 | [e2e-hooks.md](e2e-hooks.md) | selector contract between UI and end-to-end scenarios |
-| [ops-migrate.md](ops-migrate.md) | legacy data migration tool: operator guide |
 | [ops-performance.md](ops-performance.md) | performance budgets and measurements |

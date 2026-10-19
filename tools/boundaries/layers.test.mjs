@@ -71,17 +71,6 @@ describe("layer rules", () => {
       "packages/server/src/app/zz-new.ts",
     );
   });
-  it("server: the migration entry is private to the importer", async () => {
-    await denied(
-      'import { x } from "../migration.ts";',
-      "packages/server/src/app/zz-new.ts",
-      "server-migration-entry-private",
-    );
-    await clean(
-      'import { x } from "./app/create-application.ts";',
-      "packages/server/src/migration.ts",
-    );
-  });
   it("server: peers only through ports.ts or index.ts, type imports included", async () => {
     const file = "packages/server/src/modules/chat/zz-new.ts";
     await clean('import type { P } from "../identity/ports.ts";', file);
@@ -288,33 +277,6 @@ describe("layer rules", () => {
 describe("coverage of tools, bin and build scripts", () => {
   it("applies tool dependency maps and test-only permissions", async () => {
     const messages = (code, file) => lint(code, file);
-    expect(
-      await messages('import "@talos/client";', "tools/migrate/src/zz-new.ts"),
-    ).toEqual([expect.stringContaining("may not import")]);
-    expect(
-      await messages(
-        'import "@talos/server/migration";',
-        "tools/migrate/src/zz-new.ts",
-      ),
-    ).toEqual([]);
-    expect(
-      await messages('import "@talos/server";', "tools/migrate/src/zz-new.ts"),
-    ).toEqual([expect.stringContaining("only import @talos/server through")]);
-    expect(
-      await messages(
-        'import "@talos/server/src/kernel/persistence/db.ts";',
-        "tools/migrate/src/zz-new.ts",
-      ),
-    ).toEqual([expect.stringContaining("only import @talos/server through")]);
-    expect(
-      await messages('import "@talos/link";', "tools/migrate/src/zz-new.ts"),
-    ).toEqual([expect.stringContaining("may not import")]);
-    expect(
-      await messages(
-        'import "@talos/link";',
-        "tools/migrate/src/zz-new.test.ts",
-      ),
-    ).toEqual([]);
     expect(
       await messages('import "@talos/server";', "tools/e2e/zz-new.mjs"),
     ).toEqual([expect.stringContaining("may not import")]);

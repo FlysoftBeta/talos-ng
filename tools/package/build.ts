@@ -128,11 +128,6 @@ for (const platform of packageTargets) {
     "server.js",
     await readFile(join(root, "packages/server/dist/server.js")),
   );
-  // Legacy data importer (docs/impl/ops-migrate.md), run with the bundled runtime.
-  payload.set(
-    "migrate.js",
-    await readFile(join(root, "tools/migrate/dist/migrate.js")),
-  );
   payload.set("package.json", Buffer.from('{"type":"module"}'));
   // Only this target's better-sqlite3/sharp binaries (never another platform's).
   for (const [name, data] of await nativeFiles(
@@ -280,10 +275,6 @@ for (const platform of packageTargets) {
 ## 更新
 
 在运维面板上传完全匹配目标 ${platform} 的更新包 -update.zip（发布页同名资产；在线检查默认读取最新发布的 talos-${platform}-update.json），准备后应用，并在三分钟内确认。未确认会回滚应用及完整备份；期间暂停业务写入以避免回滚丢失新写入。更新清单 SHA-256 校验防损坏；仅安装可信来源的软件包。
-
-## 迁移旧版数据
-
-停止旧版应用，复制其 data.db 和 storage/objects；在安装目录用内置运行时依次运行 migrate.js 的 inspect → run → verify（<current> 为 versions/current 中的版本号），例如 \`${node} --disable-warning=ExperimentalWarning versions/<current>/migrate.js run --source 旧/data.db --blobs 旧/storage/objects --target 空目录\`，inspect 和 verify 参数相同（run 之外可加 --resume）。--target 必须是空目录；verify 无误后停止启动器，用该目录替换数据目录 data/（先移走旧的），再启动。详见 docs/impl/ops-migrate.md。
 
 ## 恢复
 

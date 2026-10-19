@@ -100,8 +100,6 @@ export function checkImport({
     if (source === entry) return;
     return `${owner} may only import @talos/${target} through ${entry}.`;
   }
-  if (source === "@talos/server/migration")
-    return "The migration entry is for tools/migrate only.";
   if (source !== `@talos/${target}`)
     return `Import @talos/${target} through its public entry point.`;
 }

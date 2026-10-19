@@ -88,9 +88,6 @@ export class ProvisioningService {
     if (
       this.options.provisioning.pinUser(
         this.options.credentials.legacyIndex(input.pin),
-      ) ||
-      this.options.provisioning.pinUser(
-        this.options.credentials.legacyTextIndex(input.pin),
       )
     )
       throw new AppError("E_CONFLICT", "PIN 已被使用");

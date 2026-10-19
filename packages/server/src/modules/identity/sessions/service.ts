@@ -64,12 +64,7 @@ export class SessionsService {
     const device = this.options.admissionPolicy.admitDevice(deviceId, ip);
     const record =
       this.options.provisioning.pin(this.options.credentials.index(pin)) ??
-      this.options.provisioning.pin(
-        this.options.credentials.legacyIndex(pin),
-      ) ??
-      this.options.provisioning.pin(
-        this.options.credentials.legacyTextIndex(pin),
-      );
+      this.options.provisioning.pin(this.options.credentials.legacyIndex(pin));
     if (!this.options.credentials.verify(pin, record))
       this.options.admissionPolicy.failedPin(device, ip);
     if (record!.verifier === null)
@@ -91,12 +86,7 @@ export class SessionsService {
     const hash = await this.options.credentials.indexAsync(pin);
     const record =
       this.options.provisioning.pin(hash) ??
-      this.options.provisioning.pin(
-        this.options.credentials.legacyIndex(pin),
-      ) ??
-      this.options.provisioning.pin(
-        this.options.credentials.legacyTextIndex(pin),
-      );
+      this.options.provisioning.pin(this.options.credentials.legacyIndex(pin));
     const invitation = this.options.provisioning.invitationPin(
       hash,
       this.options.now(),

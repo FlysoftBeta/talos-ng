@@ -21,8 +21,7 @@
     "e2e:chrome80": "pnpm --filter @talos/shell build && pnpm --filter @talos/client build && node --import tsx tools/e2e/run.mjs --chrome80",
     "dev": "node --import tsx tools/e2e/dev.mjs",
     "start": "node packages/server/dist/server.js",
-    "package": "pnpm build && node --import tsx tools/package/build.ts",
-    "migrate": "node tools/migrate/bin/migrate.mjs"
+    "package": "pnpm build && node --import tsx tools/package/build.ts"
   },
   "devDependencies": {
     "typescript": "npm:@typescript/typescript6@6.0.2",

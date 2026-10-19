@@ -50,8 +50,7 @@ The normative dependency graph is `tools/boundaries/graph.mjs`; in short, `base`
 nothing, mechanism packages depend on `base` (plus type-only edges), `server` and `client`
 are the only places where policy lives and the only packages allowed to depend on
 `contract`, `client` never imports Node packages and `server` never imports browser packages.
-`tools/` live under the same engine; `tools/migrate` reaches the server only through
-`@talos/server/migration`. Rules and rationale: `structure.md`. Each package README is a
+`tools/` live under the same engine. Rules and rationale: `structure.md`. Each package README is a
 pointer to the document that describes it.
 
 Mechanisms stay usable without the app (link, objectstore, docpack, docpipe, store, sync have
@@ -79,14 +78,13 @@ tablet (Chrome 70+)                                   server host (one Node proc
 
 ## Tooling decisions
 
-- Workspace tooling requires Node 24 (`^24.18.0`) and Node 24 declarations. Server,
-  launcher and migration bundles target `node24`; release assembly and CI pin the
+- Workspace tooling requires Node 24 (`^24.18.0`) and Node 24 declarations. Server
+  and launcher bundles target `node24`; release assembly and CI pin the
   official Node 24 runtime version documented in `packaging.md`.
 
-- Source entrypoints with non-erasable TypeScript in their import graph (server,
-  migration and release tools) use the workspace-pinned `tsx` loader via
-  `node --import tsx`. The migration wrapper registers `tsx/esm/api` in-process before
-  importing its main module; there is no bootstrap child process. Other Node scripts
+- Source entrypoints with non-erasable TypeScript in their import graph (server
+  and release tools) use the workspace-pinned `tsx` loader via
+  `node --import tsx`. Other Node scripts
   use Node 24 built-in type stripping where their imports contain only erasable syntax.
 - TypeScript 7 checks the source (`tools/typecheck.mjs` selects the native compiler); the
   TypeScript 6 API is retained only because ESLint's parser does not yet support the 7 API.
@@ -105,7 +103,7 @@ tablet (Chrome 70+)                                   server host (one Node proc
   only. E2e output is ignored; `TALOS_E2E_UPDATE=1` alone refreshes tracked measurements.
 - Product assets (sticker packs, word corpus, icons) are copied from the legacy project when
   a feature needs them, with the third-party provenance unchanged.
-- `tools/package` and `tools/migrate` are operational tools (`packaging.md`, `ops-migrate.md`).
+- `tools/package` is an operational tool (`packaging.md`).
 
 ## Adding a package
 

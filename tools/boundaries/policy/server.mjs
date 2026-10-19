@@ -10,14 +10,6 @@ export default {
   ],
   layers: [
     {
-      id: "server-migration-entry-private",
-      from: "src/**",
-      fromIgnore: "src/migration.ts",
-      forbid: ["src/migration.ts"],
-      reason:
-        "src/migration.ts is the offline importer's entry, not product API.",
-    },
-    {
       id: "server-kernel-independent",
       from: "src/kernel/**",
       forbid: ["src/modules/**", "src/app/**"],
