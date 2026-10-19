@@ -311,6 +311,10 @@ export async function mediaSuite(browser, server, { legacy = false } = {}) {
     );
     await click(cdp, "我的离线保留 · 自动");
     await fill(cdp, "保留天数", "1");
+    // Transfer progress re-checks the device cache; a row once offline must not flash back.
+    await cdp.evaluate(
+      "(function(){window.__cacheFlips=0;new MutationObserver(function(list){list.forEach(function(m){if(m.oldValue==='true'&&m.target.getAttribute('data-device-cache')==='false')window.__cacheFlips++})}).observe(document.body,{subtree:true,attributes:true,attributeOldValue:true,attributeFilter:['data-device-cache']});return true})()",
+    );
     await click(cdp, "保存设置");
     await cdp.wait("!document.querySelector('[role=dialog]')");
     await eventually(
@@ -339,6 +343,11 @@ export async function mediaSuite(browser, server, { legacy = false } = {}) {
     await click(cdp, "晨光练习曲");
     await cdp.wait(
       "document.querySelector('[data-testid=\"media.audio\"]').currentTime>0",
+    );
+    assert.equal(
+      await cdp.evaluate("window.__cacheFlips"),
+      0,
+      "device cache tag stays put while downloads progress",
     );
     await wire.call("media.playlist.share", {
       playlist: playlist.id,

@@ -362,14 +362,6 @@
   color: var(--muted);
   font-size: var(--fs-1);
 }
-.chat-image-pick {
-  display: flex;
-  align-items: center;
-  font-size: var(--fs-1);
-}
-.chat-image-pick > .muted {
-  margin-left: var(--s-1);
-}
 .chat-count {
   margin-left: auto;
   color: var(--muted);

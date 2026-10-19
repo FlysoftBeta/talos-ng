@@ -24,7 +24,6 @@ export function ComposerView({
   text,
   fullscreen,
   stickers,
-  images,
   error,
   busy,
   progress,
@@ -47,7 +46,6 @@ export function ComposerView({
   pick,
   setFullscreen,
   setStickers,
-  setImages,
   onFile,
   StickerPicker,
 }: ComposerViewProps): ReactElement {
@@ -109,13 +107,7 @@ export function ComposerView({
               disabled={!!restricted}
               onClick={() => setStickers(!stickers)}
             />
-            <IconButton
-              label="图片"
-              icon="image"
-              pressed={images}
-              disabled={!imageAllowed}
-              onClick={() => setImages(!images)}
-            />
+            <ImageField disabled={!imageAllowed || busy} onFile={onFile} />
             <IconButton
               label="全屏编辑"
               icon="expand"
@@ -125,25 +117,10 @@ export function ComposerView({
           </>
         }
         after={
-          images || showCount ? (
-            <>
-              {images && (
-                <span className="chat-image-pick">
-                  <ImageField
-                    disabled={!imageAllowed || busy}
-                    onFile={onFile}
-                  />
-                  <span className="muted">
-                    PNG、JPEG、GIF 或 BMP，最大 12 MiB
-                  </span>
-                </span>
-              )}
-              {showCount && (
-                <small className="chat-count num">
-                  {textCount} / {maxTextCount}
-                </small>
-              )}
-            </>
+          showCount ? (
+            <small className="chat-count num">
+              {textCount} / {maxTextCount}
+            </small>
           ) : undefined
         }
       />

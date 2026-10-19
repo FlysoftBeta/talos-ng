@@ -35,3 +35,55 @@ export function libraryPdf(pages = 2) {
   pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return Buffer.from(pdf);
 }
+
+/**
+ * One page covered by a deterministic noise image: incompressible, so its rendered WebP is far
+ * above the 500 KiB a reader fetches over the link and travels by verified HTTP ranges.
+ */
+export function imagePdf(side = 1200) {
+  const pixels = Buffer.alloc(side * side * 3);
+  let state = 0x9e3779b9;
+  for (let i = 0; i < pixels.length; i++) {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    pixels[i] = state & 0xff;
+  }
+  const content = "q 612 0 0 792 0 0 cm /Im1 Do Q\n";
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /XObject << /Im1 5 0 R >> >> /Contents 4 0 R >>",
+    `<< /Length ${content.length} >>\nstream\n${content}endstream`,
+    Buffer.concat([
+      Buffer.from(
+        `<< /Type /XObject /Subtype /Image /Width ${side} /Height ${side} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length ${pixels.length} >>\nstream\n`,
+      ),
+      pixels,
+      Buffer.from("\nendstream"),
+    ]),
+  ];
+  const parts = [Buffer.from("%PDF-1.4\n")];
+  let size = parts[0].length;
+  const offsets = objects.map((object, i) => {
+    const offset = size;
+    const part = Buffer.concat([
+      Buffer.from(`${i + 1} 0 obj\n`),
+      Buffer.from(object),
+      Buffer.from("\nendobj\n"),
+    ]);
+    parts.push(part);
+    size += part.length;
+    return offset;
+  });
+  parts.push(
+    Buffer.from(
+      `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n` +
+        offsets
+          .map((n) => String(n).padStart(10, "0") + " 00000 n \n")
+          .join("") +
+        `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${size}\n%%EOF\n`,
+    ),
+  );
+  return Buffer.concat(parts);
+}

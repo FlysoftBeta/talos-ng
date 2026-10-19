@@ -129,7 +129,7 @@ function ReaderUnit({
         <div className="reader-page" style={{ width: pageWidth, height }}>
           <div
             ref={page}
-            className="reader-page-body"
+            className="reader-page-body selectable"
             role="document"
             aria-label={`文档第 ${unit.ordinal + 1} 页`}
             data-page-ready={ready ? "true" : "false"}
@@ -141,7 +141,7 @@ function ReaderUnit({
           />
         </div>
       ) : (
-        <div className="reader-flow" data-testid="reader.flow">
+        <div className="reader-flow selectable" data-testid="reader.flow">
           {value.text}
         </div>
       )}

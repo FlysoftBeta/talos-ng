@@ -38,13 +38,13 @@ export class CdpClient {
     }
     this.#pending.clear();
   }
-  send(method, params = {}) {
+  send(method, params = {}, timeout = this.timeout) {
     const id = ++this.#next;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#pending.delete(id);
         reject(new Error(`CDP timeout: ${method}`));
-      }, this.timeout);
+      }, timeout);
       this.#pending.set(id, { resolve, reject, timer });
       try {
         this.socket.send(JSON.stringify({ id, method, params }));
@@ -61,12 +61,12 @@ export class CdpClient {
     this.#listeners.set(method, set);
     return () => set.delete(listener);
   }
-  async evaluate(expression) {
-    const response = await this.send("Runtime.evaluate", {
-      expression,
-      awaitPromise: true,
-      returnByValue: true,
-    });
+  async evaluate(expression, timeout = this.timeout) {
+    const response = await this.send(
+      "Runtime.evaluate",
+      { expression, awaitPromise: true, returnByValue: true },
+      timeout,
+    );
     if (response.exceptionDetails)
       throw new Error(
         response.exceptionDetails.exception?.description ||
@@ -75,8 +75,10 @@ export class CdpClient {
     return response.result.value;
   }
   async wait(expression, timeout = 20_000) {
+    // The request outlives the in-page deadline so a miss names its condition.
     await this.evaluate(
       `new Promise(function(resolve, reject) { var end = Date.now() + ${timeout}; function check() { try { if (${expression}) return resolve(true); } catch (_) {} if (Date.now() >= end) return reject(new Error("Condition timed out: " + ${JSON.stringify(expression)})); setTimeout(check, 25); } check(); })`,
+      timeout + 5000,
     );
   }
   async navigate(url) {
@@ -151,7 +153,19 @@ export async function connectCdp(url) {
   return new CdpClient(socket);
 }
 
-export async function launchChrome(executable) {
+/**
+ * A UTF-8 locale (without one Chromium 80 drops non-ASCII paths in DOM.setFileInputFiles)
+ * and no proxy variables: test servers are local, and Chromium honours them for WebSocket.
+ */
+function browserEnvironment() {
+  const env = { ...process.env, LANG: "C.UTF-8", LC_ALL: "C.UTF-8" };
+  for (const name of Object.keys(env))
+    if (/^(https?|all|no)_proxy$/i.test(name)) delete env[name];
+  return env;
+}
+
+/** `args` adds switches, e.g. a host resolver rule to reach a test server by LAN name. */
+export async function launchChrome(executable, args = []) {
   const profile = await mkdtemp(path.join(tmpdir(), "talos-chromium-"));
   const child = spawn(
     executable,
@@ -165,9 +179,13 @@ export async function launchChrome(executable) {
       "--no-first-run",
       "--remote-debugging-port=0",
       `--user-data-dir=${profile}`,
+      ...args,
       "about:blank",
     ],
-    { stdio: ["ignore", "ignore", "pipe"] },
+    {
+      stdio: ["ignore", "ignore", "pipe"],
+      env: browserEnvironment(),
+    },
   );
   let cdp;
   const stop = async () => {

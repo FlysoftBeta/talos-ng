@@ -198,6 +198,9 @@ export class ReadingSession {
         .catch((e) => {
           if (!closed) this.set({ error: messageOf(e, "读取失败") });
         });
+    // Never an endless spinner: say why nothing opens (a lock keeps an open document).
+    else if (doc?.status === "ready" && !this.snapshot.resources)
+      this.set({ error: "当前账户不能阅读此类文档" });
   }
   private refreshRetained(): void {
     this.stopRetained?.();

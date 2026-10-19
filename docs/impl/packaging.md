@@ -159,9 +159,11 @@ manifest (`{v, build, url, size, sha256}`, relative url). CI uploads the two dir
 separate artifacts (`talos-update-<target>`, `talos-full-<target>`), each uploaded from inside
 its directory so the release job merges them into one flat set of assets.
 
-**Publishing.** A release is cut only by running the `build` workflow manually on `main` with a
-`version` input (`MAJOR.MINOR.PATCH`, e.g. `1.0.2`); there is no tag trigger. After `check` and
-all three packages pass, the release job refuses an existing tag or release, creates `v<version>`
+**Publishing.** Commits and pull requests only test; packages are built only by a manual
+`build` workflow run (action `build`). A release is cut only by a manual run on `main` with action
+`release` and a `version` input (`MAJOR.MINOR.PATCH`, e.g. `1.0.2`); there is no tag trigger.
+After the lint, unit and e2e jobs (the e2e run includes the packaged-host check) and all three
+packages pass, the release job refuses an existing tag or release, creates `v<version>`
 on the exact packaged commit together with the GitHub release (generated notes, marked latest),
 and uploads every asset plus `SHA256SUMS`. The build id stays the commit's short hash (launcher
 build ids allow no dots, and an installed launcher validates every update's id). The job

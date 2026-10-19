@@ -4,17 +4,25 @@
 pnpm --filter @talos/e2e exec playwright install chromium   # once
 pnpm e2e              # build shell + client, run every feature on current Chromium
 pnpm e2e:legacy       # same on the real Chromium 70 (raw CDP)
-node tools/e2e/run.mjs <feature ...> [--legacy]   # one or more features (build first)
+pnpm e2e:chrome80     # same on the real Chromium 80 (raw CDP)
+node --import tsx tools/e2e/run.mjs <feature ...> [--legacy | --chrome80]   # build first
 ```
 
 Features run in this order: `identity`, `library`, `netbooks`, `media`, `chat`, `admin`,
-`ai`, `hardening`, `virtual`, `ops`, `offline`. Aliases: `reader` ->
+`ai`, `hardening`, `virtual`, `ops`, `offline`, `pdf`. Aliases: `reader` ->
 `library`, `update` -> `offline`. Every feature gets its own server (the real server CLI on
 a free localhost port with a temporary database and a copy of the production client, or the
 static gallery server) and a fresh browser, so no storage, ServiceWorker, emulation or
 virtual-time state leaks between features. Processes, profiles and temp dirs are cleaned up
 on failure too. The harness's start message (`dev` and `testSeed`) seeds root PIN `123456` and ordinary PIN
 `654321`; these exist only in the explicitly enabled development fixture.
+
+The `pdf` feature starts the real server with HTTPS and the operator redirect for the LAN
+name `talos.test` (a throwaway `openssl` certificate; every browser maps the name to
+127.0.0.1 and accepts the certificate). The browser opens the plain HTTP address as a tablet
+does, so Chromium 80+ is redirected to HTTPS with a ServiceWorker while Chromium 70 stays on
+insecure HTTP. It covers page rendering, a 500-page pack, a page image above the link limit
+read by HTTP ranges, retention into IndexedDB and reading from storage offline.
 
 ## Layout
 

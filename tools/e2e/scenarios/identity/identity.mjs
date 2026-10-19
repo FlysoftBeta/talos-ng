@@ -206,8 +206,7 @@ export async function identityScenarios(cdp, server, name) {
   await click(cdp, "设置");
   await click(cdp, "编辑资料");
   await fill(cdp, "显示名称", "封禁设备不能保存");
-  // Ban only now: the reconnect sync may still be in flight and would lock the
-  // device before the form opens.
+  // Ban only once the form is open: the live connection may lock the app at once.
   server.fixtureDevice({ banned: true });
   await click(cdp, "保存个人资料");
   await cdp.wait(

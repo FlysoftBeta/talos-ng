@@ -74,8 +74,9 @@ decision in `docs/tasks/DECISIONS.md`.
   pushing and inspecting CI `check` and packaging results. Do not run full local checks,
   E2E suites or packaging as a mandatory pre-push step. Local verification is optional
   when useful for quick reproduction or targeted feedback; keep it scoped to the change.
-- Every module ships with regression tests. CI must pass typecheck, lint, tests, build,
-  Chrome 70 static compatibility checks and the package matrix. Use real browsers or PDF
+- Every module ships with regression tests. CI must pass typecheck, lint, unit tests, the
+  e2e suites (current Chromium, real Chromium 70 and 80, including the client's Chrome 70
+  static compatibility check); releases additionally the package matrix. Use real browsers or PDF
   fixtures locally when needed to diagnose or quickly verify behaviour that unit tests
   cannot establish. Report the actual verification evidence and outstanding CI results.
 - Windows amd64 must work: no POSIX-only assumptions, native deps need win32-x64 prebuilds,

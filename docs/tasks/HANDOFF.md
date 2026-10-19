@@ -1,3 +1,21 @@
+# Chromium 80 PDF reading e2e — 2026-10-19
+
+- New `pdf` e2e feature (`pnpm e2e:chrome80`, or `--chrome80` on any feature; D-144): real
+  server with HTTPS + redirect on LAN name `talos.test`; render, 500-page pack, >500 KiB page
+  image over HTTP ranges, retention into IndexedDB, offline reading (and offline restart where
+  a ServiceWorker exists). Passes locally on real Chromium 80 (HTTPS + SW, also with 6x CPU
+  throttle) and Chromium 70 (plain insecure HTTP). Current Chromium not run locally
+  (Playwright's pinned browser is not installed on this host).
+- The reported "old browser stuck on 加载中 with no log" did NOT reproduce with these
+  synthetic PDFs. Fixed silent-wait paths found on the way: ready document with the reader
+  gate closed (now an explained error), stalled `/dl/` range fetch (60 s timeout -> page
+  error with 重试). If it recurs, get the browser version, HTTP vs HTTPS, and the document.
+- Fixed: PDF/text reader content inherited the global `user-select: none` (no selection).
+- The `library` e2e had been failing on every engine since the 10-17 shadow-root renderer
+  (frame-based selection/key checks) and on Chromium 70/80 at the CJK upload path (no UTF-8
+  locale in the spawned browser). Both fixed; `library --chrome80` passes locally.
+- Legacy CDP waits now outlive their in-page deadline, so failures name the condition.
+
 # Partial-sync admission — 2026-10-16
 
 - Pushed implementation `7233ce3`: login/onboarding/resume no longer wait for full sync;

@@ -807,7 +807,20 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   cannot use the HTTPS site stay connected. Over HTTP there is no ServiceWorker, so 现在更新
   reloads the page (the server serves its own build) instead of waiting on a staging that can
   never start.
-- **D-144 — Learning is removed with its data (owner instruction).** Vocabulary practice,
+- **D-144 — Chromium 80 is a pinned real-browser target next to Chromium 70.** The legacy
+  harness downloads the official 80.0.3987.0 snapshot (revision 722269, checksummed) and
+  `--chrome80` runs any e2e feature on it. The `pdf` feature opens the real server by a LAN
+  name over HTTP with HTTPS and the operator redirect configured, so each engine takes its
+  deployed path (D-143). Reader pages and text are selectable (`.selectable`); a reader that
+  cannot open a ready document says why instead of loading forever, and a stalled ranged pack
+  read fails after 60 s.
+- **D-145 — CI tests every commit and packages only on demand (owner instruction).** Pushes and
+  pull requests run three parallel job groups: typecheck+lint, every vitest project with one
+  worker per core, and the e2e suites on current Chromium, real Chromium 70 and 80 (shell and
+  client built for the browser; the packaged-host ops check is skipped, it packages itself). A
+  manual run with action `build` packages the three targets; action `release` runs all test
+  jobs (packaged-host check included), packages, and publishes `v<version>` from main.
+- **D-146 — Learning is removed with its data (owner instruction).** Vocabulary practice,
   word import, discipline mode and the `learning` gate are gone from contract, server, client,
   importer and tests. Data is removed by forward migrations, not by a reset: `learning` n=2
   drops its three tables (n=1 is now a no-op so new databases never create them), `authority`
@@ -815,19 +828,19 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   `learning.discipline`; the client's IndexedDB version 5 drops the `learn` scope, learning
   rows, the discipline setting and queued `learning.*` intents. The legacy importer skips
   `words`/`user_word_progress` and maps legacy feature bits by their old positions.
-- **D-145 — 管理 is an area, not an overlay (owner instruction).** `admin` joins `AREA_IDS`
+- **D-147 — 管理 is an area, not an overlay (owner instruction).** `admin` joins `AREA_IDS`
   (gated by the admin capability, its rail entry stays at the foot of the rail); the `admin`
   overlay kind is gone. Opening a section pushes one page on the admin stack so a narrow
   window shows it and back returns to the section list. Saved navigation that no longer
   validates falls back to the default, as before.
-- **D-146 — Host tools: 重置教学环境 and 定时关机 replace 关闭 WPS (owner instruction).**
+- **D-148 — Host tools: 重置教学环境 and 定时关机 replace 关闭 WPS (owner instruction).**
   `ops.host.run` takes `reset-classroom` (folder windows via the shell window list, so the
   desktop stays; Office, WPS, Seewo EasiNote and the visualiser by process name),
   `shutdown` with `delayMinutes` 0–1440 (0 keeps the 10 s grace) or `cancel-shutdown`, and
   answers the host status, which now reports the pending shutdown the server set. One
   duration control (`ui/inputs` `DurationInput`: minutes, unit fields, maximum, presets)
   serves restrictions and shutdown.
-- **D-147 — Opened-document capture survives single-file failures and finds full-screen
+- **D-149 — Opened-document capture survives single-file failures and finds full-screen
   documents.** The script is Windows PowerShell 2.0-compatible with base64 path output, adds
   process command lines as a second source (Office registers for automation only after its
   window first loses focus), and a file that cannot be copied is skipped instead of failing

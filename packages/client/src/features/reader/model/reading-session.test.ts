@@ -180,6 +180,20 @@ describe("reading session loading", () => {
     expect(session.getState().resources).toEqual({ loaded: true });
     session.dispose();
   });
+  it("explains a ready document the account may not read instead of loading forever", async () => {
+    const h = harness(),
+      session = new ReadingSession("doc", h.port, h.visibility, input());
+    session.start();
+    session.update(input({ readable: false }));
+    await flush();
+    expect(opened.open).not.toHaveBeenCalled();
+    expect(session.getState().error).toBe("当前账户不能阅读此类文档");
+    session.update(input());
+    await flush();
+    expect(session.getState().error).toBe("");
+    expect(session.getState().resources).toEqual({ loaded: true });
+    session.dispose();
+  });
   it("does not open a document that is still converting", async () => {
     const h = harness(),
       session = new ReadingSession("doc", h.port, h.visibility, input());

@@ -51,5 +51,9 @@ packaging copies only manifest assets.
 587811) with a checksum, verifies the executable version, and drives it over raw CDP (Node's
 native WebSocket; Playwright is not used). The same production UI scenarios (`tools/e2e`)
 run on current Chromium (Playwright) and on this binary, including ServiceWorker boot,
-IndexedDB, offline restart and update. The legacy binary is Linux x64 only; other hosts use the
+IndexedDB, offline restart and update. The same harness also pins Chromium 80.0.3987.0
+(revision 722269), the first version the HTTP gateway sends to HTTPS (D-143): `--chrome80`
+runs any feature on it, and the `pdf` feature reaches the real server by a LAN name over
+HTTP so each engine takes its deployed path (301 to HTTPS with a ServiceWorker from 80, plain
+HTTP in an insecure context before). The legacy binaries are Linux x64 only; other hosts use the
 current-browser suite. Wine runs of the Windows package are not a native Windows qualification.

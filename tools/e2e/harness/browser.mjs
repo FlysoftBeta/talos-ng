@@ -1,13 +1,21 @@
 import { chromium } from "playwright";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { prepareChrome70 } from "../../legacy-chromium/prepare.mjs";
+import { prepareChromium } from "../../legacy-chromium/prepare.mjs";
 import { WAIT_TIMEOUT } from "./wait.mjs";
 import { launchChrome } from "../../legacy-chromium/cdp.mjs";
+import { LAN_HOST } from "./real-server.mjs";
+
+/** The LAN name of a real server resolves locally; its throwaway certificate is accepted. */
+const LAN_ARGS = [
+  `--host-resolver-rules=MAP ${LAN_HOST} 127.0.0.1`,
+  "--ignore-certificate-errors",
+];
 
 /**
  * One browser engine behind the raw-CDP surface every scenario uses:
- * current Playwright Chromium, or the real Chromium 70 (`legacy`).
+ * current Playwright Chromium, or a real old Chromium snapshot (`legacy`; `major` 70 by
+ * default, 80 for the first version the server sends to HTTPS).
  * `playwright` is the Playwright browser (current only; chat opens extra contexts).
  */
 /**
@@ -15,10 +23,10 @@ import { launchChrome } from "../../legacy-chromium/cdp.mjs";
  * test page gets a style that collapses animations and transitions to zero.
  */
 export const STILL_MOTION = `(function(){var s=document.createElement('style');s.textContent='*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition-duration:0s!important;transition-delay:0s!important}';function add(){var root=document.head||document.documentElement;if(root)root.appendChild(s);else document.addEventListener('readystatechange',add,{once:true});}add();})()`;
-export async function launchBrowser({ legacy = false } = {}) {
+export async function launchBrowser({ legacy = false, major = 70 } = {}) {
   if (legacy) {
-    const chrome = await prepareChrome70();
-    const adapter = await launchChrome(chrome.executable);
+    const chrome = await prepareChromium(major);
+    const adapter = await launchChrome(chrome.executable, LAN_ARGS);
     await adapter.cdp.send("Page.addScriptToEvaluateOnNewDocument", {
       source: STILL_MOTION,
     });
@@ -35,9 +43,9 @@ export async function launchBrowser({ legacy = false } = {}) {
   }
   const playwright = await chromium.launch({
     headless: true,
-    args: ["--no-sandbox"],
+    args: ["--no-sandbox", ...LAN_ARGS],
   });
-  const context = await playwright.newContext();
+  const context = await playwright.newContext({ ignoreHTTPSErrors: true });
   await context.addInitScript(STILL_MOTION);
   const page = await context.newPage();
   const session = await context.newCDPSession(page);

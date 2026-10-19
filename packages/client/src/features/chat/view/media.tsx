@@ -203,8 +203,8 @@ export function ImageField({
 }): ReactElement {
   return (
     <FileButton
-      label="上传图片（最大 12 MiB）"
-      accept="image/png,image/jpeg,image/gif,image/bmp"
+      label="图片"
+      accept="image/*"
       disabled={disabled}
       onFile={(file) => {
         if (file) onFile(file);
