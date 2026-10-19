@@ -43,6 +43,10 @@ export class LibraryAccess {
           this.collection(user, row.id),
       );
   }
+  /** A queued preference or progress write for a deleted document is moot, not denied. */
+  deletedDoc(id: string): boolean {
+    return !!this.service.repo.doc(id)?.deleted;
+  }
   canDistribute(user: string, id: string): boolean {
     if (!this.document(user, id)) return false;
     if (this.service.document(id).owner === user) return true;

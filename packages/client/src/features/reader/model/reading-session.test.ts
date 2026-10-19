@@ -316,8 +316,14 @@ describe("reading session edge cases", () => {
     expect(h.commands.at(-1)!.args).toMatchObject({ value: { v: true } });
     expect(await session.saveRetention("7")).toBe(true);
     expect(h.commands.at(-1)!.args).toMatchObject({ value: { v: 7 } });
+    session.positionChanged({ unit: 0, offset: 5 });
     expect(await session.deleteDocument()).toBe(true);
     expect(h.port.dispatch).toHaveBeenCalledWith({ type: "back" });
+    // Leaving the reader after deletion must not queue progress for the gone doc.
+    const sent = h.commands.length;
+    session.dispose();
+    await flush();
+    expect(h.commands.length).toBe(sent);
     (h.port as { command: unknown }).command = async () => {
       throw new Error("拒绝");
     };

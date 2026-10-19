@@ -546,8 +546,37 @@ describe("library server", () => {
     await expect(
       b.api.library.doc.delete({ doc: first }),
     ).rejects.toMatchObject({ code: "E_DENIED" });
-    await a.api.library.doc.delete({ doc: first });
+    k.authority.setGrant({
+      resource: `coll:${coll}`,
+      principalType: "user",
+      principal: b.user.id,
+      level: "read",
+    });
+    // Deleting another author's document is the community manager's call;
+    // root alone does not carry it.
+    await expect(
+      b.api.library.doc.delete({ doc: first }),
+    ).rejects.toMatchObject({ code: "E_DENIED" });
+    k.authority.setAccess(b.user.id, { roles: ["root", "community_manager"] });
+    await b.api.library.doc.delete({ doc: first });
     expect(k.library.collection(coll).docs).toEqual([second]);
+    // Writes queued before the deletion settle instead of failing forever.
+    const stamp = { t: { ms: 1, counter: 0 }, op: id() };
+    await a.api.library.progress.set(
+      {
+        doc: first,
+        resume: { v: { unit: 0, offset: 1 }, ...stamp },
+        furthest: 0,
+        seconds: 1,
+        device: a.device,
+      },
+      { op: id() },
+    );
+    await a.api.library.favourite.set(
+      { doc: first, value: { v: true, ...stamp } },
+      { op: id() },
+    );
+    expect(k.library.state(a.user.id, first).favourite).toBeNull();
     expect(
       k.db.all("SELECT * FROM object_refs WHERE owner_id=?", first),
     ).toHaveLength(0);
@@ -875,9 +904,11 @@ describe("library container invariants", () => {
       expect(delta.scopes[`me:${a.user.id}`]!.rows).toContainEqual(
         expect.objectContaining({ type, id: doc, deleted: true, data: null }),
       );
-    await expect(
-      a.api.library.favourite.set({ doc, value }, { op: id() }),
-    ).rejects.toMatchObject({ code: "E_DENIED" });
+    // A favourite replayed after deletion settles without reviving the doc.
+    await a.api.library.favourite.set({ doc, value }, { op: id() });
+    expect(() => k.library.document(doc)).toThrow();
+    expect(k.library.state(a.user.id, doc).favourite).toBeNull();
+    expect(k.library.collection(builtins.favourites).docs).toEqual([]);
   });
   it("replayed favourite values do not reorder an existing booklist", async () => {
     const k = setup(),

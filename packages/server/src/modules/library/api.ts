@@ -213,6 +213,7 @@ export function registerLibraryApi(
     return { ok: true as const };
   });
   host.register(contract.library.favourite.set, (ctx, args) => {
+    if (access.deletedDoc(args.doc)) return { ok: true as const };
     access.requireDoc(ctx.user!, args.doc);
     if (args.value.v && !access.canDistribute(ctx.user!, args.doc))
       throw new AppError("E_DENIED", "来源书单未允许收藏此文档");
@@ -225,6 +226,8 @@ export function registerLibraryApi(
     return { ok: true as const };
   });
   host.register(contract.library.retention.set, (ctx, args) => {
+    if (args.kind === "doc" && access.deletedDoc(args.id))
+      return { ok: true as const };
     if (args.kind === "doc") access.requireDoc(ctx.user!, args.id);
     else access.requireCollection(ctx.user!, args.id);
     if (!access.authority.can(ctx.user!, "feature.use", { feature: "offline" }))
@@ -233,6 +236,7 @@ export function registerLibraryApi(
     return { ok: true as const };
   });
   host.register(contract.library.progress.set, (ctx, args) => {
+    if (access.deletedDoc(args.doc)) return { ok: true as const };
     canRead(ctx.user!, args.doc);
     if (args.device !== ctx.device)
       throw new AppError("E_INVALID", "阅读设备标识无效");

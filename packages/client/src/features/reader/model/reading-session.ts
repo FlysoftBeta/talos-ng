@@ -114,6 +114,8 @@ export class ReadingSession {
   private readonly clock: ReadingClock;
   private saveTimer: unknown;
   private retries = 0;
+  /** The document is gone; its progress must not be queued after deletion. */
+  private deleted = false;
   private loadKey = "";
   private retainedKey: unknown[] | undefined;
   private clockKey: unknown[] | undefined;
@@ -253,7 +255,7 @@ export class ReadingSession {
   }
   private async save(): Promise<void> {
     const { doc, readable, state, device } = this.input;
-    if (!this.snapshot.resources || !doc || !readable) return;
+    if (this.deleted || !this.snapshot.resources || !doc || !readable) return;
     try {
       const op = this.port.operation();
       this.furthest = Math.max(this.furthest, this.position.unit);
@@ -313,6 +315,8 @@ export class ReadingSession {
   async deleteDocument(): Promise<boolean> {
     try {
       await this.port.command(contract.library.doc.delete, { doc: this.id });
+      this.deleted = true;
+      this.port.clearDelay(this.saveTimer);
       this.port.dispatch({ type: "back" });
       return true;
     } catch (e) {
