@@ -35,15 +35,6 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
       "leave reader focus mode before using library menus",
     );
   };
-  const contexts = new Set();
-  cdp.on("Runtime.executionContextCreated", ({ context }) =>
-    contexts.add(context.id),
-  );
-  cdp.on("Runtime.executionContextDestroyed", ({ executionContextId }) =>
-    contexts.delete(executionContextId),
-  );
-  cdp.on("Runtime.executionContextsCleared", () => contexts.clear());
-  await cdp.send("Runtime.enable");
   const directory = await mkdtemp(
     path.join(tmpdir(), "talos-library-fixtures-"),
   );
@@ -153,25 +144,31 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     );
     await cdp.wait("!!document.querySelector('[data-page-ready=true]')");
     await pagePlacement(cdp);
-    await eventually(
-      async () => {
-        for (const contextId of contexts) {
-          try {
-            const result = await cdp.send("Runtime.evaluate", {
-              contextId,
-              returnByValue: true,
-              expression:
-                "(function(){if(parent===window||document.body.textContent.indexOf('你好世界')<0)return false;var r=document.createRange();r.selectNodeContents(document.body);var s=getSelection();s.removeAllRanges();s.addRange(r);return s.toString().indexOf('你好世界')>=0})()",
-            });
-            if (result.result.value) return true;
-          } catch {
-            /* A virtualized frame may have just unloaded. */
-          }
-        }
-        return false;
-      },
-      (value) => value,
-      "PDF selectable CJK text",
+    // Pages are shadow roots in the main document; a real drag selects their CJK text.
+    const word = JSON.parse(
+      await cdp.evaluate(
+        "(function(){var host=Array.prototype.slice.call(document.querySelectorAll('[data-page-ready=true]')).find(function(n){return n.shadowRoot&&n.shadowRoot.textContent.indexOf('你好世界')>=0});var w=host.shadowRoot.querySelector('.word');w.scrollIntoView({block:'center'});var b=w.getBoundingClientRect();return JSON.stringify({left:b.left,right:b.right,y:(b.top+b.bottom)/2})})()",
+      ),
+    );
+    for (const [type, x] of [
+      ["mousePressed", word.left + 1],
+      ["mouseMoved", word.right - 1],
+      ["mouseReleased", word.right - 1],
+    ])
+      await cdp.send("Input.dispatchMouseEvent", {
+        type,
+        x,
+        y: word.y,
+        button: "left",
+        clickCount: 1,
+      });
+    assert.ok(
+      (
+        await cdp.evaluate(
+          "(function(){var root=Array.prototype.slice.call(document.querySelectorAll('[data-page-ready=true]')).find(function(n){return n.shadowRoot&&n.shadowRoot.textContent.indexOf('你好世界')>=0}).shadowRoot;var s=root.getSelection?root.getSelection():getSelection();var t=s.toString();s.removeAllRanges();return t})()",
+        )
+      ).includes("你好世界"),
+      "PDF CJK text is selectable",
     );
     const wheelStart = await cdp.evaluate(
       "document.querySelector('[data-testid=\"reader.scroll\"]').scrollTop",
@@ -192,19 +189,18 @@ export async function librarySuite(browser, server, { legacy = false } = {}) {
     const keyStart = await cdp.evaluate(
       "document.querySelector('[data-testid=\"reader.scroll\"]').scrollTop",
     );
-    for (const contextId of contexts) {
-      try {
-        const key = await cdp.send("Runtime.evaluate", {
-          contextId,
-          returnByValue: true,
-          expression:
-            "(function(){if(parent===window||document.body.textContent.indexOf('你好世界')<0)return false;dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown'}));return true})()",
-        });
-        if (key.result.value) break;
-      } catch {
-        /* A scrolled-out frame can unload between context events. */
-      }
-    }
+    // Native keyboard scrolling of the focused viewport (no per-page key forwarding).
+    await cdp.evaluate(
+      "(function(){var s=document.querySelector('[data-testid=\"reader.scroll\"]');if(!s.hasAttribute('tabindex'))s.setAttribute('tabindex','-1');s.focus()})()",
+    );
+    for (const type of ["rawKeyDown", "keyUp"])
+      await cdp.send("Input.dispatchKeyEvent", {
+        type,
+        key: "ArrowDown",
+        code: "ArrowDown",
+        windowsVirtualKeyCode: 40,
+        nativeVirtualKeyCode: 40,
+      });
     await cdp.wait(
       `document.querySelector('[data-testid=\"reader.scroll\"]').scrollTop>${keyStart}`,
     );

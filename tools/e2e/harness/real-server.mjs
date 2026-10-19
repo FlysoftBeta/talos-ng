@@ -1,6 +1,5 @@
-import { fork } from "node:child_process";
+import { execFile, execFileSync, fork } from "node:child_process";
 import { promisify } from "node:util";
-import { execFile } from "node:child_process";
 import { createServer } from "node:net";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -25,8 +24,17 @@ async function freePort() {
   return port;
 }
 
-/** Owns an isolated real server process, release directory, and durable test database. */
-export async function createRealServer() {
+/** Name the browser resolves to 127.0.0.1 (see launchBrowser): a LAN-like, non-loopback origin. */
+export const LAN_HOST = "talos.test";
+
+/**
+ * Owns an isolated real server process, release directory, and durable test database.
+ * `https` adds a TLS listener for LAN_HOST with a throwaway self-signed certificate and the
+ * operator redirect, like a school deployment: `lanUrl` is the plain HTTP address tablets
+ * are given, `secureUrl` where Chromium 80+ is sent. `url` stays the local HTTP address for
+ * the harness's own clients (Node is never redirected).
+ */
+export async function createRealServer({ https = false } = {}) {
   const startupTimeout = Number(
     process.env.TALOS_E2E_STARTUP_TIMEOUT_MS ?? 120_000,
   );
@@ -47,11 +55,14 @@ export async function createRealServer() {
     throw error;
   }
   const port = await freePort();
+  const securePort = https ? await freePort() : undefined;
   let child;
   let logs = "";
   const url = `http://localhost:${port}`;
   return {
     url,
+    lanUrl: `http://${LAN_HOST}:${port}`,
+    secureUrl: https ? `https://${LAN_HOST}:${securePort}` : undefined,
     data,
     assets,
     get logs() {
@@ -63,10 +74,44 @@ export async function createRealServer() {
       // the rest is wiring. Paths are absolute: the child's cwd is the repo.
       const configDir = path.join(directory, "config");
       await mkdir(configDir, { recursive: true });
+      if (https) {
+        execFileSync(
+          "openssl",
+          [
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-keyout",
+            path.join(configDir, "key.pem"),
+            "-out",
+            path.join(configDir, "cert.pem"),
+            "-days",
+            "1",
+            "-subj",
+            `/CN=${LAN_HOST}`,
+            "-addext",
+            `subjectAltName=DNS:${LAN_HOST}`,
+          ],
+          { stdio: "ignore" },
+        );
+      }
       await writeFile(
         path.join(configDir, "config.json"),
         JSON.stringify({
           ports: [port],
+          ...(https
+            ? {
+                securePorts: [securePort],
+                https: {
+                  cert: path.join(configDir, "cert.pem"),
+                  key: path.join(configDir, "key.pem"),
+                  domain: LAN_HOST,
+                  redirect: true,
+                },
+              }
+            : {}),
           bindHost: "127.0.0.1",
           dataDir: data,
           logsDir: path.join(directory, "logs"),

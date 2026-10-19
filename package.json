@@ -18,6 +18,7 @@
     "dev:server": "node --import tsx packages/server/bin/talos-server.ts --dev",
     "e2e": "pnpm --filter @talos/shell build && pnpm --filter @talos/client build && node tools/e2e/run.mjs",
     "e2e:legacy": "pnpm --filter @talos/shell build && pnpm --filter @talos/client build && node tools/e2e/run.mjs --legacy",
+    "e2e:chrome80": "pnpm --filter @talos/shell build && pnpm --filter @talos/client build && node --import tsx tools/e2e/run.mjs --chrome80",
     "dev": "node --import tsx tools/e2e/dev.mjs",
     "start": "node packages/server/dist/server.js",
     "package": "pnpm build && node --import tsx tools/package/build.ts",

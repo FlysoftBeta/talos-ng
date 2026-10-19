@@ -1,4 +1,4 @@
-// Usage: node tools/e2e/run.mjs [feature ...] [--legacy]
+// Usage: node tools/e2e/run.mjs [feature ...] [--legacy | --chrome80]
 // No feature runs everything in order (pnpm e2e / pnpm e2e:legacy). Build shell and client first.
 import { createStaticServer } from "./harness/static-server.mjs";
 import { createRealServer } from "./harness/real-server.mjs";
@@ -17,12 +17,16 @@ const ORDER = [
   "virtual",
   "ops",
   "offline",
+  "pdf",
 ];
 /** Scenario groups that run inside another feature's session. */
 const ALIASES = { learning: "identity", reader: "library", update: "offline" };
 
 const args = process.argv.slice(2);
-const legacy = args.includes("--legacy");
+// --legacy is the real Chromium 70; --chrome80 the real Chromium 80 through the same raw CDP.
+const major = args.includes("--chrome80") ? 80 : 70;
+const legacy = args.includes("--legacy") || major === 80;
+const engine = legacy ? `chrome${major}` : "current";
 const requested = args
   .filter((arg) => !arg.startsWith("--"))
   .map((name) => ALIASES[name] ?? name);
@@ -45,7 +49,7 @@ const features = await Promise.all(
 const afters = [];
 /** A fresh browser per feature: no leaked storage, ServiceWorker, emulation or virtual-time state. */
 async function openBrowser() {
-  const opened = await launchBrowser({ legacy });
+  const opened = await launchBrowser({ legacy, major });
   // Stress option: TALOS_E2E_CPU_THROTTLE=6 slows page CPU to expose timing assumptions.
   const throttle = Number(process.env.TALOS_E2E_CPU_THROTTLE ?? 1);
   if (throttle > 1)
@@ -58,14 +62,14 @@ try {
   for (const feature of features) {
     const server =
       feature.server === "real"
-        ? await createRealServer()
+        ? await createRealServer({ https: !!feature.https })
         : createStaticServer();
     let ctx;
     try {
       await server.start();
       await feature.prepare?.(server);
       ctx = await openBrowser();
-      console.log(`[e2e] ${feature.name}${legacy ? " (chrome70)" : ""}`);
+      console.log(`[e2e] ${feature.name}${legacy ? ` (${engine})` : ""}`);
       await feature.run(ctx, server);
       if (feature.after) afters.push(feature.after);
     } catch (error) {
@@ -82,7 +86,7 @@ try {
     }
   }
   console.log(
-    `${selected.join(", ")} passed (${legacy ? "Chromium 70" : "current Chromium"}).`,
+    `${selected.join(", ")} passed (${legacy ? `Chromium ${major}` : "current Chromium"}).`,
   );
 } catch (error) {
   console.error(error);

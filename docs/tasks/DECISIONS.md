@@ -807,3 +807,10 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   cannot use the HTTPS site stay connected. Over HTTP there is no ServiceWorker, so 现在更新
   reloads the page (the server serves its own build) instead of waiting on a staging that can
   never start.
+- **D-144 — Chromium 80 is a pinned real-browser target next to Chromium 70.** The legacy
+  harness downloads the official 80.0.3987.0 snapshot (revision 722269, checksummed) and
+  `--chrome80` runs any e2e feature on it. The `pdf` feature opens the real server by a LAN
+  name over HTTP with HTTPS and the operator redirect configured, so each engine takes its
+  deployed path (D-143). Reader pages and text are selectable (`.selectable`); a reader that
+  cannot open a ready document says why instead of loading forever, and a stalled ranged pack
+  read fails after 60 s.
