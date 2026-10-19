@@ -1,19 +1,27 @@
 name: build
 
+# Commits and pull requests only test (static checks, unit tests and the browser end-to-end
+# suites, in parallel); nothing is packaged. Packages are built only on a manual run:
+# action "build" packages the three targets, action "release" tests, packages and publishes
+# release v<version> from main.
 on:
   push:
     branches: [main]
   pull_request:
-  # Run from main with a version (e.g. 1.0.2) to publish release v<version>; empty only builds.
   workflow_dispatch:
     inputs:
+      action:
+        description: "build = package the three targets; release = test, package and publish"
+        type: choice
+        options: [build, release]
+        default: build
       version:
-        description: "Release version without the v (e.g. 1.0.2); empty = build only"
+        description: "Release version without the v (e.g. 1.0.2); required for release"
         required: false
         default: ""
 
 concurrency:
-  # A release run never shares a queue slot with (or is replaced by) a push run.
+  # A manual run never shares a queue slot with (or is replaced by) a push run.
   group: build-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
@@ -21,7 +29,25 @@ permissions:
   contents: read
 
 jobs:
-  check:
+  # Typecheck, lint, formatting and boundaries.
+  lint:
+    if: github.event_name != 'workflow_dispatch' || inputs.action == 'release'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24.22.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+
+  # Every vitest project, one worker per available core.
+  unit:
+    if: github.event_name != 'workflow_dispatch' || inputs.action == 'release'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -32,12 +58,62 @@ jobs:
           node-version: 24.22.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm check
+      - run: pnpm exec vitest run --maxWorkers=100%
+
+  # The production UI suites on current Chromium and the real Chromium 70 and 80 snapshots.
+  # Only the shell and client are built (the browser loads them); the server runs from source.
+  e2e:
+    if: github.event_name != 'workflow_dispatch' || inputs.action == 'release'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [current, legacy, chrome80]
+    env:
+      TMPDIR: ${{ runner.temp }}
+      TALOS_LARGE_TEST_TMPDIR: ${{ runner.temp }}
+      TALOS_PACKAGE_E2E_TMPDIR: ${{ runner.temp }}
+      # The packaged-host check packages releases itself: only before a release.
+      TALOS_E2E_PACKAGED: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24.22.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Browser libraries (also used by the old snapshots) and the PDF renderer's libjpeg.
+      - run: |
+          pnpm --filter @talos/e2e exec playwright install-deps chromium
+          sudo apt-get install -y --no-install-recommends libjpeg-turbo8
+      - if: matrix.engine == 'current'
+        run: pnpm --filter @talos/e2e exec playwright install chromium
+      - if: matrix.engine != 'current'
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/talos-ng/chromium
+          key: chromium-snapshots-${{ hashFiles('tools/legacy-chromium/prepare.mjs') }}
+      - if: matrix.engine == 'current' && github.event_name == 'workflow_dispatch'
+        name: Cache bundled Node runtime and media tools
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/talos-ng
+          key: talos-runtime-e2e-${{ hashFiles('tools/package/build.ts', 'tools/package/media-manifest.json') }}
+      - run: pnpm --filter @talos/shell build && pnpm --filter @talos/client build
+      - run: node --import tsx tools/e2e/run.mjs ${{ matrix.engine == 'legacy' && '--legacy' || matrix.engine == 'chrome80' && '--chrome80' || '' }}
+      - if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: e2e-${{ matrix.engine }}-screenshots
+          path: .tmp/e2e
+          if-no-files-found: ignore
 
   # Every target is cross-assembled on Linux (see pnpm-workspace.yaml supportedArchitectures
   # and tools/package/native.ts); each artifact carries only its own native binaries.
-  # Independent of `check`: a failing test reports red but never blocks the artifacts.
   package:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -86,10 +162,10 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-  # Publishing waits for `check` too: a release is never cut from a red commit.
+  # Publishing waits for every test job and every package: never cut from a red commit.
   release:
-    if: github.event_name == 'workflow_dispatch' && inputs.version != ''
-    needs: [check, package]
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'release'
+    needs: [lint, unit, e2e, package]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

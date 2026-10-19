@@ -25,7 +25,9 @@ Use Node **24.18+ (24.x)** and Corepack's pinned **pnpm 12.11.2**:
 pnpm install
 ```
 
-CI runs `pnpm check`, which runs `typecheck`, `lint` (including `format:check`), `test`, and `build`.
+`pnpm check` runs `typecheck`, `lint` (including `format:check`), `test`, and `build`. CI on
+every commit runs typecheck+lint, the unit tests (all cores) and the e2e suites on current
+Chromium and real Chromium 70 and 80 as parallel jobs, without packaging.
 `pnpm format` applies Prettier; `pnpm test:coverage` produces optional V8 coverage.
 Library builds check types; source exports require no intermediate build artifacts.
 TypeScript 7 runs checks; the TypeScript 6 API is retained solely for ESLint until
@@ -47,7 +49,9 @@ Each artifact carries only its own platform's `better-sqlite3` and `sharp` binar
 `node_modules/` (pinned by `tools/package/native-manifest.json`, see
 [packaging](docs/impl/packaging.md)); `pnpm install` also fetches the win32 sharp package
 so Windows releases can be assembled on Linux.
-To publish release `v1.2.3`, run the `build` workflow on `main` from the Actions tab
-(or `gh workflow run build.yml --ref main -f version=1.2.3`); it checks, packages all three
-targets and creates the tag and GitHub release with every asset.
+To package the three targets, run the `build` workflow manually with action `build`
+(`gh workflow run build.yml -f action=build`). To publish release `v1.2.3`, run it on `main`
+with action `release` (`gh workflow run build.yml --ref main -f action=release -f version=1.2.3`);
+it runs every test job (plus the packaged-host check), packages all three targets and
+creates the tag and GitHub release with every asset.
 See [release assembly and operator instructions](tools/package/README.md).

@@ -814,3 +814,9 @@ The owner is unavailable; decisions are made by the orchestrator and recorded he
   deployed path (D-143). Reader pages and text are selectable (`.selectable`); a reader that
   cannot open a ready document says why instead of loading forever, and a stalled ranged pack
   read fails after 60 s.
+- **D-145 — CI tests every commit and packages only on demand (owner instruction).** Pushes and
+  pull requests run three parallel job groups: typecheck+lint, every vitest project with one
+  worker per core, and the e2e suites on current Chromium, real Chromium 70 and 80 (shell and
+  client built for the browser; the packaged-host ops check is skipped, it packages itself). A
+  manual run with action `build` packages the three targets; action `release` runs all test
+  jobs (packaged-host check included), packages, and publishes `v<version>` from main.

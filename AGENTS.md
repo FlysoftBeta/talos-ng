@@ -43,7 +43,9 @@ available for questions — decide, and record notable decisions.
   orchestrator merges, pushes `main` to `origin` (GitHub), monitors that exact commit's CI,
   and prunes the worktree. Helpers never merge or push, and commit after every step.
 - Verification defaults to **push, then inspect CI** (owner instruction, 2026-10-16).
-  CI runs `pnpm check` and the three-target package matrix. Fix failures and push again
+  CI on every commit runs, in parallel, typecheck+lint, all unit tests (one worker per core)
+  and the e2e suites on current Chromium and real Chromium 70 and 80; it builds no packages
+  (a manual `build`/`release` run does, D-145). Fix failures and push again
   until the relevant jobs pass; do not call an in-progress run successful.
   Do not require local full `pnpm check`, E2E suites or packaging before pushing.
   Use local checks only when a quick reproduction or targeted verification is useful,
