@@ -80,24 +80,33 @@ export const appMigrations: readonly Migration[] = [
   },
   {
     version: 5,
-    upgrade(tx) {
+    upgrade(tx, oldVersion) {
       // The learning feature was removed: drop its cached rows, its scope's
       // coverage, the discipline setting and queued answers nobody can send.
-      const rows = tx.objectStore("rows").openCursor();
-      rows.onsuccess = () => {
-        const row = rows.result;
-        if (!row) return;
-        const value = row.value as { scope: string; type: string; id: string };
-        if (
-          value.scope === "learn" ||
-          value.type === "learningCorpus" ||
-          value.type === "learningProgress" ||
-          (value.type === "setting" && value.id === "learning.discipline")
-        )
-          row.delete();
-        row.continue();
-      };
-      tx.objectStore("scopes").delete("learn");
+      // Only a version 4 database can hold learning rows. Earlier versions run
+      // version 4's row and scope cursors in this same transaction, and
+      // Chromium 80 then never completes the open; they have nothing to drop.
+      if (oldVersion === 4) {
+        const rows = tx.objectStore("rows").openCursor();
+        rows.onsuccess = () => {
+          const row = rows.result;
+          if (!row) return;
+          const value = row.value as {
+            scope: string;
+            type: string;
+            id: string;
+          };
+          if (
+            value.scope === "learn" ||
+            value.type === "learningCorpus" ||
+            value.type === "learningProgress" ||
+            (value.type === "setting" && value.id === "learning.discipline")
+          )
+            row.delete();
+          row.continue();
+        };
+        tx.objectStore("scopes").delete("learn");
+      }
       const outbox = tx.objectStore("outbox").openCursor();
       outbox.onsuccess = () => {
         const entry = outbox.result;

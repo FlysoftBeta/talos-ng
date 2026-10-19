@@ -6,7 +6,8 @@ import type { TransactionContext } from "./table.ts";
 
 export interface Migration {
   version: number;
-  upgrade: (tx: IDBTransaction) => void;
+  /** `oldVersion` is the version the database is upgraded from (0 when created). */
+  upgrade: (tx: IDBTransaction, oldVersion: number) => void;
 }
 export interface Change {
   tables: readonly string[];
@@ -183,7 +184,10 @@ export class Database {
         try {
           for (const migration of this.options.schema)
             if (migration.version > event.oldVersion) {
-              const result: unknown = migration.upgrade(request.transaction!);
+              const result: unknown = migration.upgrade(
+                request.transaction!,
+                event.oldVersion,
+              );
               if (isThenable(result)) {
                 void Promise.resolve(result).catch(() => undefined);
                 throw new AppError(
