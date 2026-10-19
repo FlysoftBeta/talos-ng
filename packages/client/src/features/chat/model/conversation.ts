@@ -219,11 +219,16 @@ export class ConversationController extends StateStore<ConversationState> {
       if (this.online()) throw error;
     }
   }
+  /** A live session already holds the pushed conversation state; otherwise pull it first. */
+  private async current(): Promise<void> {
+    if (this.runtime.getSnapshot().status.connection !== "connected")
+      await this.runtime.sync();
+  }
   private async prepareOnline(seek: Seek<HistoryKey>): Promise<void> {
     const base = this.base();
     if ("edge" in seek) {
       if (seek.edge !== "end") return;
-      await this.runtime.sync();
+      await this.current();
       if ((base[base.length - 1]?.seq ?? 0) < this.input.state.lastSeq)
         await this.fetch("latest");
       return;
@@ -231,7 +236,7 @@ export class ConversationController extends StateStore<ConversationState> {
     if (!("key" in seek)) return;
     const key = seek.key;
     if ("unreadAfter" in key) {
-      await this.runtime.sync();
+      await this.current();
       if (
         key.unreadAfter < this.input.state.lastSeq &&
         !base.some((post) => post.seq === key.unreadAfter + 1)

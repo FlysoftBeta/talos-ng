@@ -441,6 +441,7 @@ export function createKernel(options: KernelOptions): Kernel {
   );
   if (!options.replica) {
     seedIdentity(identity, uow, options.testSeed);
+    communityService.repairDms();
     for (const user of authority.repo.users()) {
       library.ensureBuiltins(user);
       communityService.initializeUser(user);

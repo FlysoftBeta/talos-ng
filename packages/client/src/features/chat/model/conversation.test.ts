@@ -54,7 +54,10 @@ function fixture() {
     time: () => 1000,
     sync: vi.fn(async () => {}),
     outbox: vi.fn<() => OutboxItem[]>(() => []),
-    getSnapshot: () => ({ user: { id: "user" } }),
+    getSnapshot: () => ({
+      user: { id: "user" },
+      status: { connection: "syncing" },
+    }),
     command: vi.fn(async () => ({})),
   };
   const input = {

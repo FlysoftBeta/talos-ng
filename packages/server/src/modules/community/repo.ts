@@ -117,6 +117,23 @@ export class CommunityRepo {
       handle,
     );
   }
+  /** Live direct messages lacking a name or a live membership (legacy imports). */
+  incompleteDms(): ConversationRecord[] {
+    return this.db.all(
+      `SELECT c.* FROM community_conversations c
+       WHERE c.kind='dm' AND c.deleted=0 AND c.pair_key IS NOT NULL AND (c.name='' OR
+        (SELECT count(*) FROM community_members m WHERE m.conversation=c.id AND m.deleted=0)<2)
+       ORDER BY c.rev,c.id`,
+    );
+  }
+  setName(name: string, rev: number, id: string): void {
+    this.db.run(
+      "UPDATE community_conversations SET name=?,rev=? WHERE id=?",
+      name,
+      rev,
+      id,
+    );
+  }
   pair(key: string): ConversationRecord | undefined {
     return this.db.get(
       "SELECT * FROM community_conversations WHERE pair_key=?",

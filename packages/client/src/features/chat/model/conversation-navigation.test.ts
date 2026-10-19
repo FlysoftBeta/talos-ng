@@ -61,6 +61,8 @@ const settle = async () => {
 function fixture(
   options: {
     online?: boolean;
+    /** The sync engine is live: pushes keep the conversation state current. */
+    live?: boolean;
     readSeq?: number;
     lastSeq?: number;
     rows?: number[];
@@ -73,7 +75,10 @@ function fixture(
     can: () => ({ ok: online }),
     sync: vi.fn(async () => {}),
     outbox: vi.fn(() => []),
-    getSnapshot: () => ({ user: { id: "user" } }),
+    getSnapshot: () => ({
+      user: { id: "user" },
+      status: { connection: options.live ? "connected" : "syncing" },
+    }),
     command: vi.fn(async () => ({})),
     time: () => 1000,
     // Coverage vouches for the stored posts only.
@@ -159,6 +164,13 @@ describe("opening a conversation", () => {
     await t.open();
     expect(page).toHaveBeenCalledWith(t.runtime, "group", "around", 6);
     expect(t.model.history.position()?.id).toBe("post6");
+  });
+  it("skips the full pull before fetching when the session is live", async () => {
+    const t = fixture({ live: true, rows: [1, 2], readSeq: 5, lastSeq: 20 });
+    vi.mocked(page).mockResolvedValueOnce(win([6, 7, 8]));
+    await t.open();
+    expect(t.runtime.sync).not.toHaveBeenCalled();
+    expect(page).toHaveBeenCalledWith(t.runtime, "group", "around", 6);
   });
   it("opens offline at the newest cached post when nothing newer is cached", async () => {
     const t = fixture({ online: false, readSeq: 9, lastSeq: 10 });

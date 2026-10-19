@@ -11,7 +11,7 @@ export interface DirectMessagesContext {
     user: string,
     conversation: string,
   ): { members: CommunityMember[]; self: CommunityMember; hidden: boolean };
-  repo: Pick<CommunityRepo, "pair" | "put">;
+  repo: Pick<CommunityRepo, "pair" | "put" | "incompleteDms" | "setName">;
   id: () => string;
   options: Pick<CommunityOptions, "uow" | "user">;
   now: () => number;
@@ -40,10 +40,7 @@ export class DirectMessages {
         id,
         kind: "dm",
         type: "normal",
-        name: [
-          this.context.options.user(user)!.name,
-          this.context.options.user(peer)!.name,
-        ].join(" · "),
+        name: this.name([user, peer]),
         handle: `dm-${id.toLowerCase()}`,
         parent: null,
         owner: null,
@@ -62,5 +59,32 @@ export class DirectMessages {
       ctx.changed(`conv:${id}`, "communityConversation", id);
       return this.context.conversation(id)!;
     });
+  }
+  /**
+   * Completes direct messages imported without memberships or a name: until
+   * both participants are members neither can read it, and opening it from a
+   * member list landed on a conversation that never synchronises.
+   */
+  repair(): void {
+    for (const row of this.context.repo.incompleteDms()) {
+      const users = row
+        .pair_key!.split(":")
+        .filter((user) => this.context.options.user(user));
+      const missing = users.filter(
+        (user) => !this.context.canAccess(user, row.id),
+      );
+      const name = row.name || this.name(users);
+      if (!missing.length && name === row.name) continue;
+      this.context.options.uow.write((ctx) => {
+        if (name !== row.name) this.context.repo.setName(name, ctx.rev, row.id);
+        for (const user of missing) this.context.addMember(user, row.id, ctx);
+        ctx.changed(`conv:${row.id}`, "communityConversation", row.id);
+      });
+    }
+  }
+  private name(users: readonly string[]): string {
+    return users
+      .map((user) => this.context.options.user(user)!.name)
+      .join(" · ");
   }
 }

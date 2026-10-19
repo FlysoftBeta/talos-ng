@@ -247,6 +247,31 @@ describe("community", () => {
     s.service.hide(s.b, group.id, true);
     expect(() => s.service.openDm(s.a, s.b, group.id)).toThrow(/共同/);
   });
+  it("repairs imported DMs that have no memberships or name", () => {
+    const s = setup();
+    const group = s.service.create(s.a, {
+      name: "私聊来源",
+      discoverable: true,
+    });
+    s.service.join(s.b, group.id, { type: "search" });
+    // The legacy import stored the pair without members or a name.
+    s.db.run(
+      "INSERT INTO community_conversations VALUES('legacy','dm','normal','','legacy',NULL,NULL,0,0,0,0,NULL,?,1,1,0)",
+      [s.a, s.b].sort().join(":"),
+    );
+    expect(s.service.openDm(s.a, s.b, group.id).id).toBe("legacy");
+    expect(s.service.canAccess(s.a, "legacy")).toBe(false);
+    s.service.repairDms();
+    expect(s.service.canAccess(s.a, "legacy")).toBe(true);
+    expect(s.service.canAccess(s.b, "legacy")).toBe(true);
+    expect(s.service.conversation("legacy")!.name).toBe("用户1 · 用户2");
+    expect(Object.keys(s.hub.pull(s.a, { cursors: {} }).scopes)).toContain(
+      "conv:legacy",
+    );
+    const revision = s.uow.revision;
+    s.service.repairDms();
+    expect(s.uow.revision).toBe(revision);
+  });
   it("pushes scope added and gone immediately on membership changes", () => {
     const s = setup();
     const emitted: unknown[] = [];

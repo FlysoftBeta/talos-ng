@@ -90,6 +90,7 @@ export class CommunityService {
       conversation: (...args) => this.conversation(...args),
     });
     this.openDm = direct_messages.openDm.bind(direct_messages);
+    this.repairDms = direct_messages.repair.bind(direct_messages);
 
     this.now = options.now ?? Date.now;
     this.id = options.id ?? createUlid({ clock: this.now });
@@ -141,6 +142,7 @@ export class CommunityService {
   readonly leave: Membership["leave"];
   readonly hide: Membership["hide"];
   readonly openDm: DirectMessages["openDm"];
+  readonly repairDms: DirectMessages["repair"];
   registerSync(hub: SyncHub): void {
     registerCommunitySync(
       {

@@ -251,6 +251,18 @@ export async function chatSuite(browser, server) {
       .textContent();
     await send(b, "私信已经建立");
     await capture(b, demo, "direct");
+    // The peer's live session reaches the existing conversation from the members list.
+    await a.getByRole("button", { name: "成员", exact: true }).click();
+    await a
+      .getByRole("dialog")
+      .locator(T("ui.row"), { hasText: "测试用户" })
+      .getByRole("button", { name: "私信", exact: true })
+      .click();
+    await a.getByRole("heading", { name: dmName, exact: true }).waitFor();
+    await a.locator(T("chat.post.text"), { hasText: "私信已经建立" }).waitFor();
+    await send(a, "私信回复");
+    await b.locator(T("chat.post.text"), { hasText: "私信回复" }).waitFor();
+    await open(a, "社区验收群");
     // The peer's live session receives the new conversation without a reload.
     await open(a, dmName);
     await a.locator(T("chat.post.text"), { hasText: "私信已经建立" }).waitFor();
