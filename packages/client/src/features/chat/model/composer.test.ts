@@ -144,13 +144,11 @@ describe("composer draft and send lifecycle", () => {
     );
     expect(timers.size).toBe(0);
   });
-  it("keeps the reply on upload failure and closes attachments only after success", async () => {
+  it("keeps the reply on upload failure and clears it only after success", async () => {
     const { model, input } = fixture();
-    model.setImages(true);
     vi.mocked(uploadImage).mockRejectedValueOnce(new Error("interrupted"));
     await model.image({ size: 1, read: async () => new Uint8Array(1) });
     expect(model.getState()).toMatchObject({
-      images: true,
       busy: false,
       progress: undefined,
       error: "interrupted",
@@ -158,7 +156,6 @@ describe("composer draft and send lifecycle", () => {
     expect(input.onReplyClear).not.toHaveBeenCalled();
     vi.mocked(uploadImage).mockResolvedValueOnce();
     await model.image({ size: 1, read: async () => new Uint8Array(1) });
-    expect(model.getState().images).toBe(false);
     expect(input.onReplyClear).toHaveBeenCalledOnce();
   });
 });

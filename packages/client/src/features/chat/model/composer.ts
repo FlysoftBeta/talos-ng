@@ -19,7 +19,6 @@ export class ComposerController extends StateStore<{
   text: string;
   fullscreen: boolean;
   stickers: boolean;
-  images: boolean;
   error: string;
   busy: boolean;
   progress: number | undefined;
@@ -41,7 +40,6 @@ export class ComposerController extends StateStore<{
       text: input.state.draft.v,
       fullscreen: false,
       stickers: false,
-      images: false,
       error: "",
       busy: false,
       progress: undefined,
@@ -177,7 +175,6 @@ export class ComposerController extends StateStore<{
         this.input.reply?.id,
       );
       this.input.onReplyClear();
-      this.patch({ images: false });
     } catch (cause) {
       this.patch({ error: message(cause) });
     } finally {
@@ -202,7 +199,6 @@ export class ComposerController extends StateStore<{
   };
   setFullscreen = (fullscreen: boolean): void => this.patch({ fullscreen });
   setStickers = (stickers: boolean): void => this.patch({ stickers });
-  setImages = (images: boolean): void => this.patch({ images });
   presentation() {
     const restricted = this.restriction(),
       imageGate = this.runtime.gate("post_images"),
@@ -238,7 +234,6 @@ export class ComposerController extends StateStore<{
       pick: this.pick,
       setFullscreen: this.setFullscreen,
       setStickers: this.setStickers,
-      setImages: this.setImages,
     };
   }
 }

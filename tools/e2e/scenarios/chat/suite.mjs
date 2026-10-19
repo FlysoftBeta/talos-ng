@@ -435,19 +435,16 @@ export async function chatSuite(browser, server) {
       .waitFor();
     cases++;
     console.log(`Chat E2E completed ${cases}`);
-    await a.getByRole("button", { name: "图片", exact: true }).click();
-    await a
-      .locator('input[type="file"][aria-label="上传图片（最大 12 MiB）"]')
-      .setInputFiles({
-        name: "retained.png",
-        mimeType: "image/png",
-        buffer: await readFile(
-          new URL(
-            "../../../../packages/server/stickers/akendfield/akendfield-d-1.png",
-            import.meta.url,
-          ),
+    await a.locator('input[type="file"][aria-label="图片"]').setInputFiles({
+      name: "retained.png",
+      mimeType: "image/png",
+      buffer: await readFile(
+        new URL(
+          "../../../../packages/server/stickers/akendfield/akendfield-d-1.png",
+          import.meta.url,
         ),
-      });
+      ),
+    });
     await b
       .getByRole("button", { name: /查看原图/ })
       .last()
